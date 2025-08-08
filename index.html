@@ -1,0 +1,546 @@
+
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="shortcut icon" href="/favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-title" content="Serra Nobre" />
+  <link rel="manifest" href="/manifest.json" />
+  <title>PEDIDO V2.1</title>
+<style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background: #f4f4f4; }
+    h1 { text-align: right; margin-bottom: 10px; font-size: 30px; }
+    .logo-header { width: 360px; display: block; margin: 0 auto 10px auto; }
+    input, select, textarea { width: 100%; padding: 8px; margin: 5px 0; box-sizing: border-box; }
+    .item { border: 1px solid #ccc; padding: 10px; background: #fff; margin-bottom: 10px; }
+    .total { font-weight: bold; font-size: 1.2em; }
+    button { width: 100%; padding: 10px; background: #008000; color: white; border: none; font-size: 1em; margin-top: 5px; border-radius: 6px; }
+    .remove { background: #c0392b; }
+    .pdf-btn { background: #005580; margin-top: 10px; }
+    .pdf-btn.salvar { background: #3d7311; } /* <-- NOVA COR PARA SALVAR PDF */
+.pdf-btn.compartilhar {
+  background: #b06912; /* azul vibrante, por exemplo */
+}
+    .tipo-select { width: auto; margin-right: 10px; }
+    label { font-weight: bold; }
+    .field-group { margin-bottom: 12px; }
+    .switch-box { display: flex; gap: 20px; justify-content: left; align-items: center; margin-bottom: 12px; }
+    #pagamentoOutro { margin-top: 6px; }
+    @media (max-width: 450px) {
+      h1 { font-size: 1.1em; }
+      .logo-header { width: 110px; }
+      .item { padding: 6px; }
+      button, .pdf-btn { padding: 7px; font-size: 0.96em; }
+      input, select, textarea { padding: 6px; }
+      .field-group { margin-bottom: 8px; }
+    }
+</style>
+</head>
+<body>
+  <img src="Serra-Nobre_3.png" alt="Logo" class="logo-header" onerror="this.style.display='none'">
+  <h1>V2.1</h1>
+  <div class="field-group">
+    <label>Cliente:</label>
+    <input type="text" id="cliente" autocomplete="off" required/>
+  </div>
+  <div class="field-group">
+    <label>Endereço:</label>
+    <input type="text" id="endereco" autocomplete="off" required/>
+  </div>
+  <div class="field-group">
+    <label>Data de Entrega:</label>
+    <input type="date" id="entrega" required/>
+  </div>
+  <div class="field-group">
+    <label>Horário de Entrega:</label>
+    <input type="time" id="horaEntrega" required/>
+  </div>
+  <div class="field-group switch-box">
+    <label>Entrega/Retirada:</label>
+    <label><input type="radio" name="tipoEntrega" value="ENTREGA" checked> Entrega</label>
+    <label><input type="radio" name="tipoEntrega" value="RETIRADA"> Retirada</label>
+  </div>
+  <div id="itens"></div>
+  <button onclick="adicionarItem()">Adicionar Item</button>
+  <hr/>
+  <label>Forma de Pagamento:</label>
+  <select id="pagamento">
+    <option value="PIX">PIX</option>
+    <option value="DINHEIRO">DINHEIRO</option>
+    <option value="CARTÃO (LEVAR MAQUINA)">CARTÃO (LEVAR MAQUINA)</option>
+    <option value="OUTROS">OUTRO</option>
+  </select>
+  <input type="text" id="pagamentoOutro" placeholder="Digite outra forma de pagamento" style="display:none"/>
+  <hr/>
+  <label>Observação geral do pedido:</label>
+  <textarea id="obsGeral"></textarea>
+  <hr/>
+  <button class="pdf-btn" onclick="gerarPDF(false)">Gerar PDF</button>
+<button class="pdf-btn salvar" onclick="gerarPDF(true)">Salvar PDF</button>
+<button class="pdf-btn compartilhar" onclick="compartilharPDF()">Compartilhar PDF</button>
+  <div id="resumo"></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    let produtos = [
+      "AGULHA DESOSSADA KG", "CHOP TUPINIQUIM PILSEN 1L",
+      "COSTELA GAUCHA KG", "COSTELINHA SUINA KG",
+      "GALINHA CAIPIRA CONG. KG", "MAMINHA BOVINA KG",
+      "PERNIL SUINO KG", "TULIPA TEMPERADA KG", "VAZIO GAUCHO KG"
+    ];
+    let itens = [{
+      produto: "", tipo: "KG", quantidade: 0, preco: 0, total: 0, obs: ""
+    }];
+    document.addEventListener('DOMContentLoaded', function() {
+      renderItens();
+      document.getElementById('pagamento').addEventListener('change', function() {
+        if (this.value === 'OUTRO') {
+          document.getElementById('pagamentoOutro').style.display = '';
+        } else {
+          document.getElementById('pagamentoOutro').style.display = 'none';
+        }
+      });
+    });
+    function criarSelectProduto(i) {
+      return `<input list="listaProdutos" class="produto" data-index="${i}" placeholder="Digite ou selecione" value="${itens[i].produto || ''}"/>`;
+    }
+    function criarTipoSelect(i) {
+      return `
+        <select class="tipo-select" data-index="${i}" onchange="atualizarTipo(${i}, this.value)">
+          <option value="KG" ${itens[i].tipo === 'KG' ? 'selected' : ''}>KG</option>
+          <option value="UN" ${itens[i].tipo === 'UN' ? 'selected' : ''}>UN</option>
+        </select>
+      `;
+    }
+    function renderItens() {
+      salvarCamposAntesRender();
+      const container = document.getElementById("itens");
+      container.innerHTML = "";
+      itens.forEach((item, i) => {
+        container.innerHTML += `
+        <div class="item">
+          <label>Produto:</label>
+          ${criarSelectProduto(i)}
+          <label>Tipo:</label>
+          ${criarTipoSelect(i)}
+          <label>Quantidade:</label>
+          <input type="number" step="0.01" class="quantidade" data-index="${i}" value="${item.quantidade || ''}" oninput="calcularItem(${i})"/>
+          <label>Preço Unitário:</label>
+          <input type="number" step="0.01" class="preco" data-index="${i}" value="${item.preco || ''}" oninput="calcularItem(${i})"/>
+          <label>Observação do item:</label>
+          <textarea class="obsItem" data-index="${i}">${item.obs || ''}</textarea>
+          <p class="total">Total do Item: R$ <span id="totalItem_${i}">${(item.total || 0).toFixed(2)}</span></p>
+          <button class="remove" onclick="removerItem(${i})">Remover Item</button>
+        </div>`;
+      });
+      atualizarListaDatalist();
+    }
+    function atualizarTipo(i, valor) {
+      itens[i].tipo = valor;
+      calcularItem(i);
+    }
+    function atualizarListaDatalist() {
+      let dataList = document.getElementById("listaProdutos");
+      if (!dataList) {
+        dataList = document.createElement("datalist");
+        dataList.id = "listaProdutos";
+        document.body.appendChild(dataList);
+      }
+      dataList.innerHTML = produtos.map(p => `<option value="${p}"></option>`).join('');
+    }
+    function salvarCamposAntesRender() {
+      document.querySelectorAll(".item").forEach((el, idx) => {
+        if (typeof itens[idx] === "undefined") return;
+        let prod = el.querySelector(".produto")?.value || "";
+        let tipo = el.querySelector(".tipo-select")?.value || "KG";
+        let qtd = el.querySelector(".quantidade")?.value || 0;
+        let preco = el.querySelector(".preco")?.value || 0;
+        let obs = el.querySelector(".obsItem")?.value || "";
+        itens[idx] = {
+          produto: prod, tipo: tipo, quantidade: parseFloat(qtd), preco: parseFloat(preco), obs: obs, total: parseFloat(qtd) * parseFloat(preco)
+        };
+      });
+    }
+    function adicionarItem() {
+      salvarCamposAntesRender();
+      itens.push({ produto: "", tipo: "KG", quantidade: 0, preco: 0, total: 0, obs: "" });
+      renderItens();
+    }
+    function removerItem(i) {
+      salvarCamposAntesRender();
+      itens.splice(i, 1);
+      if(itens.length===0) itens.push({ produto: "", tipo: "KG", quantidade: 0, preco: 0, total: 0, obs: "" });
+      renderItens();
+    }
+    function calcularItem(i) {
+      let tipo = document.querySelectorAll(".tipo-select")[i].value;
+      const q = document.querySelectorAll(".quantidade")[i].value || 0;
+      const p = document.querySelectorAll(".preco")[i].value || 0;
+      itens[i].quantidade = parseFloat(q);
+      itens[i].preco = parseFloat(p);
+      itens[i].tipo = tipo;
+      itens[i].total = tipo === "KG" ? (parseFloat(q) * parseFloat(p)) : (p ? (parseFloat(q) * parseFloat(p)) : 0);
+      document.getElementById(`totalItem_${i}`).innerText = itens[i].total ? itens[i].total.toFixed(2) : "—";
+    }
+    function camposObrigatoriosPreenchidos() {
+      return (
+        document.getElementById("cliente").value.trim() &&
+        document.getElementById("endereco").value.trim() &&
+        document.getElementById("entrega").value &&
+        document.getElementById("horaEntrega").value
+      );
+    }
+    function gerarResumo() {
+      if (!camposObrigatoriosPreenchidos()) {
+        alert("Preencha todos os campos obrigatórios: Cliente, Endereço, Data de Entrega e Horário.");
+        return;
+      }
+      salvarCamposAntesRender();
+      const nome = document.getElementById("cliente").value;
+      const end = document.getElementById("endereco").value;
+      const ent = document.getElementById("entrega").value;
+      const hora = document.getElementById("horaEntrega").value;
+      const obsGeral = document.getElementById("obsGeral").value;
+      let pagamento = document.getElementById("pagamento").value;
+      if (pagamento === "Outro") {
+        pagamento = document.getElementById("pagamentoOutro").value;
+      }
+      const tipoEntrega = document.querySelector('input[name="tipoEntrega"]:checked').value;
+      const itensResumo = itens.map((item, i) => {
+        const prod = item.produto;
+        const obs = item.obs;
+        let tipo = item.tipo;
+        let qtdDisplay = `${item.quantidade} ${tipo}`;
+        let precoDisplay = item.preco ? "R$ " + item.preco.toFixed(2) : "—";
+        let totalDisplay = item.total ? "R$ " + item.total.toFixed(2) : "—";
+        return `<li>${prod} - ${qtdDisplay} x ${precoDisplay} = ${totalDisplay} <br><em>${obs}</em>${tipo === "UN" ? "<br><small>(*) Este item está em unidades (não em kg).</small>" : ""}</li>`;
+      }).join('');
+      const totalGeral = itens.reduce((sum, item) => sum + (item.total||0), 0).toFixed(2);
+      document.getElementById("resumo").innerHTML = `
+        <h3>Resumo do Pedido</h3>
+        <div><b>Cliente:</b> ${nome}<br><b>Endereço:</b> ${end}</div>
+        <div><b>Entrega:</b> ${formatarData(ent)} às ${hora} <b>${tipoEntrega}</b></div>
+        <ul>${itensResumo}</ul>
+        <div><b>Forma de Pagamento:</b> ${pagamento}</div>
+        <p><strong>Observação geral:</strong> ${obsGeral}</p>
+        <p class="total">Valor Total: R$${totalGeral}</p>`;
+    }
+    function formatarData(dataStr) {
+      if (!dataStr) return "";
+      const [a, m, d] = dataStr.split("-");
+      return `${d}/${m}/${a.slice(-2)}`;
+    }
+    function centralizaTexto(doc, text, x, y, width, linhas) {
+      let texto = doc.splitTextToSize(text, width - 2);
+      if (texto.length > linhas) texto = texto.slice(0, linhas);
+      let offsetY = (10 * linhas - texto.length * 8) / 2 + 5;
+      for (let l = 0; l < texto.length; l++) {
+        doc.text(texto[l], x + width / 2, y + offsetY + l * 8, { align: "center" });
+      }
+    }
+   function gerarPDF(apenasSalvar = false) {
+  if (!camposObrigatoriosPreenchidos()) {
+    alert("Preencha todos os campos obrigatórios: Cliente, Endereço, Data de Entrega e Horário.");
+    return;
+  }
+  salvarCamposAntesRender();
+let nomeCliente = document.getElementById("cliente").value.trim();
+  let dataEntrega = document.getElementById("entrega").value;
+  let nomeArquivo = `Pedido_${nomeCliente.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '')}_${dataEntrega}.pdf`;
+
+  const { jsPDF } = window.jspdf;
+  const margemX = 2; // Margem esquerda/direita
+  const larguraCaixa = 68; // Largura útil (72mm - 2mm de cada lado)
+  let y = 10;
+
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: [72, 297]
+  });
+
+  // Logo
+  let imgLogo = new Image();
+  imgLogo.src = 'Serra-Nobre_3.png';
+  doc.setFontSize(7);
+  doc.setFont(undefined, "bold");
+  try {
+    doc.addImage(imgLogo, "PNG", 20, y, 32, 12, '', 'FAST'); // centralizado
+    y += 14;
+  } catch (e) {
+    y += 2;
+  }
+
+  // CLIENTE
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.2);
+  doc.rect(margemX, y, larguraCaixa, 10, "S");
+  doc.text("CLIENTE", margemX + larguraCaixa / 2, y + 4.0, { align: "center" });
+  doc.setFontSize(8);
+  doc.setFont(undefined, "normal");
+  centralizaTexto(doc, document.getElementById("cliente").value, margemX, y-3, larguraCaixa, 2);
+  y += 11;
+
+  // ENDEREÇO
+  doc.setFont(undefined, "bold");
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.2);
+  doc.rect(margemX, y, larguraCaixa, 10, "S");
+  doc.text("ENDEREÇO", margemX + larguraCaixa / 2, y + 4.0, { align: "center" });
+  doc.setFontSize(8);
+  doc.setFont(undefined, "normal");
+  centralizaTexto(doc, document.getElementById("endereco").value, margemX, y-3, larguraCaixa, 2);
+  y += 11;
+
+  // DATA/HORÁRIO
+doc.setFont(undefined, "bold");
+doc.setDrawColor(0);
+doc.setLineWidth(0.2);
+
+// caixas
+doc.rect(margemX, y, larguraCaixa / 2, 10, "S");
+doc.rect(margemX + larguraCaixa / 2, y, larguraCaixa / 2, 10, "S");
+
+// títulos
+doc.setFontSize(7);
+doc.text("DATA ENTREGA", margemX + larguraCaixa / 4, y + 4, { align: "center" });
+doc.text("HORÁRIO ENTREGA", margemX + (3 * larguraCaixa) / 4, y + 4, { align: "center" });
+
+// valores com tamanho de fonte maior
+doc.setFont(undefined, "normal");
+doc.setFontSize(8); // aumentei o tamanho do valor (de 7 para 8)
+doc.text(formatarData(document.getElementById("entrega").value), margemX + larguraCaixa / 4, y + 8, { align: "center" });
+doc.text(document.getElementById("horaEntrega").value, margemX + (3 * larguraCaixa) / 4, y + 8, { align: "center" });
+
+// volta fonte ao padrão para o restante do PDF
+doc.setFontSize(7);
+y += 10;
+
+  // ENTREGA/RETIRADA
+  y += 2;
+  doc.setLineWidth(1.1);
+  doc.rect(margemX + larguraCaixa * 0.235, y, larguraCaixa * 0.53, 10, "S");
+  doc.setLineWidth(0.2);
+  doc.setFontSize(10);
+  doc.setFont(undefined, "bold");
+  let tipoEntrega = document.querySelector('input[name="tipoEntrega"]:checked').value;
+  doc.text(tipoEntrega, margemX + larguraCaixa / 2, y + 6.5, { align: "center" });
+  y += 12;
+
+  // ITENS (TABELA)
+  const larguraProduto = 23.5;   // Reduzida
+  const larguraQde = 13;         // Aumentada
+  const larguraUnit = 13;        // Igual
+  const larguraTotal = 18.5;     // Levemente reduzida
+  doc.setFontSize(7);
+  doc.setFont(undefined, "bold");
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.2);
+  // Cabeçalho
+  doc.rect(margemX, y, larguraProduto, 10, "S");
+  doc.rect(margemX + larguraProduto, y, larguraQde, 10, "S");
+  doc.rect(margemX + larguraProduto + larguraQde, y, larguraUnit, 10, "S");
+  doc.rect(margemX + larguraProduto + larguraQde + larguraUnit, y, larguraTotal, 10, "S");
+  doc.text("PRODUTO", margemX + larguraProduto / 2, y + 6, { align: "center" });
+  doc.text("QDE", margemX + larguraProduto + larguraQde / 2, y + 6, { align: "center" });
+  doc.text("R$ UNIT.", margemX + larguraProduto + larguraQde + larguraUnit / 2, y + 6, { align: "center" });
+  const valorX = margemX + larguraProduto + larguraQde + larguraUnit + larguraTotal / 2;
+doc.text("VALOR", valorX, y + 4, { align: "center" });
+doc.text("PRODUTO", valorX, y + 8.5, { align: "center" });
+
+  y += 12;
+
+  let totalGeral = 0;
+  doc.setFont(undefined, "normal");
+  doc.setFontSize(7);
+
+  for (let i = 0; i < itens.length; i++) {
+    let prod = itens[i].produto;
+    let qtd = String(itens[i].quantidade);
+    let tipo = itens[i].tipo;
+    let preco = itens[i].preco.toFixed(2);
+    let total = itens[i].total ? itens[i].total.toFixed(2) : "—";
+    let qtdDisplay = qtd ? `${qtd} ${tipo}` : "";
+    let precoDisplay = itens[i].preco ? "R$ " + preco : "—";
+    let totalDisplay = (itens[i].preco && itens[i].quantidade) ? "R$ " + total : "—";
+    let prodLines = doc.splitTextToSize(prod, larguraProduto - 2);
+    if (prodLines.length > 2) prodLines = prodLines.slice(0, 2);
+    let rowHeight = 8 * prodLines.length;
+    if (rowHeight < 10) rowHeight = 10;
+
+    // Caixa do item (ajustada para larguras novas)
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.2);
+    doc.rect(margemX, y, larguraProduto, rowHeight, "S");
+    doc.rect(margemX + larguraProduto, y, larguraQde, rowHeight, "S");
+    doc.rect(margemX + larguraProduto + larguraQde, y, larguraUnit, rowHeight, "S");
+    doc.rect(margemX + larguraProduto + larguraQde + larguraUnit, y, larguraTotal, rowHeight, "S");
+    // PRODUTO
+    for (let l = 0; l < prodLines.length; l++) {
+      let prodY = y + 5 + l * (prodLines.length > 1 ? 5 : 8);
+      doc.text(prodLines[l], margemX + larguraProduto / 2, prodY, { align: "center" });
+    }
+    doc.text(qtdDisplay, margemX + larguraProduto + larguraQde / 2, y + rowHeight / 2 + 2, { align: "center" });
+    doc.text(precoDisplay, margemX + larguraProduto + larguraQde + larguraUnit / 2, y + rowHeight / 2 + 2, { align: "center" });
+    doc.text(totalDisplay, margemX + larguraProduto + larguraQde + larguraUnit + larguraTotal / 2, y + rowHeight / 2 + 2, { align: "center" });
+    // OBSERVAÇÃO DO ITEM
+    let obs = itens[i].obs;
+    if (obs && obs.trim() !== "") {
+      y += rowHeight;
+      let obsLines = doc.splitTextToSize(obs, larguraCaixa - 4);
+      let obsHeight = 5 + obsLines.length * 4;
+      doc.rect(margemX, y, larguraCaixa, obsHeight, "S");
+      doc.setFont(undefined, "bold");
+      doc.text("OBSERVAÇÕES:", margemX + 3, y + 5.5);
+      doc.setFont(undefined, "normal");
+      for (let ol = 0; ol < obsLines.length; ol++) {
+        doc.text(obsLines[ol], margemX + 25, y + 5.5 + ol * 4);
+      }
+      y += obsHeight;
+    } else {
+      y += rowHeight;
+    }
+    // Observação de UN
+    if (tipo === "UN") {
+      doc.setFont(undefined, "italic");
+      doc.text("(*) ESTE ITEM ESTÁ EM UNIDADES! (NÃO EM KG).", margemX + 5, y + 4);
+      doc.setFont(undefined, "normal");
+      y += 4;
+    }
+    totalGeral += itens[i].total;
+    // Separação de 2mm entre itens
+    if (i < itens.length - 1) {
+      y += 2;
+    }
+  }
+
+  // PAGAMENTO caixa separada
+  y += 2;
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.2);
+  doc.setFont(undefined, "bold");
+  doc.rect(margemX, y, larguraCaixa, 10, "S");
+  let pagamento = document.getElementById("pagamento").value;
+  if (pagamento === "Outro") {
+    pagamento = document.getElementById("pagamentoOutro").value;
+  }
+  doc.text("FORMA DE PAGAMENTO", margemX + larguraCaixa / 2, y + 4.0, { align: "center" });
+  doc.setFontSize(10);
+  doc.text(pagamento, margemX + larguraCaixa / 2, y + 8, { align: "center" });
+  y += 13;
+
+  // TOTAL DO PEDIDO
+  doc.setFont(undefined, "bold");
+  doc.setLineWidth(1.1);
+  doc.rect(margemX, y, larguraCaixa, 12, "S");
+  doc.text("TOTAL DO PEDIDO", margemX + larguraCaixa / 2, y + 4.5, { align: "center" });
+  doc.setFontSize(10);
+  doc.text("R$ " + totalGeral.toFixed(2), margemX + larguraCaixa / 2, y + 9, { align: "center" });
+  y += 15;
+
+  // OBSERVAÇÃO GERAL
+  let obsGeral = document.getElementById("obsGeral").value;
+  if (obsGeral && obsGeral.trim() !== "") {
+    doc.setFont(undefined, "bold");
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.2);
+    let obsLines = doc.splitTextToSize(obsGeral, larguraCaixa - 4);
+    let obsHeight = 7 + obsLines.length * 5;
+    doc.rect(margemX, y, larguraCaixa, obsHeight, "S");
+    doc.text("OBS: PEDIDO", margemX + 6, y + 6);
+    doc.setFont(undefined, "normal");
+    doc.setFontSize(9);
+    for (let l = 0; l < obsLines.length; l++) {
+      doc.text(obsLines[l], margemX + 6, y + 11 + l * 5);
+    }
+    y += obsHeight + 3;
+  }
+
+  // Final do PDF
+  if (apenasSalvar) {
+    doc.save(nomeArquivo); // Agora usa o nome personalizado!
+  } else {
+    window.open(doc.output('bloburl'), '_blank');
+  }
+}
+// Compartilhar PDF (Android/iOS modernos)
+async function compartilharPDF() {
+  if (!camposObrigatoriosPreenchidos()) {
+    alert("Preencha todos os campos obrigatórios: Cliente, Endereço, Data de Entrega e Horário.");
+    return;
+  }
+  salvarCamposAntesRender();
+let nomeCliente = document.getElementById("cliente").value.trim();
+  let dataEntrega = document.getElementById("entrega").value;
+  let nomeArquivo = `Pedido_${nomeCliente.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '')}_${dataEntrega}.pdf`;
+
+  const { jsPDF } = window.jspdf;
+  const margemX = 2;
+  const larguraCaixa = 68;
+  let y = 10;
+
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: [72, 297]
+  });
+
+  // Repete toda a geração do PDF (igual ao gerarPDF)
+  let imgLogo = new Image();
+  imgLogo.src = 'Serra-Nobre_3.png';
+  doc.setFontSize(7);
+  doc.setFont(undefined, "bold");
+  try {
+    doc.addImage(imgLogo, "PNG", 20, y, 32, 12, '', 'FAST');
+    y += 14;
+  } catch (e) {
+    y += 2;
+  }
+  // --- Cole aqui toda a lógica das caixas/itens/total/observação igual ao gerarPDF acima ---
+
+  // Compartilhamento nativo
+  if (navigator.canShare && window.Blob) {
+    const blob = await doc.output("blob");
+    const file = new File([blob], nomeArquivo, { type: "application/pdf" }); // Usa nome personalizado!
+    if (navigator.canShare({ files: [file] })) {
+      navigator.share({
+        files: [file],
+        title: "Pedido Serra Nobre",
+        text: "Segue pedido em PDF"
+      });
+    } else {
+      alert("Seu dispositivo não permite compartilhamento direto de arquivos PDF. Salve e envie manualmente.");
+    }
+  } else {
+    alert("Seu navegador não suporta compartilhamento direto de PDF. Salve e envie manualmente.");
+  }
+}
+  </script>
+  <datalist id="listaProdutos">
+    <option value="AGULHA DESOSSADA KG"></option>
+    <option value="CHOP TUPINIQUIM PILSEN 1L"></option>
+    <option value="COSTELA GAUCHA KG"></option>
+    <option value="COSTELINHA SUINA KG"></option>
+    <option value="GALINHA CAIPIRA CONG. KG"></option>
+    <option value="MAMINHA BOVINA KG"></option>
+    <option value="PERNIL SUINO KG"></option>
+    <option value="TULIPA TEMPERADA KG"></option>
+    <option value="VAZIO GAUCHO KG"></option>
+  </datalist>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('sw.js')
+        .then(function(registration) {
+          // Sucesso!
+        }, function(err) {
+          // Erro
+        });
+    });
+  }
+</script>
+</body>
+</html>
