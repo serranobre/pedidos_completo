@@ -72,7 +72,7 @@
     <option value="PIX">PIX</option>
     <option value="DINHEIRO">DINHEIRO</option>
     <option value="CARTÃO (LEVAR MAQUINA)">CARTÃO (LEVAR MAQUINA)</option>
-    <option value="OUTROS">OUTRO</option>
+    <option value="OUTRO">OUTRO</option>
   </select>
   <input type="text" id="pagamentoOutro" placeholder="Digite outra forma de pagamento" style="display:none"/>
   <hr/>
@@ -479,7 +479,6 @@ async function compartilharPDF() {
 let [ano, mes, dia] = dataEntregaBr.split("-");
 let dataFormatada = `${dia}-${mes}-${ano}`;
 let nomeArquivo = `Pedido_${nomeCliente.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '')}_${dataFormatada}.pdf`;
-  let nomeArquivo = `Pedido_${nomeCliente.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '')}_${dataEntrega}.pdf`;
 
   const { jsPDF } = window.jspdf;
   const margemX = 2;
