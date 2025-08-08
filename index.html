@@ -466,14 +466,13 @@ doc.text("PRODUTO", valorX, y + 8.5, { align: "center" });
     window.open(doc.output('bloburl'), '_blank');
   }
 }
-// Compartilhar PDF (Android/iOS modernos)
 async function compartilharPDF() {
   if (!camposObrigatoriosPreenchidos()) {
     alert("Preencha todos os campos obrigatórios: Cliente, Endereço, Data de Entrega e Horário.");
     return;
   }
   salvarCamposAntesRender();
-let nomeCliente = document.getElementById("cliente").value.trim();
+  let nomeCliente = document.getElementById("cliente").value.trim();
   let dataEntrega = document.getElementById("entrega").value;
   let nomeArquivo = `Pedido_${nomeCliente.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '')}_${dataEntrega}.pdf`;
 
@@ -488,7 +487,6 @@ let nomeCliente = document.getElementById("cliente").value.trim();
     format: [72, 297]
   });
 
-  // Repete toda a geração do PDF (igual ao gerarPDF)
   let imgLogo = new Image();
   imgLogo.src = 'Serra-Nobre_3.png';
   doc.setFontSize(7);
@@ -499,12 +497,172 @@ let nomeCliente = document.getElementById("cliente").value.trim();
   } catch (e) {
     y += 2;
   }
-  // --- Cole aqui toda a lógica das caixas/itens/total/observação igual ao gerarPDF acima ---
 
-  // Compartilhamento nativo
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.2);
+  doc.rect(margemX, y, larguraCaixa, 10, "S");
+  doc.text("CLIENTE", margemX + larguraCaixa / 2, y + 4.0, { align: "center" });
+  doc.setFontSize(8);
+  doc.setFont(undefined, "normal");
+  centralizaTexto(doc, document.getElementById("cliente").value, margemX, y-3, larguraCaixa, 2);
+  y += 11;
+
+  doc.setFont(undefined, "bold");
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.2);
+  doc.rect(margemX, y, larguraCaixa, 10, "S");
+  doc.text("ENDEREÇO", margemX + larguraCaixa / 2, y + 4.0, { align: "center" });
+  doc.setFontSize(8);
+  doc.setFont(undefined, "normal");
+  centralizaTexto(doc, document.getElementById("endereco").value, margemX, y-3, larguraCaixa, 2);
+  y += 11;
+
+  doc.setFont(undefined, "bold");
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.2);
+  doc.rect(margemX, y, larguraCaixa / 2, 10, "S");
+  doc.rect(margemX + larguraCaixa / 2, y, larguraCaixa / 2, 10, "S");
+  doc.setFontSize(7);
+  doc.text("DATA ENTREGA", margemX + larguraCaixa / 4, y + 4, { align: "center" });
+  doc.text("HORÁRIO ENTREGA", margemX + (3 * larguraCaixa) / 4, y + 4, { align: "center" });
+  doc.setFont(undefined, "normal");
+  doc.setFontSize(8);
+  doc.text(formatarData(document.getElementById("entrega").value), margemX + larguraCaixa / 4, y + 8, { align: "center" });
+  doc.text(document.getElementById("horaEntrega").value, margemX + (3 * larguraCaixa) / 4, y + 8, { align: "center" });
+  doc.setFontSize(7);
+  y += 10;
+
+  y += 2;
+  doc.setLineWidth(1.1);
+  doc.rect(margemX + larguraCaixa * 0.235, y, larguraCaixa * 0.53, 10, "S");
+  doc.setLineWidth(0.2);
+  doc.setFontSize(10);
+  doc.setFont(undefined, "bold");
+  let tipoEntrega = document.querySelector('input[name="tipoEntrega"]:checked').value;
+  doc.text(tipoEntrega, margemX + larguraCaixa / 2, y + 6.5, { align: "center" });
+  y += 12;
+
+  const larguraProduto = 23.5;
+  const larguraQde = 13;
+  const larguraUnit = 13;
+  const larguraTotal = 18.5;
+  doc.setFontSize(7);
+  doc.setFont(undefined, "bold");
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.2);
+  doc.rect(margemX, y, larguraProduto, 10, "S");
+  doc.rect(margemX + larguraProduto, y, larguraQde, 10, "S");
+  doc.rect(margemX + larguraProduto + larguraQde, y, larguraUnit, 10, "S");
+  doc.rect(margemX + larguraProduto + larguraQde + larguraUnit, y, larguraTotal, 10, "S");
+  doc.text("PRODUTO", margemX + larguraProduto / 2, y + 6, { align: "center" });
+  doc.text("QDE", margemX + larguraProduto + larguraQde / 2, y + 6, { align: "center" });
+  doc.text("R$ UNIT.", margemX + larguraProduto + larguraQde + larguraUnit / 2, y + 6, { align: "center" });
+  const valorX = margemX + larguraProduto + larguraQde + larguraUnit + larguraTotal / 2;
+  doc.text("VALOR", valorX, y + 4, { align: "center" });
+  doc.text("PRODUTO", valorX, y + 8.5, { align: "center" });
+  y += 12;
+
+  let totalGeral = 0;
+  doc.setFont(undefined, "normal");
+  doc.setFontSize(7);
+  for (let i = 0; i < itens.length; i++) {
+    let prod = itens[i].produto;
+    let qtd = String(itens[i].quantidade);
+    let tipo = itens[i].tipo;
+    let preco = itens[i].preco.toFixed(2);
+    let total = itens[i].total ? itens[i].total.toFixed(2) : "—";
+    let qtdDisplay = qtd ? `${qtd} ${tipo}` : "";
+    let precoDisplay = itens[i].preco ? "R$ " + preco : "—";
+    let totalDisplay = (itens[i].preco && itens[i].quantidade) ? "R$ " + total : "—";
+    let prodLines = doc.splitTextToSize(prod, larguraProduto - 2);
+    if (prodLines.length > 2) prodLines = prodLines.slice(0, 2);
+    let rowHeight = 8 * prodLines.length;
+    if (rowHeight < 10) rowHeight = 10;
+
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.2);
+    doc.rect(margemX, y, larguraProduto, rowHeight, "S");
+    doc.rect(margemX + larguraProduto, y, larguraQde, rowHeight, "S");
+    doc.rect(margemX + larguraProduto + larguraQde, y, larguraUnit, rowHeight, "S");
+    doc.rect(margemX + larguraProduto + larguraQde + larguraUnit, y, larguraTotal, rowHeight, "S");
+    for (let l = 0; l < prodLines.length; l++) {
+      let prodY = y + 5 + l * (prodLines.length > 1 ? 5 : 8);
+      doc.text(prodLines[l], margemX + larguraProduto / 2, prodY, { align: "center" });
+    }
+    doc.text(qtdDisplay, margemX + larguraProduto + larguraQde / 2, y + rowHeight / 2 + 2, { align: "center" });
+    doc.text(precoDisplay, margemX + larguraProduto + larguraQde + larguraUnit / 2, y + rowHeight / 2 + 2, { align: "center" });
+    doc.text(totalDisplay, margemX + larguraProduto + larguraQde + larguraUnit + larguraTotal / 2, y + rowHeight / 2 + 2, { align: "center" });
+    let obs = itens[i].obs;
+    if (obs && obs.trim() !== "") {
+      y += rowHeight;
+      let obsLines = doc.splitTextToSize(obs, larguraCaixa - 4);
+      let obsHeight = 5 + obsLines.length * 4;
+      doc.rect(margemX, y, larguraCaixa, obsHeight, "S");
+      doc.setFont(undefined, "bold");
+      doc.text("OBSERVAÇÕES:", margemX + 3, y + 5.5);
+      doc.setFont(undefined, "normal");
+      for (let ol = 0; ol < obsLines.length; ol++) {
+        doc.text(obsLines[ol], margemX + 25, y + 5.5 + ol * 4);
+      }
+      y += obsHeight;
+    } else {
+      y += rowHeight;
+    }
+    if (tipo === "UN") {
+      doc.setFont(undefined, "italic");
+      doc.text("(*) ESTE ITEM ESTÁ EM UNIDADES! (NÃO EM KG).", margemX + 5, y + 4);
+      doc.setFont(undefined, "normal");
+      y += 4;
+    }
+    totalGeral += itens[i].total;
+    if (i < itens.length - 1) {
+      y += 2;
+    }
+  }
+
+  y += 2;
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.2);
+  doc.setFont(undefined, "bold");
+  doc.rect(margemX, y, larguraCaixa, 10, "S");
+  let pagamento = document.getElementById("pagamento").value;
+  if (pagamento === "Outro") {
+    pagamento = document.getElementById("pagamentoOutro").value;
+  }
+  doc.text("FORMA DE PAGAMENTO", margemX + larguraCaixa / 2, y + 4.0, { align: "center" });
+  doc.setFontSize(10);
+  doc.text(pagamento, margemX + larguraCaixa / 2, y + 8, { align: "center" });
+  y += 13;
+
+  doc.setFont(undefined, "bold");
+  doc.setLineWidth(1.1);
+  doc.rect(margemX, y, larguraCaixa, 12, "S");
+  doc.text("TOTAL DO PEDIDO", margemX + larguraCaixa / 2, y + 4.5, { align: "center" });
+  doc.setFontSize(10);
+  doc.text("R$ " + totalGeral.toFixed(2), margemX + larguraCaixa / 2, y + 9, { align: "center" });
+  y += 15;
+
+  let obsGeral = document.getElementById("obsGeral").value;
+  if (obsGeral && obsGeral.trim() !== "") {
+    doc.setFont(undefined, "bold");
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.2);
+    let obsLines = doc.splitTextToSize(obsGeral, larguraCaixa - 4);
+    let obsHeight = 7 + obsLines.length * 5;
+    doc.rect(margemX, y, larguraCaixa, obsHeight, "S");
+    doc.text("OBS: PEDIDO", margemX + 6, y + 6);
+    doc.setFont(undefined, "normal");
+    doc.setFontSize(9);
+    for (let l = 0; l < obsLines.length; l++) {
+      doc.text(obsLines[l], margemX + 6, y + 11 + l * 5);
+    }
+    y += obsHeight + 3;
+  }
+
+  // Compartilhar
   if (navigator.canShare && window.Blob) {
     const blob = await doc.output("blob");
-    const file = new File([blob], nomeArquivo, { type: "application/pdf" }); // Usa nome personalizado!
+    const file = new File([blob], nomeArquivo, { type: "application/pdf" });
     if (navigator.canShare({ files: [file] })) {
       navigator.share({
         files: [file],
@@ -518,6 +676,7 @@ let nomeCliente = document.getElementById("cliente").value.trim();
     alert("Seu navegador não suporta compartilhamento direto de PDF. Salve e envie manualmente.");
   }
 }
+
   </script>
   <datalist id="listaProdutos">
     <option value="AGULHA DESOSSADA KG"></option>
