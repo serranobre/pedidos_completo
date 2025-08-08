@@ -248,8 +248,10 @@
   }
   salvarCamposAntesRender();
 let nomeCliente = document.getElementById("cliente").value.trim();
-  let dataEntrega = document.getElementById("entrega").value;
-  let nomeArquivo = `Pedido_${nomeCliente.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '')}_${dataEntrega}.pdf`;
+let dataEntregaBr = document.getElementById("entrega").value;
+let [ano, mes, dia] = dataEntregaBr.split("-");
+let dataFormatada = `${dia}-${mes}-${ano}`;
+let nomeArquivo = `Pedido_${nomeCliente.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '')}_${dataFormatada}.pdf`;
 
   const { jsPDF } = window.jspdf;
   const margemX = 2; // Margem esquerda/direita
@@ -473,7 +475,10 @@ async function compartilharPDF() {
   }
   salvarCamposAntesRender();
   let nomeCliente = document.getElementById("cliente").value.trim();
-  let dataEntrega = document.getElementById("entrega").value;
+  let dataEntregaBr = document.getElementById("entrega").value;
+let [ano, mes, dia] = dataEntregaBr.split("-");
+let dataFormatada = `${dia}-${mes}-${ano}`;
+let nomeArquivo = `Pedido_${nomeCliente.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '')}_${dataFormatada}.pdf`;
   let nomeArquivo = `Pedido_${nomeCliente.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '')}_${dataEntrega}.pdf`;
 
   const { jsPDF } = window.jspdf;
