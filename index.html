@@ -43,7 +43,7 @@
 
   <div class="field-group">
     <label>Cliente:</label>
-    <input type="text" id="cliente" autocomplete="off" required onblur="preencherEnderecoCliente()"/>
+    <input type="text" id="cliente" list="listaClientes" autocomplete="off" required onblur="preencherEnderecoCliente()"/>
   </div>
 
   <div class="field-group">
@@ -91,17 +91,34 @@
 
   <div id="resumo"></div>
 
-  <!-- jsPDF -->
+  <datalist id="listaClientes"></datalist>
+  <datalist id="listaProdutos"></datalist>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-  <!-- Firebase (module) -->
+  <!-- FIREBASE (module) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
     import {
-      getFirestore, collection, addDoc, getDocs, query, where, orderBy, limit, updateDoc
+      getFirestore,
+      collection,
+      addDoc,
+      getDocs,
+      query,
+      where,
+      orderBy,
+      limit,
+      updateDoc,
+      startAt,
+      endAt
     } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+    import {
+      getAuth,
+      signInAnonymously,
+      onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 
-    // Config do Firebase
+    // ---- Config do Firebase ----
     const firebaseConfig = {
       apiKey: "AIzaSyB3zBW_WhVfNpX5uoJCq-6WysE5XKYKZt4",
       authDomain: "serranobrepedidos.firebaseapp.com",
@@ -111,12 +128,23 @@
       appId: "1:948939268023:web:3f1f6c18f2c047c82b1232"
     };
 
-    // Inicializa
+    // ---- Inicializa ----
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
-    console.log("🔥 Firebase conectado com sucesso!");
+    const auth = getAuth(app);
 
-    // Salvar/atualizar cliente
+    async function loginAnonimo() {
+      if (auth.currentUser) return auth.currentUser;
+      try {
+        const res = await signInAnonymously(auth);
+        return res.user;
+      } catch (e) {
+        console.error("Falha ao logar anonimamente:", e);
+        throw e;
+      }
+    }
+
+    // ---- Salvar/atualizar cliente (upsert) ----
     async function salvarCliente(nome, endereco) {
       try {
         const nomeNorm = (nome || "").trim();
@@ -139,13 +167,13 @@
             criadoEm: new Date()
           });
         }
-        console.log("✅ Cliente salvo/atualizado!");
+        console.log("✅ Cliente salvo/atualizado");
       } catch (e) {
         console.error("❌ Erro ao salvar cliente:", e);
       }
     }
 
-    // Buscar endereço por nome do cliente
+    // ---- Buscar endereço de um cliente ----
     async function buscarEnderecoCliente(nomeCliente) {
       const nomeNorm = (nomeCliente || "").trim();
       if (!nomeNorm) return "";
@@ -158,7 +186,7 @@
       return "";
     }
 
-    // Buscar último preço (cliente + produto)
+    // ---- Buscar último preço de um produto para um cliente ----
     async function buscarUltimoPreco(clienteNome, produtoNome) {
       const nomeCli = (clienteNome || "").trim();
       const nomeProd = (produtoNome || "").trim();
@@ -171,64 +199,156 @@
         orderBy("data", "desc"),
         limit(1)
       );
-      const qs = await getDocs(q);
-      if (!qs.empty) {
-        const dados = qs.docs[0].data();
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        const dados = querySnapshot.docs[0].data();
         return typeof dados.preco === "number" ? dados.preco : parseFloat(dados.preco);
       }
       return null;
     }
 
-    // Registrar preço no histórico
+    // ---- Registrar preço no histórico ----
     async function registrarPrecoCliente(clienteNome, produtoNome, preco) {
       const nomeCli = (clienteNome || "").trim();
       const nomeProd = (produtoNome || "").trim();
       const valor = parseFloat(preco);
       if (!nomeCli || !nomeProd || isNaN(valor)) return;
+
       try {
         await addDoc(collection(db, "historico_precos"), {
-          cliente: nomeCli, produto: nomeProd, preco: valor, data: new Date()
+          cliente: nomeCli,
+          produto: nomeProd,
+          preco: valor,
+          data: new Date()
         });
-        console.log("💾 Preço registrado no histórico.");
+        console.log("💾 Preço registrado:", nomeProd, valor);
       } catch (e) {
         console.error("❌ Erro ao registrar preço:", e);
       }
     }
 
-    // Expor para o script não-module
+    // ---- Autocomplete: clientes por prefixo ----
+    async function sugerirClientes(prefixo) {
+      const p = (prefixo || "").trim();
+      if (!p) return [];
+      const q = query(
+        collection(db, "clientes"),
+        orderBy("nome"),
+        startAt(p),
+        endAt(p + "\uf8ff"),
+        limit(20)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map(d => (d.data().nome || "").toString()).filter(Boolean);
+    }
+
+    // ---- Carregar lista de produtos (dinâmica) ----
+    async function carregarProdutos() {
+      try {
+        const q = query(collection(db, "produtos"), orderBy("nome"), limit(300));
+        const snap = await getDocs(q);
+        return snap.docs.map(d => (d.data().nome || "").toString()).filter(Boolean);
+      } catch (e) {
+        console.warn("Não foi possível carregar 'produtos' do Firestore. Usando lista local.");
+        return [];
+      }
+    }
+
+    // ---- Inicialização global: login + carregar datalists ----
+    async function initAuthAndLists() {
+      await loginAnonimo();
+
+      // Produtos
+      let produtos = await carregarProdutos();
+      if (!produtos || produtos.length === 0) {
+        produtos = [
+          "AGULHA DESOSSADA KG","CHOP TUPINIQUIM PILSEN 1L","COSTELA GAUCHA KG","COSTELINHA SUINA KG",
+          "GALINHA CAIPIRA CONG. KG","MAMINHA BOVINA KG","PERNIL SUINO KG","TULIPA TEMPERADA KG","VAZIO GAUCHO KG"
+        ];
+      }
+      const dlProd = document.getElementById("listaProdutos");
+      if (dlProd) dlProd.innerHTML = produtos.map(p => `<option value="${p}"></option>`).join("");
+
+      // Clientes (carrega 50 mais recentes por conveniência)
+      try {
+        const snap = await getDocs(query(collection(db, "clientes"), orderBy("nome"), limit(50)));
+        const nomes = snap.docs.map(d => (d.data().nome || "").toString()).filter(Boolean);
+        const dlCli = document.getElementById("listaClientes");
+        if (dlCli) dlCli.innerHTML = nomes.map(n => `<option value="${n}"></option>`).join("");
+      } catch (e) {
+        console.warn("Não foi possível carregar clientes iniciais:", e);
+      }
+    }
+
+    // Expor para scripts não-module
     window.salvarCliente = salvarCliente;
     window.buscarEnderecoCliente = buscarEnderecoCliente;
     window.buscarUltimoPreco = buscarUltimoPreco;
     window.registrarPrecoCliente = registrarPrecoCliente;
+    window.sugerirClientes = sugerirClientes;
+    window.initAuthAndLists = initAuthAndLists;
+
+    // Faz login e carrega listas assim que o auth estiver pronto
+    onAuthStateChanged(auth, () => { initAuthAndLists().catch(console.error); });
   </script>
 
-  <!-- App (não-module) -->
+  <!-- APP / UI -->
   <script>
-    // ------- Dados iniciais -------
-    let produtos = [
-      "AGULHA DESOSSADA KG", "CHOP TUPINIQUIM PILSEN 1L",
-      "COSTELA GAUCHA KG", "COSTELINHA SUINA KG",
-      "GALINHA CAIPIRA CONG. KG", "MAMINHA BOVINA KG",
-      "PERNIL SUINO KG", "TULIPA TEMPERADA KG", "VAZIO GAUCHO KG"
+    // ====== Estado ======
+    let itens = [
+      { produto: "", tipo: "KG", quantidade: 0, preco: 0, total: 0, obs: "" }
     ];
+    window.itens = itens; // para outras funções enxergarem
 
-    let itens = [{ produto: "", tipo: "KG", quantidade: 0, preco: 0, total: 0, obs: "" }];
+    const LISTA_PRODUTOS_ID = "listaProdutos";
 
-    document.addEventListener('DOMContentLoaded', function() {
-      renderItens(); // GARANTE que aparece ao carregar
+    // ====== Boot confiável (iOS também) ======
+    function initUI() {
+      renderItens();
       const sel = document.getElementById('pagamento');
-      sel.addEventListener('change', function () {
-        document.getElementById('pagamentoOutro').style.display =
-          (this.value === 'OUTRO') ? '' : 'none';
-      });
-    });
+      if (sel) {
+        sel.addEventListener('change', function () {
+          document.getElementById('pagamentoOutro').style.display =
+            (this.value === 'OUTRO') ? '' : 'none';
+        });
+      }
 
-    // ------- Utilidades -------
+      // Autocomplete incremental de clientes
+      const clienteInput = document.getElementById('cliente');
+      if (clienteInput) {
+        let debounce;
+        clienteInput.addEventListener('input', () => {
+          clearTimeout(debounce);
+          debounce = setTimeout(async () => {
+            const termo = clienteInput.value.trim();
+            if (!termo) return;
+            try {
+              const sugestoes = await (window.sugerirClientes ? window.sugerirClientes(termo) : []);
+              const dl = document.getElementById('listaClientes');
+              if (dl && Array.isArray(sugestoes)) {
+                dl.innerHTML = sugestoes.map(n => `<option value="${n}"></option>`).join('');
+              }
+            } catch (e) { /* silencioso */ }
+          }, 200);
+        });
+      }
+
+      // Se o módulo firebase já carregou, inicia listas
+      if (typeof window.initAuthAndLists === 'function') {
+        window.initAuthAndLists().catch(console.error);
+      }
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initUI);
+    } else { initUI(); }
+
+    // ====== UI helpers ======
     function criarSelectProduto(i) {
-      return `<input list="listaProdutos" class="produto" data-index="${i}"
+      return `<input list="${LISTA_PRODUTOS_ID}" class="produto" data-index="${i}"
                 placeholder="Digite ou selecione"
                 value="${itens[i].produto || ''}"
-                onblur="preencherUltimoPreco(${i})"/>`;
+                onblur="preencherUltimoPreco(${i})"
+                onchange="preencherUltimoPreco(${i})"/>`;
     }
 
     function criarTipoSelect(i) {
@@ -243,6 +363,7 @@
     function renderItens() {
       salvarCamposAntesRender();
       const container = document.getElementById("itens");
+      if (!container) return;
       container.innerHTML = "";
       itens.forEach((item, i) => {
         container.innerHTML += `
@@ -252,16 +373,17 @@
             <label>Tipo:</label>
             ${criarTipoSelect(i)}
             <label>Quantidade:</label>
-            <input type="number" step="0.01" class="quantidade" data-index="${i}" value="${item.quantidade || ''}" oninput="calcularItem(${i})"/>
+            <input type="number" step="0.01" class="quantidade" data-index="${i}"
+                   value="${item.quantidade || ''}" oninput="calcularItem(${i})"/>
             <label>Preço Unitário:</label>
-            <input type="number" step="0.01" class="preco" data-index="${i}" value="${item.preco || ''}" oninput="calcularItem(${i})"/>
+            <input type="number" step="0.01" class="preco" data-index="${i}"
+                   value="${item.preco || ''}" oninput="calcularItem(${i})"/>
             <label>Observação do item:</label>
             <textarea class="obsItem" data-index="${i}">${item.obs || ''}</textarea>
             <p class="total">Total do Item: R$ <span id="totalItem_${i}">${(item.total || 0).toFixed(2)}</span></p>
             <button class="remove" onclick="removerItem(${i})">Remover Item</button>
           </div>`;
       });
-      atualizarListaDatalist();
     }
 
     function atualizarTipo(i, valor) {
@@ -269,18 +391,7 @@
       calcularItem(i);
     }
 
-    function atualizarListaDatalist() {
-      let dataList = document.getElementById("listaProdutos");
-      if (!dataList) {
-        dataList = document.createElement("datalist");
-        dataList.id = "listaProdutos";
-        document.body.appendChild(dataList);
-      }
-      dataList.innerHTML = produtos.map(p => `<option value="${p}"></option>`).join('');
-    }
-
     function salvarCamposAntesRender() {
-      // Preserva o que já foi digitado
       document.querySelectorAll(".item").forEach((el, idx) => {
         if (typeof itens[idx] === "undefined") return;
         let prod = el.querySelector(".produto")?.value || "";
@@ -313,14 +424,15 @@
     }
 
     function calcularItem(i) {
-      let tipo = document.querySelectorAll(".tipo-select")[i].value;
-      const q = parseFloat(document.querySelectorAll(".quantidade")[i].value || "0");
-      const p = parseFloat(document.querySelectorAll(".preco")[i].value || "0");
+      const tipo = document.querySelectorAll(".tipo-select")[i].value;
+      const q = parseFloat(document.querySelectorAll(".quantidade")[i].value) || 0;
+      const p = parseFloat(document.querySelectorAll(".preco")[i].value) || 0;
       itens[i].quantidade = q;
       itens[i].preco = p;
       itens[i].tipo = tipo;
-      itens[i].total = (q && p) ? (q * p) : 0;
-      document.getElementById(`totalItem_${i}`).innerText = itens[i].total ? itens[i].total.toFixed(2) : "—";
+      itens[i].total = q * p;
+      const el = document.getElementById(`totalItem_${i}`);
+      if (el) el.innerText = itens[i].total ? itens[i].total.toFixed(2) : "—";
     }
 
     function camposObrigatoriosPreenchidos() {
@@ -330,42 +442,6 @@
         document.getElementById("entrega").value &&
         document.getElementById("horaEntrega").value
       );
-    }
-
-    function gerarResumo() {
-      if (!camposObrigatoriosPreenchidos()) {
-        alert("Preencha todos os campos obrigatórios: Cliente, Endereço, Data de Entrega e Horário.");
-        return;
-      }
-      salvarCamposAntesRender();
-      const nome = document.getElementById("cliente").value;
-      const end = document.getElementById("endereco").value;
-      const ent = document.getElementById("entrega").value;
-      const hora = document.getElementById("horaEntrega").value;
-      const obsGeral = document.getElementById("obsGeral").value;
-      let pagamento = document.getElementById("pagamento").value;
-      if (pagamento === "OUTRO") pagamento = document.getElementById("pagamentoOutro").value;
-      const tipoEntrega = document.querySelector('input[name="tipoEntrega"]:checked').value;
-
-      const itensResumo = itens.map((item) => {
-        const prod = item.produto;
-        const obs = item.obs;
-        let tipo = item.tipo;
-        let qtdDisplay = `${item.quantidade} ${tipo}`;
-        let precoDisplay = item.preco ? "R$ " + item.preco.toFixed(2) : "—";
-        let totalDisplay = item.total ? "R$ " + item.total.toFixed(2) : "—";
-        return `<li>${prod} - ${qtdDisplay} x ${precoDisplay} = ${totalDisplay} <br><em>${obs}</em>${tipo === "UN" ? "<br><small>(*) Este item está em unidades (não em kg).</small>" : ""}</li>`;
-      }).join('');
-
-      const totalGeral = itens.reduce((sum, item) => sum + (item.total||0), 0).toFixed(2);
-      document.getElementById("resumo").innerHTML = `
-        <h3>Resumo do Pedido</h3>
-        <div><b>Cliente:</b> ${nome}<br><b>Endereço:</b> ${end}</div>
-        <div><b>Entrega:</b> ${formatarData(ent)} às ${hora} <b>${tipoEntrega}</b></div>
-        <ul>${itensResumo}</ul>
-        <div><b>Forma de Pagamento:</b> ${pagamento}</div>
-        <p><strong>Observação geral:</strong> ${obsGeral}</p>
-        <p class="total">Valor Total: R$${totalGeral}</p>`;
     }
 
     function formatarData(dataStr) {
@@ -383,10 +459,10 @@
       }
     }
 
-    // ------- Preenchimentos automáticos -------
+    // ====== Integrações Firebase expostas pelo módulo ======
     async function preencherEnderecoCliente() {
       const nomeCliente = document.getElementById("cliente").value.trim();
-      if (!nomeCliente) return;
+      if (!nomeCliente || !window.buscarEnderecoCliente) return;
       const endereco = await window.buscarEnderecoCliente(nomeCliente);
       if (endereco) document.getElementById("endereco").value = endereco;
     }
@@ -396,7 +472,7 @@
       const produtoEl = document.querySelectorAll(".produto")[index];
       if (!produtoEl) return;
       const produto = produtoEl.value.trim();
-      if (!nomeCliente || !produto) return;
+      if (!nomeCliente || !produto || !window.buscarUltimoPreco) return;
 
       const preco = await window.buscarUltimoPreco(nomeCliente, produto);
       if (preco !== null) {
@@ -406,13 +482,11 @@
         if (window.itens && window.itens[index]) {
           window.itens[index].preco = parseFloat(preco);
         }
-        if (typeof window.calcularItem === "function") {
-          window.calcularItem(index);
-        }
+        calcularItem(index);
       }
     }
 
-    // ------- PDF -------
+    // ====== PDF / COMPARTILHAR ======
     async function gerarPDF(apenasSalvar = false) {
       if (!camposObrigatoriosPreenchidos()) {
         alert("Preencha todos os campos obrigatórios: Cliente, Endereço, Data de Entrega e Horário.");
@@ -420,23 +494,28 @@
       }
       salvarCamposAntesRender();
 
-      let nomeCliente = document.getElementById("cliente").value.trim();
-      let dataEntregaBr = document.getElementById("entrega").value;
-      let [ano, mes, dia] = dataEntregaBr.split("-");
-      let dataFormatada = `${dia}-${mes}-${ano}`;
-      let nomeArquivo = `Pedido_${nomeCliente.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '')}_${dataFormatada}.pdf`;
+      const nomeCliente = document.getElementById("cliente").value.trim();
+      const dataEntregaBr = document.getElementById("entrega").value;
+      const [ano, mes, dia] = dataEntregaBr.split("-");
+      const dataFormatada = `${dia}-${mes}-${ano}`;
+      const nomeArquivo = `Pedido_${nomeCliente.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '')}_${dataFormatada}.pdf`;
 
       const { jsPDF } = window.jspdf;
-      const margemX = 2, larguraCaixa = 68;
+      const margemX = 2;
+      const larguraCaixa = 68;
       let y = 10;
 
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [72, 297] });
 
       // Logo
-      let imgLogo = new Image();
-      imgLogo.src = 'Serra-Nobre_3.png';
-      doc.setFontSize(7); doc.setFont(undefined, "bold");
-      try { doc.addImage(imgLogo, "PNG", 20, y, 32, 12, '', 'FAST'); y += 14; } catch (e) { y += 2; }
+      try {
+        let imgLogo = new Image();
+        imgLogo.src = 'Serra-Nobre_3.png';
+        doc.setFontSize(7);
+        doc.setFont(undefined, "bold");
+        doc.addImage(imgLogo, "PNG", 20, y, 32, 12, '', 'FAST');
+        y += 14;
+      } catch (e) { y += 2; }
 
       // Cliente
       doc.setDrawColor(0); doc.setLineWidth(0.2);
@@ -464,19 +543,20 @@
       doc.setFont(undefined, "normal"); doc.setFontSize(8);
       doc.text(formatarData(document.getElementById("entrega").value), margemX + larguraCaixa / 4, y + 8, { align: "center" });
       doc.text(document.getElementById("horaEntrega").value, margemX + (3 * larguraCaixa) / 4, y + 8, { align: "center" });
-      doc.setFontSize(7); y += 10;
+      doc.setFontSize(7);
+      y += 10;
 
       // Entrega/Retirada
       y += 2; doc.setLineWidth(1.1);
       doc.rect(margemX + larguraCaixa * 0.235, y, larguraCaixa * 0.53, 10, "S");
       doc.setLineWidth(0.2); doc.setFontSize(10); doc.setFont(undefined, "bold");
-      let tipoEntrega = document.querySelector('input[name="tipoEntrega"]:checked').value;
+      const tipoEntrega = document.querySelector('input[name="tipoEntrega"]:checked').value;
       doc.text(tipoEntrega, margemX + larguraCaixa / 2, y + 6.5, { align: "center" });
       y += 12;
 
-      // Itens
+      // Tabela itens
       const larguraProduto = 23.5, larguraQde = 13, larguraUnit = 13, larguraTotal = 18.5;
-      doc.setFontSize(7); doc.setFont(undefined, "bold");
+      doc.setFontSize(7); doc.setFont(undefined, "bold"); doc.setDrawColor(0); doc.setLineWidth(0.2);
       doc.rect(margemX, y, larguraProduto, 10, "S");
       doc.rect(margemX + larguraProduto, y, larguraQde, 10, "S");
       doc.rect(margemX + larguraProduto + larguraQde, y, larguraUnit, 10, "S");
@@ -489,22 +569,23 @@
       doc.text("PRODUTO", valorX, y + 8.5, { align: "center" });
       y += 12;
 
-      let totalGeral = 0; doc.setFont(undefined, "normal"); doc.setFontSize(7);
+      let totalGeral = 0;
+      doc.setFont(undefined, "normal"); doc.setFontSize(7);
 
       for (let i = 0; i < itens.length; i++) {
-        let prod = itens[i].produto || "";
-        let qtd = String(itens[i].quantidade || "");
-        let tipo = itens[i].tipo || "KG";
-        let preco = (itens[i].preco || 0).toFixed(2);
-        let total = itens[i].total ? itens[i].total.toFixed(2) : "—";
-        let qtdDisplay = qtd ? `${qtd} ${tipo}` : "";
-        let precoDisplay = itens[i].preco ? "R$ " + preco : "—";
-        let totalDisplay = (itens[i].preco && itens[i].quantidade) ? "R$ " + total : "—";
+        const prod = itens[i].produto || "";
+        const qtd = String(itens[i].quantidade || "");
+        const tipo = itens[i].tipo || "KG";
+        const preco = (parseFloat(itens[i].preco) || 0).toFixed(2);
+        const total = (parseFloat(itens[i].total) || 0).toFixed(2);
+        const qtdDisplay = qtd ? `${qtd} ${tipo}` : "";
+        const precoDisplay = itens[i].preco ? "R$ " + preco : "—";
+        const totalDisplay = (itens[i].preco && itens[i].quantidade) ? "R$ " + total : "—";
+
         let prodLines = doc.splitTextToSize(prod, larguraProduto - 2);
         if (prodLines.length > 2) prodLines = prodLines.slice(0, 2);
         let rowHeight = Math.max(10, 8 * prodLines.length);
 
-        doc.setDrawColor(0); doc.setLineWidth(0.2);
         doc.rect(margemX, y, larguraProduto, rowHeight, "S");
         doc.rect(margemX + larguraProduto, y, larguraQde, rowHeight, "S");
         doc.rect(margemX + larguraProduto + larguraQde, y, larguraUnit, rowHeight, "S");
@@ -518,15 +599,14 @@
         doc.text(precoDisplay, margemX + larguraProduto + larguraQde + larguraUnit / 2, y + rowHeight / 2 + 2, { align: "center" });
         doc.text(totalDisplay, margemX + larguraProduto + larguraQde + larguraUnit + larguraTotal / 2, y + rowHeight / 2 + 2, { align: "center" });
 
-        // Obs do item
-        let obs = itens[i].obs || "";
+        // Obs item
+        const obs = itens[i].obs || "";
         if (obs.trim() !== "") {
           y += rowHeight;
           let obsLines = doc.splitTextToSize(obs, larguraCaixa - 4);
           let obsHeight = 5 + obsLines.length * 4;
           doc.rect(margemX, y, larguraCaixa, obsHeight, "S");
-          doc.setFont(undefined, "bold");
-          doc.text("OBSERVAÇÕES:", margemX + 3, y + 5.5);
+          doc.setFont(undefined, "bold"); doc.text("OBSERVAÇÕES:", margemX + 3, y + 5.5);
           doc.setFont(undefined, "normal");
           for (let ol = 0; ol < obsLines.length; ol++) {
             doc.text(obsLines[ol], margemX + 25, y + 5.5 + ol * 4);
@@ -542,35 +622,30 @@
           doc.setFont(undefined, "normal");
           y += 4;
         }
-
-        totalGeral += (itens[i].total || 0);
+        totalGeral += (parseFloat(itens[i].total) || 0);
         if (i < itens.length - 1) y += 2;
       }
 
       // Pagamento
-      y += 2; doc.setDrawColor(0); doc.setLineWidth(0.2); doc.setFont(undefined, "bold");
-      doc.rect(margemX, y, larguraCaixa, 10, "S");
+      y += 2;
+      doc.setFont(undefined, "bold"); doc.rect(margemX, y, larguraCaixa, 10, "S");
       let pagamento = document.getElementById("pagamento").value;
-      if (pagamento === "OUTRO") pagamento = document.getElementById("pagamentoOutro").value;
+      if (pagamento === "OUTRO") pagamento = document.getElementById("pagamentoOutro").value || "OUTRO";
       doc.text("FORMA DE PAGAMENTO", margemX + larguraCaixa / 2, y + 4.0, { align: "center" });
-      doc.setFontSize(10);
-      doc.text(pagamento, margemX + larguraCaixa / 2, y + 8, { align: "center" });
+      doc.setFontSize(10); doc.text(pagamento, margemX + larguraCaixa / 2, y + 8, { align: "center" });
       y += 13;
 
-      // Total geral
+      // Total
       doc.setFont(undefined, "bold"); doc.setLineWidth(1.1);
       doc.rect(margemX, y, larguraCaixa, 12, "S");
       doc.text("TOTAL DO PEDIDO", margemX + larguraCaixa / 2, y + 4.5, { align: "center" });
-      doc.setFontSize(10);
-      doc.text("R$ " + totalGeral.toFixed(2), margemX + larguraCaixa / 2, y + 9, { align: "center" });
+      doc.setFontSize(10); doc.text("R$ " + totalGeral.toFixed(2), margemX + larguraCaixa / 2, y + 9, { align: "center" });
       y += 15;
 
       // Obs geral
-      let obsGeral = document.getElementById("obsGeral").value;
+      const obsGeral = document.getElementById("obsGeral").value;
       if (obsGeral && obsGeral.trim() !== "") {
-        doc.setFont(undefined, "bold");
-        doc.setDrawColor(0);
-        doc.setLineWidth(0.2);
+        doc.setFont(undefined, "bold"); doc.setDrawColor(0); doc.setLineWidth(0.2);
         let obsLines = doc.splitTextToSize(obsGeral, larguraCaixa - 4);
         let obsHeight = 7 + obsLines.length * 5;
         doc.rect(margemX, y, larguraCaixa, obsHeight, "S");
@@ -582,29 +657,27 @@
         y += obsHeight + 3;
       }
 
-      // Persistir dados
-      await window.salvarCliente(
-        document.getElementById("cliente").value.trim(),
-        document.getElementById("endereco").value.trim()
-      );
-
+      // Salvar cliente + registrar histórico
+      if (window.salvarCliente) {
+        window.salvarCliente(
+          document.getElementById("cliente").value.trim(),
+          document.getElementById("endereco").value.trim()
+        );
+      }
       try {
         const nomeCli = document.getElementById("cliente").value.trim();
         await Promise.all(
           itens
             .filter(i => (i?.produto || "").trim() && !isNaN(parseFloat(i?.preco)))
-            .map(i => window.registrarPrecoCliente(
-              nomeCli,
-              String(i.produto).trim(),
-              parseFloat(i.preco)
-            ))
+            .map(i => window.registrarPrecoCliente
+              ? window.registrarPrecoCliente(nomeCli, String(i.produto).trim(), parseFloat(i.preco))
+              : Promise.resolve()
+            )
         );
-        console.log("✅ Histórico de preços atualizado.");
       } catch (err) {
-        console.error("❌ Erro ao registrar histórico:", err);
+        console.error("Erro ao registrar histórico:", err);
       }
 
-      // Abrir/salvar
       if (apenasSalvar) {
         doc.save(nomeArquivo);
       } else {
@@ -617,95 +690,14 @@
         alert("Preencha todos os campos obrigatórios: Cliente, Endereço, Data de Entrega e Horário.");
         return;
       }
-      salvarCamposAntesRender();
-
-      let nomeCliente = document.getElementById("cliente").value.trim();
-      let dataEntregaBr = document.getElementById("entrega").value;
-      let [ano, mes, dia] = dataEntregaBr.split("-");
-      let dataFormatada = `${dia}-${mes}-${ano}`;
-      let nomeArquivo = `Pedido_${nomeCliente.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '')}_${dataFormatada}.pdf`;
-
-      const { jsPDF } = window.jspdf;
-      const margemX = 2, larguraCaixa = 68;
-      let y = 10;
-
-      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [72, 297] });
-
-      // (Mesmo layout do gerarPDF — omitido aqui para brevidade, mas é idêntico)
-      // Você pode manter o mesmo bloco acima para cliente/endereço/itens/pagamento/total/obs...
-
-      // Para encurtar o exemplo: vamos reutilizar a geração acima chamando gerarPDF em background e só compartilhar.
-      // Caso prefira manter 100% separado, replique o conteúdo do gerarPDF aqui.
-      // ---- Gera o PDF em memória:
-      await gerarPDF(true); // salva nomeado localmente também
-      // Agora cria o blob para compartilhar:
-      const blob = doc.output("blob");
-      // como usamos um doc novo acima sem conteúdo replicado, vamos gerar de novo para o share:
-      // Para fazer share corretamente, refaça a geração aqui se quiser que o PDF do compartilhamento contenha tudo.
-      // (Opcional: manter em um só lugar para evitar duplicação de código.)
-
-      // Registro de cliente + histórico (mesmo do gerarPDF)
-      try {
-        await window.salvarCliente(
-          document.getElementById("cliente").value.trim(),
-          document.getElementById("endereco").value.trim()
-        );
-        const nomeCli = document.getElementById("cliente").value.trim();
-        await Promise.all(
-          itens
-            .filter(i => (i?.produto || "").trim() && !isNaN(parseFloat(i?.preco)))
-            .map(i => window.registrarPrecoCliente(
-              nomeCli,
-              String(i.produto).trim(),
-              parseFloat(i.preco)
-            ))
-        );
-      } catch (e) {
-        console.error("Erro ao persistir no compartilhar:", e);
-      }
-
-      if (navigator.canShare && window.Blob) {
-        const file = new File([blob], nomeArquivo, { type: "application/pdf" });
-        if (navigator.canShare({ files: [file] })) {
-          navigator.share({ files: [file], title: "Pedido Serra Nobre", text: "Segue pedido em PDF" });
-        } else {
-          alert("Seu dispositivo não permite compartilhamento direto de arquivos PDF. Salve e envie manualmente.");
-        }
-      } else {
-        alert("Seu navegador não suporta compartilhamento direto de PDF. Salve e envie manualmente.");
-      }
+      await gerarPDF(false); // abre em nova aba; iOS Share direto de Blob é limitado, por isso usamos o PDF aberto
     }
-
-    // Expor algumas funções no escopo global para handlers inline
-    window.preencherEnderecoCliente = preencherEnderecoCliente;
-    window.preencherUltimoPreco = preencherUltimoPreco;
-    window.renderItens = renderItens;
-    window.calcularItem = calcularItem;
-    window.adicionarItem = adicionarItem;
-    window.removerItem = removerItem;
-    window.gerarPDF = gerarPDF;
-    window.compartilharPDF = compartilharPDF;
-    window.itens = itens; // para acesso em outras funções globais
   </script>
 
-  <!-- Datalist de produtos -->
-  <datalist id="listaProdutos">
-    <option value="AGULHA DESOSSADA KG"></option>
-    <option value="CHOP TUPINIQUIM PILSEN 1L"></option>
-    <option value="COSTELA GAUCHA KG"></option>
-    <option value="COSTELINHA SUINA KG"></option>
-    <option value="GALINHA CAIPIRA CONG. KG"></option>
-    <option value="MAMINHA BOVINA KG"></option>
-    <option value="PERNIL SUINO KG"></option>
-    <option value="TULIPA TEMPERADA KG"></option>
-    <option value="VAZIO GAUCHO KG"></option>
-  </datalist>
-
-  <!-- Service Worker opcional -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
-        navigator.serviceWorker.register('sw.js').catch(function(err){});
+        navigator.serviceWorker.register('sw.js').catch(()=>{});
       });
     }
   </script>
