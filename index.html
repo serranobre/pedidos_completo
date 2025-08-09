@@ -44,9 +44,9 @@
   <img src="Serra-Nobre_3.png" alt="Logo" class="logo-header" onerror="this.style.display='none'">
   <h1>V2.1</h1>
   <div class="field-group">
-    <label>Cliente:</label>
-    <input type="text" id="cliente" autocomplete="off" required/>
-  </div>
+  <label>Cliente:</label>
+  <input type="text" id="cliente" autocomplete="off" required onblur="preencherEnderecoCliente()"/>
+</div>
   <div class="field-group">
     <label>Endereço:</label>
     <input type="text" id="endereco" autocomplete="off" required/>
@@ -84,6 +84,159 @@
 <button class="pdf-btn compartilhar" onclick="compartilharPDF()">Compartilhar PDF</button>
   <div id="resumo"></div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+  import {
+    getFirestore,
+    collection,
+    addDoc,
+    getDocs,
+    query,
+    where,
+    orderBy,
+    limit,
+    updateDoc
+  } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+  // ---- Config do Firebase ----
+  const firebaseConfig = {
+    apiKey: "AIzaSyB3zBW_WhVfNpX5uoJCq-6WysE5XKYKZt4",
+    authDomain: "serranobrepedidos.firebaseapp.com",
+    projectId: "serranobrepedidos",
+    storageBucket: "serranobrepedidos.firebasestorage.app",
+    messagingSenderId: "948939268023",
+    appId: "1:948939268023:web:3f1f6c18f2c047c82b1232"
+  };
+
+  // ---- Inicializa ----
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  console.log("🔥 Firebase conectado com sucesso!");
+
+  // ---- Salvar/atualizar cliente (upsert) ----
+  async function salvarCliente(nome, endereco) {
+    try {
+      const nomeNorm = (nome || "").trim();
+      const enderecoNorm = (endereco || "").trim();
+      if (!nomeNorm) return;
+
+      const qCli = query(collection(db, "clientes"), where("nome", "==", nomeNorm), limit(1));
+      const snap = await getDocs(qCli);
+
+      if (!snap.empty) {
+        const ref = snap.docs[0].ref;
+        const atual = snap.docs[0].data();
+        if ((atual.endereco || "") !== enderecoNorm) {
+          await updateDoc(ref, { endereco: enderecoNorm, atualizadoEm: new Date() });
+        }
+      } else {
+        await addDoc(collection(db, "clientes"), {
+          nome: nomeNorm,
+          endereco: enderecoNorm,
+          criadoEm: new Date()
+        });
+      }
+      console.log("✅ Cliente salvo/atualizado com sucesso!");
+    } catch (e) {
+      console.error("❌ Erro ao salvar cliente:", e);
+    }
+  }
+
+  // ---- Buscar endereço de um cliente ----
+  async function buscarEnderecoCliente(nomeCliente) {
+    const nomeNorm = (nomeCliente || "").trim();
+    if (!nomeNorm) return "";
+
+    const q = query(collection(db, "clientes"), where("nome", "==", nomeNorm), limit(1));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      const dados = snapshot.docs[0].data();
+      return dados.endereco || "";
+    }
+    return "";
+  }
+
+  // ---- Buscar último preço de um produto para um cliente ----
+  async function buscarUltimoPreco(clienteNome, produtoNome) {
+    const nomeCli = (clienteNome || "").trim();
+    const nomeProd = (produtoNome || "").trim();
+    if (!nomeCli || !nomeProd) return null;
+
+    const q = query(
+      collection(db, "historico_precos"),
+      where("cliente", "==", nomeCli),
+      where("produto", "==", nomeProd),
+      orderBy("data", "desc"),
+      limit(1)
+    );
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+      const dados = querySnapshot.docs[0].data();
+      return typeof dados.preco === "number" ? dados.preco : parseFloat(dados.preco);
+    }
+    return null;
+  }
+
+  // ---- Registrar preço no histórico (chame ao finalizar pedido ou quando quiser salvar o preço digitado) ----
+  async function registrarPrecoCliente(clienteNome, produtoNome, preco) {
+    const nomeCli = (clienteNome || "").trim();
+    const nomeProd = (produtoNome || "").trim();
+    const valor = parseFloat(preco);
+    if (!nomeCli || !nomeProd || isNaN(valor)) return;
+
+    try {
+      await addDoc(collection(db, "historico_precos"), {
+        cliente: nomeCli,
+        produto: nomeProd,
+        preco: valor,
+        data: new Date()
+      });
+      console.log("💾 Preço registrado no histórico.");
+    } catch (e) {
+      console.error("❌ Erro ao registrar preço:", e);
+    }
+  }
+
+  // ---- Expor funções para o script não-module usar ----
+  window.salvarCliente = salvarCliente;
+  window.buscarEnderecoCliente = buscarEnderecoCliente;
+  window.buscarUltimoPreco = buscarUltimoPreco;
+  window.registrarPrecoCliente = registrarPrecoCliente;
+  </script>
+
+<script>
+async function preencherEnderecoCliente() {
+  const nomeCliente = document.getElementById("cliente").value.trim();
+  if (!nomeCliente) return;
+  const endereco = await window.buscarEnderecoCliente(nomeCliente);
+  if (endereco) {
+    document.getElementById("endereco").value = endereco;
+  }
+}
+
+async function preencherUltimoPreco(index) {
+  const nomeCliente = document.getElementById("cliente").value.trim();
+  const produtoEl = document.querySelectorAll(".produto")[index];
+  if (!produtoEl) return;
+  const produto = produtoEl.value.trim();
+  if (!nomeCliente || !produto) return;
+
+  const preco = await window.buscarUltimoPreco(nomeCliente, produto);
+  if (preco !== null) {
+    const precoInput = document.querySelectorAll(".preco")[index];
+    if (!precoInput) return;
+    precoInput.value = preco;
+    if (window.itens && window.itens[index]) {
+      window.itens[index].preco = parseFloat(preco);
+    }
+    if (typeof window.calcularItem === "function") {
+      window.calcularItem(index);
+    }
+  }
+}
+</script>
+
   <script>
     let produtos = [
       "AGULHA DESOSSADA KG", "CHOP TUPINIQUIM PILSEN 1L",
@@ -95,18 +248,18 @@
       produto: "", tipo: "KG", quantidade: 0, preco: 0, total: 0, obs: ""
     }];
     document.addEventListener('DOMContentLoaded', function() {
-      renderItens();
-      document.getElementById('pagamento').addEventListener('change', function() {
-        if (this.value === 'OUTRO') {
-          document.getElementById('pagamentoOutro').style.display = '';
-        } else {
-          document.getElementById('pagamentoOutro').style.display = 'none';
-        }
-      });
-    });
+  renderItens();
+  document.getElementById('pagamento').addEventListener('change', function() {
+    document.getElementById('pagamentoOutro').style.display =
+      (this.value === 'OUTRO') ? '' : 'none';
+  });
+});
     function criarSelectProduto(i) {
-      return `<input list="listaProdutos" class="produto" data-index="${i}" placeholder="Digite ou selecione" value="${itens[i].produto || ''}"/>`;
-    }
+  return `<input list="listaProdutos" class="produto" data-index="${i}"
+           placeholder="Digite ou selecione"
+           value="${itens[i].produto || ''}"
+           onblur="preencherUltimoPreco(${i})"/>`;
+}
     function criarTipoSelect(i) {
       return `
         <select class="tipo-select" data-index="${i}" onchange="atualizarTipo(${i}, this.value)">
@@ -205,7 +358,7 @@
       const hora = document.getElementById("horaEntrega").value;
       const obsGeral = document.getElementById("obsGeral").value;
       let pagamento = document.getElementById("pagamento").value;
-      if (pagamento === "Outro") {
+      if (pagamento === "OUTRO") {
         pagamento = document.getElementById("pagamentoOutro").value;
       }
       const tipoEntrega = document.querySelector('input[name="tipoEntrega"]:checked').value;
@@ -241,7 +394,7 @@
         doc.text(texto[l], x + width / 2, y + offsetY + l * 8, { align: "center" });
       }
     }
-   function gerarPDF(apenasSalvar = false) {
+   async function gerarPDF(apenasSalvar = false) {
   if (!camposObrigatoriosPreenchidos()) {
     alert("Preencha todos os campos obrigatórios: Cliente, Endereço, Data de Entrega e Horário.");
     return;
@@ -426,9 +579,9 @@ doc.text("PRODUTO", valorX, y + 8.5, { align: "center" });
   doc.setFont(undefined, "bold");
   doc.rect(margemX, y, larguraCaixa, 10, "S");
   let pagamento = document.getElementById("pagamento").value;
-  if (pagamento === "Outro") {
-    pagamento = document.getElementById("pagamentoOutro").value;
-  }
+if (pagamento === "OUTRO") {
+  pagamento = document.getElementById("pagamentoOutro").value;
+}
   doc.text("FORMA DE PAGAMENTO", margemX + larguraCaixa / 2, y + 4.0, { align: "center" });
   doc.setFontSize(10);
   doc.text(pagamento, margemX + larguraCaixa / 2, y + 8, { align: "center" });
@@ -462,12 +615,36 @@ doc.text("PRODUTO", valorX, y + 8.5, { align: "center" });
   }
 
   // Final do PDF
+  salvarCliente(
+    document.getElementById("cliente").value.trim(),
+    document.getElementById("endereco").value.trim()
+  );
+
+  // >>> NOVO: registra preços dos itens no histórico
+  try {
+    const nomeCliente = document.getElementById("cliente").value.trim();
+    await Promise.all(
+      itens
+        .filter(i => (i?.produto || "").trim() && !isNaN(parseFloat(i?.preco)))
+        .map(i => window.registrarPrecoCliente(
+          nomeCliente,
+          String(i.produto).trim(),
+          parseFloat(i.preco)
+        ))
+    );
+    console.log("✅ Histórico de preços atualizado.");
+  } catch (err) {
+    console.error("❌ Erro ao registrar histórico de preços:", err);
+  }
+
+  // Final do PDF
   if (apenasSalvar) {
-    doc.save(nomeArquivo); // Agora usa o nome personalizado!
+    doc.save(nomeArquivo);
   } else {
     window.open(doc.output('bloburl'), '_blank');
   }
 }
+
 async function compartilharPDF() {
   if (!camposObrigatoriosPreenchidos()) {
     alert("Preencha todos os campos obrigatórios: Cliente, Endereço, Data de Entrega e Horário.");
@@ -630,9 +807,9 @@ let nomeArquivo = `Pedido_${nomeCliente.replace(/\s+/g, '_').replace(/[^a-zA-Z0-
   doc.setFont(undefined, "bold");
   doc.rect(margemX, y, larguraCaixa, 10, "S");
   let pagamento = document.getElementById("pagamento").value;
-  if (pagamento === "Outro") {
-    pagamento = document.getElementById("pagamentoOutro").value;
-  }
+if (pagamento === "OUTRO") {
+  pagamento = document.getElementById("pagamentoOutro").value;
+}
   doc.text("FORMA DE PAGAMENTO", margemX + larguraCaixa / 2, y + 4.0, { align: "center" });
   doc.setFontSize(10);
   doc.text(pagamento, margemX + larguraCaixa / 2, y + 8, { align: "center" });
@@ -662,6 +839,27 @@ let nomeArquivo = `Pedido_${nomeCliente.replace(/\s+/g, '_').replace(/[^a-zA-Z0-
     }
     y += obsHeight + 3;
   }
+salvarCliente(
+  document.getElementById("cliente").value.trim(),
+  document.getElementById("endereco").value.trim()
+);
+
+// registrar histórico de preços
+try {
+  const nomeCliente = document.getElementById("cliente").value.trim();
+  await Promise.all(
+    itens
+      .filter(i => (i?.produto || "").trim() && !isNaN(parseFloat(i?.preco)))
+      .map(i => window.registrarPrecoCliente(
+        nomeCliente,
+        String(i.produto).trim(),
+        parseFloat(i.preco)
+      ))
+  );
+  console.log("✅ Histórico de preços atualizado (compartilhar).");
+} catch (err) {
+  console.error("❌ Erro ao registrar histórico (compartilhar):", err);
+}
 
   // Compartilhar
   if (navigator.canShare && window.Blob) {
