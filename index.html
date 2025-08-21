@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <!-- favicons (caminhos relativos p/ GitHub Pages) -->
+  <!-- favicons (caminhos relativos p/ GitHub/Vercel) -->
   <link rel="icon" type="image/png" href="favicon-96x96.png" sizes="96x96" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="shortcut icon" href="favicon.ico" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Serra Nobre" />
   <link rel="manifest" href="manifest.json" />
-  <title>PEDIDO V2.5</title>
+  <title>PEDIDO V2.6</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background: #f4f4f4; }
     h1 { text-align: right; margin-bottom: 10px; font-size: 30px; }
@@ -40,7 +40,7 @@
 </head>
 <body>
   <img src="Serra-Nobre_3.png" alt="Logo" class="logo-header" onerror="this.style.display='none'">
-  <h1>V2.5</h1>
+  <h1>V2.6</h1>
 
   <div class="field-group">
     <label>Cliente:</label>
@@ -98,14 +98,21 @@
   <!-- jsPDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-  <!-- Firebase (module) -->
+  <!-- Firebase (module): App + Firestore + App Check + Auth -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
     import {
       getFirestore, collection, addDoc, getDocs, query, where, orderBy, limit,
       updateDoc, increment
     } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+    import {
+      initializeAppCheck, ReCaptchaV3Provider
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app-check.js";
+    import {
+      getAuth, signInAnonymously, onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 
+    /* ===== Config Firebase ===== */
     const firebaseConfig = {
       apiKey: "AIzaSyB3zBW_WhVfNpX5uoJCq-6WysE5XKYKZt4",
       authDomain: "serranobrepedidos.firebaseapp.com",
@@ -116,14 +123,43 @@
     };
 
     const app = initializeApp(firebaseConfig);
-    const db  = getFirestore(app);
+
+    /* ===== App Check (reCAPTCHA v3) =====
+       IMPORTANTE:
+       - Site Key (pública) vai aqui
+       - Secret Key (privada) você já colou no console do Firebase (App Check)
+    */
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider("6Lf0MK0rAAAAACI68fwbg7RDERSlL0AW5zKd-sDA"),
+      isTokenAutoRefreshEnabled: true
+    });
+
+    /* ===== Auth anônima (login automático) ===== */
+    const auth = getAuth(app);
+    const authReady = new Promise((resolve) => {
+      onAuthStateChanged(auth, (user) => {
+        if (user) resolve(user);
+        else signInAnonymously(auth).catch(console.error);
+      });
+    });
+
+    /* Firestore (usaremos depois de auth pronta) */
+    const db = getFirestore(app);
+
+    /* Exponho uma Promise global para a outra <script> poder aguardar */
+    window.firebaseReady = authReady;
+
+    /* ========= Funções Firestore ========= */
 
     async function salvarCliente(nome, endereco) {
+      await authReady;
       const nomeNorm = (nome || "").trim();
       const enderecoNorm = (endereco || "").trim();
       if (!nomeNorm) return;
+
       const qCli = query(collection(db, "clientes"), where("nome", "==", nomeNorm), limit(1));
       const snap = await getDocs(qCli);
+
       if (!snap.empty) {
         const ref = snap.docs[0].ref;
         const atual = snap.docs[0].data();
@@ -131,11 +167,14 @@
         if ((atual.endereco || "") !== enderecoNorm) campos.endereco = enderecoNorm;
         await updateDoc(ref, campos);
       } else {
-        await addDoc(collection(db, "clientes"), { nome: nomeNorm, endereco: enderecoNorm, compras: 0, criadoEm: new Date() });
+        await addDoc(collection(db, "clientes"), {
+          nome: nomeNorm, endereco: enderecoNorm, compras: 0, criadoEm: new Date()
+        });
       }
     }
 
     async function buscarEnderecoCliente(nomeCliente) {
+      await authReady;
       const nome = (nomeCliente || "").trim();
       if (!nome) return "";
       const q = query(collection(db, "clientes"), where("nome", "==", nome), limit(1));
@@ -144,6 +183,7 @@
     }
 
     async function clientesMaisUsados(limitQtd = 50) {
+      await authReady;
       const lista = [];
       const qs = await getDocs(collection(db, "clientes"));
       qs.forEach(d => {
@@ -155,6 +195,7 @@
     }
 
     async function buscarUltimoPreco(clienteNome, produtoNome) {
+      await authReady;
       const nomeCli  = (clienteNome || "").trim();
       const nomeProd = (produtoNome || "").trim();
       if (!nomeCli || !nomeProd) return null;
@@ -172,6 +213,7 @@
     }
 
     async function produtosDoCliente(nomeCliente) {
+      await authReady;
       const nome = (nomeCliente || "").trim();
       if (!nome) return [];
       const set = new Set();
@@ -182,17 +224,21 @@
     }
 
     async function registrarPrecoCliente(clienteNome, produtoNome, preco) {
+      await authReady;
       const nomeCli  = (clienteNome || "").trim();
       const nomeProd = (produtoNome || "").trim();
       const valor    = parseFloat(preco);
       if (!nomeCli || !nomeProd || isNaN(valor)) return;
-      await addDoc(collection(db, "historico_precos"), { cliente: nomeCli, produto: nomeProd, preco: valor, data: new Date() });
+      await addDoc(collection(db, "historico_precos"), {
+        cliente: nomeCli, produto: nomeProd, preco: valor, data: new Date()
+      });
       const qCli = query(collection(db, "clientes"), where("nome", "==", nomeCli), limit(1));
       const s = await getDocs(qCli);
       if (!s.empty) await updateDoc(s.docs[0].ref, { compras: increment(1), atualizadoEm: new Date() });
     }
 
     async function carregarSugestoesProdutosDoCliente() {
+      await authReady;
       const nome = document.getElementById("cliente").value.trim();
       const listaProdutos = document.getElementById("listaProdutos");
       if (!listaProdutos) return;
@@ -201,10 +247,12 @@
     }
 
     async function popularClientesMaisUsados() {
+      await authReady;
       const lista = await clientesMaisUsados();
       document.getElementById("listaClientes").innerHTML = lista.map(n => `<option value="${n}"></option>`).join("");
     }
 
+    // Expor para o script não-module
     window.salvarCliente = salvarCliente;
     window.buscarEnderecoCliente = buscarEnderecoCliente;
     window.buscarUltimoPreco = buscarUltimoPreco;
@@ -217,7 +265,7 @@
   <script>
     let itens = [{ produto: "", tipo: "KG", quantidade: 0, preco: 0, total: 0, obs: "" }];
 
-    /* Logo do repositório -> base64 com cache diário */
+    /* ====== Cache do logo em base64 (carrega bem no iOS) ====== */
     const LOGO_PATH = 'Serra-Nobre_3.png';
     const LOGO_KEY  = 'logoBase64';
     function blobToDataURL(blob){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(blob);});}
@@ -228,6 +276,9 @@
     function guessImageFormatFromDataURL(u){return u.startsWith('data:image/jpeg')||u.startsWith('data:image/jpg')?'JPEG':'PNG';}
 
     document.addEventListener('DOMContentLoaded', async () => {
+      // Garante Firebase (Auth + App Check) pronto antes de qualquer coisa:
+      if (window.firebaseReady) { try { await window.firebaseReady; } catch(_){} }
+
       await ensureRepoLogoCached();
       renderItens();
       document.getElementById('pagamento').addEventListener('change', function(){
@@ -305,7 +356,12 @@
       itens[i].total = (parseFloat(q) || 0) * (parseFloat(p) || 0);
       document.getElementById(`totalItem_${i}`).innerText = itens[i].total ? itens[i].total.toFixed(2) : "—";
     }
-    function camposObrigatoriosPreenchidos(){return document.getElementById("cliente").value.trim() && document.getElementById("endereco").value.trim() && document.getElementById("entrega").value && document.getElementById("horaEntrega").value;}
+    function camposObrigatoriosPreenchidos(){
+      return document.getElementById("cliente").value.trim()
+        && document.getElementById("endereco").value.trim()
+        && document.getElementById("entrega").value
+        && document.getElementById("horaEntrega").value;
+    }
 
     // Helpers PDF
     function formatarData(s){ if(!s) return ""; const [a,m,d]=s.split("-"); return `${d}/${m}/${a.slice(-2)}`; }
@@ -315,10 +371,17 @@
     function drawCenteredMultiline(doc,lines,cx,top,rowH,step=LINE,pad=PADY){ const usable=Math.max(0,rowH-2*pad); const block=(lines.length-1)*step; let y0=top+pad+(usable-block)/2; for(let i=0;i<lines.length;i++) doc.text(lines[i],cx,y0+i*step,{align:"center"}); }
     function underline(doc,x,y,text,size){ const prev=doc.getFontSize(); if(size) doc.setFontSize(size); const w=doc.getTextWidth(text); doc.line(x,y+0.8,x+w,y+0.8); if(size) doc.setFontSize(prev); }
 
-    async function preencherEnderecoCliente(){ const n=document.getElementById("cliente").value.trim(); if(!n||typeof window.buscarEnderecoCliente!=="function")return; const e=await window.buscarEnderecoCliente(n); if(e) document.getElementById("endereco").value=e; }
+    async function preencherEnderecoCliente(){
+      if (window.firebaseReady) { try { await window.firebaseReady; } catch(_){} }
+      const n=document.getElementById("cliente").value.trim();
+      if(!n||typeof window.buscarEnderecoCliente!=="function")return;
+      const e=await window.buscarEnderecoCliente(n);
+      if(e) document.getElementById("endereco").value=e;
+    }
     window.preencherEnderecoCliente = preencherEnderecoCliente;
 
     async function preencherUltimoPreco(index){
+      if (window.firebaseReady) { try { await window.firebaseReady; } catch(_){} }
       const nome=document.getElementById("cliente").value.trim();
       const el=document.querySelectorAll(".produto")[index];
       if(!el) return; const prod=el.value.trim();
@@ -327,6 +390,15 @@
       if(preco!==null){ const input=document.querySelectorAll(".preco")[index]; if(!input) return; input.value=preco; itens[index].preco=parseFloat(preco)||0; calcularItem(index); }
     }
     window.preencherUltimoPreco = preencherUltimoPreco;
+
+    function centralizaTexto(doc, text, x, y, width, linhas){
+      let texto=doc.splitTextToSize(text||"", width-2);
+      if (texto.length>linhas) texto=texto.slice(0,linhas);
+      let offsetY=(10*linhas - texto.length*8)/2 + 5;
+      for (let l=0;l<texto.length;l++){
+        doc.text(texto[l], x+width/2, y+offsetY+l*8, {align:"center"});
+      }
+    }
 
     async function montarPDF(){
       const { jsPDF } = window.jspdf;
@@ -482,6 +554,7 @@
         y += h + 3;
       }
 
+      // grava cliente + histórico
       if (typeof window.salvarCliente === "function") {
         await window.salvarCliente(
           document.getElementById("cliente").value.trim(),
@@ -504,15 +577,6 @@
       const nomeArquivo=`Pedido_${nomeCliente.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'')}_${dia}-${mes}-${ano}.pdf`;
 
       return { doc, nomeArquivo };
-    }
-
-    function centralizaTexto(doc, text, x, y, width, linhas){
-      let texto=doc.splitTextToSize(text||"", width-2);
-      if (texto.length>linhas) texto=texto.slice(0,linhas);
-      let offsetY=(10*linhas - texto.length*8)/2 + 5;
-      for (let l=0;l<texto.length;l++){
-        doc.text(texto[l], x+width/2, y+offsetY+l*8, {align:"center"});
-      }
     }
 
     async function gerarPDF(apenasSalvar=false){
@@ -545,6 +609,7 @@
     }
   </script>
 
+  <!-- datalist de produtos (inputs dos itens usam este id) -->
   <datalist id="listaProdutos"></datalist>
 </body>
 </html>
