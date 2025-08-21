@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <link rel="shortcut icon" href="/favicon.ico" />
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <!-- favicons (caminhos relativos p/ GitHub Pages) -->
+  <link rel="icon" type="image/png" href="favicon-96x96.png" sizes="96x96" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="shortcut icon" href="favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Serra Nobre" />
-  <link rel="manifest" href="/manifest.json" />
-  <title>PEDIDO V2.2.2</title>
+  <link rel="manifest" href="manifest.json" />
+  <title>PEDIDO V2.5</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background: #f4f4f4; }
     h1 { text-align: right; margin-bottom: 10px; font-size: 30px; }
@@ -39,11 +40,14 @@
 </head>
 <body>
   <img src="Serra-Nobre_3.png" alt="Logo" class="logo-header" onerror="this.style.display='none'">
-  <h1>V2.2.2</h1>
+  <h1>V2.5</h1>
 
   <div class="field-group">
     <label>Cliente:</label>
-    <input type="text" id="cliente" list="listaClientes" autocomplete="off" required onblur="preencherEnderecoCliente()"/>
+    <input list="listaClientes" type="text" id="cliente" autocomplete="off" required
+           onfocus="popularClientesMaisUsados()"
+           onblur="preencherEnderecoCliente(); carregarSugestoesProdutosDoCliente();" />
+    <datalist id="listaClientes"></datalist>
   </div>
 
   <div class="field-group">
@@ -83,42 +87,25 @@
   <hr/>
   <label>Observação geral do pedido:</label>
   <textarea id="obsGeral"></textarea>
-
   <hr/>
+
   <button class="pdf-btn" onclick="gerarPDF(false)">Gerar PDF</button>
   <button class="pdf-btn salvar" onclick="gerarPDF(true)">Salvar PDF</button>
   <button class="pdf-btn compartilhar" onclick="compartilharPDF()">Compartilhar PDF</button>
 
   <div id="resumo"></div>
 
-  <datalist id="listaClientes"></datalist>
-  <datalist id="listaProdutos"></datalist>
-
+  <!-- jsPDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-  <!-- FIREBASE (module) -->
+  <!-- Firebase (module) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
     import {
-      getFirestore,
-      collection,
-      addDoc,
-      getDocs,
-      query,
-      where,
-      orderBy,
-      limit,
-      updateDoc,
-      startAt,
-      endAt
+      getFirestore, collection, addDoc, getDocs, query, where, orderBy, limit,
+      updateDoc, increment
     } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
-    import {
-      getAuth,
-      signInAnonymously,
-      onAuthStateChanged
-    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 
-    // ---- Config do Firebase ----
     const firebaseConfig = {
       apiKey: "AIzaSyB3zBW_WhVfNpX5uoJCq-6WysE5XKYKZt4",
       authDomain: "serranobrepedidos.firebaseapp.com",
@@ -128,70 +115,49 @@
       appId: "1:948939268023:web:3f1f6c18f2c047c82b1232"
     };
 
-    // ---- Inicializa ----
     const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const auth = getAuth(app);
+    const db  = getFirestore(app);
 
-    async function loginAnonimo() {
-      if (auth.currentUser) return auth.currentUser;
-      try {
-        const res = await signInAnonymously(auth);
-        return res.user;
-      } catch (e) {
-        console.error("Falha ao logar anonimamente:", e);
-        throw e;
-      }
-    }
-
-    // ---- Salvar/atualizar cliente (upsert) ----
     async function salvarCliente(nome, endereco) {
-      try {
-        const nomeNorm = (nome || "").trim();
-        const enderecoNorm = (endereco || "").trim();
-        if (!nomeNorm) return;
-
-        const qCli = query(collection(db, "clientes"), where("nome", "==", nomeNorm), limit(1));
-        const snap = await getDocs(qCli);
-
-        if (!snap.empty) {
-          const ref = snap.docs[0].ref;
-          const atual = snap.docs[0].data();
-          if ((atual.endereco || "") !== enderecoNorm) {
-            await updateDoc(ref, { endereco: enderecoNorm, atualizadoEm: new Date() });
-          }
-        } else {
-          await addDoc(collection(db, "clientes"), {
-            nome: nomeNorm,
-            endereco: enderecoNorm,
-            criadoEm: new Date()
-          });
-        }
-        console.log("✅ Cliente salvo/atualizado");
-      } catch (e) {
-        console.error("❌ Erro ao salvar cliente:", e);
+      const nomeNorm = (nome || "").trim();
+      const enderecoNorm = (endereco || "").trim();
+      if (!nomeNorm) return;
+      const qCli = query(collection(db, "clientes"), where("nome", "==", nomeNorm), limit(1));
+      const snap = await getDocs(qCli);
+      if (!snap.empty) {
+        const ref = snap.docs[0].ref;
+        const atual = snap.docs[0].data();
+        const campos = { atualizadoEm: new Date() };
+        if ((atual.endereco || "") !== enderecoNorm) campos.endereco = enderecoNorm;
+        await updateDoc(ref, campos);
+      } else {
+        await addDoc(collection(db, "clientes"), { nome: nomeNorm, endereco: enderecoNorm, compras: 0, criadoEm: new Date() });
       }
     }
 
-    // ---- Buscar endereço de um cliente ----
     async function buscarEnderecoCliente(nomeCliente) {
-      const nomeNorm = (nomeCliente || "").trim();
-      if (!nomeNorm) return "";
-      const q = query(collection(db, "clientes"), where("nome", "==", nomeNorm), limit(1));
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        const dados = snapshot.docs[0].data();
-        return dados.endereco || "";
-      }
-      return "";
+      const nome = (nomeCliente || "").trim();
+      if (!nome) return "";
+      const q = query(collection(db, "clientes"), where("nome", "==", nome), limit(1));
+      const s = await getDocs(q);
+      return s.empty ? "" : (s.docs[0].data().endereco || "");
     }
 
-    // ---- Buscar último preço de um produto para um cliente ----
+    async function clientesMaisUsados(limitQtd = 50) {
+      const lista = [];
+      const qs = await getDocs(collection(db, "clientes"));
+      qs.forEach(d => {
+        const x = d.data();
+        if ((x?.nome || "").trim()) lista.push({ nome: x.nome.trim(), compras: x.compras || 0 });
+      });
+      lista.sort((a,b)=> b.compras - a.compras || a.nome.localeCompare(b.nome));
+      return lista.slice(0, limitQtd).map(x => x.nome);
+    }
+
     async function buscarUltimoPreco(clienteNome, produtoNome) {
-      const nomeCli = (clienteNome || "").trim();
+      const nomeCli  = (clienteNome || "").trim();
       const nomeProd = (produtoNome || "").trim();
       if (!nomeCli || !nomeProd) return null;
-
       const q = query(
         collection(db, "historico_precos"),
         where("cliente", "==", nomeCli),
@@ -199,507 +165,386 @@
         orderBy("data", "desc"),
         limit(1)
       );
-      const querySnapshot = await getDocs(q);
-      if (!querySnapshot.empty) {
-        const dados = querySnapshot.docs[0].data();
-        return typeof dados.preco === "number" ? dados.preco : parseFloat(dados.preco);
-      }
-      return null;
+      const qs = await getDocs(q);
+      if (qs.empty) return null;
+      const dados = qs.docs[0].data();
+      return typeof dados.preco === "number" ? dados.preco : parseFloat(dados.preco);
     }
 
-    // ---- Registrar preço no histórico ----
+    async function produtosDoCliente(nomeCliente) {
+      const nome = (nomeCliente || "").trim();
+      if (!nome) return [];
+      const set = new Set();
+      const q = query(collection(db, "historico_precos"), where("cliente", "==", nome), orderBy("data", "desc"), limit(1000));
+      const qs = await getDocs(q);
+      qs.forEach(d => { const p = (d.data().produto || "").trim(); if (p) set.add(p); });
+      return [...set].sort((a,b)=>a.localeCompare(b));
+    }
+
     async function registrarPrecoCliente(clienteNome, produtoNome, preco) {
-      const nomeCli = (clienteNome || "").trim();
+      const nomeCli  = (clienteNome || "").trim();
       const nomeProd = (produtoNome || "").trim();
-      const valor = parseFloat(preco);
+      const valor    = parseFloat(preco);
       if (!nomeCli || !nomeProd || isNaN(valor)) return;
-
-      try {
-        await addDoc(collection(db, "historico_precos"), {
-          cliente: nomeCli,
-          produto: nomeProd,
-          preco: valor,
-          data: new Date()
-        });
-        console.log("💾 Preço registrado:", nomeProd, valor);
-      } catch (e) {
-        console.error("❌ Erro ao registrar preço:", e);
-      }
+      await addDoc(collection(db, "historico_precos"), { cliente: nomeCli, produto: nomeProd, preco: valor, data: new Date() });
+      const qCli = query(collection(db, "clientes"), where("nome", "==", nomeCli), limit(1));
+      const s = await getDocs(qCli);
+      if (!s.empty) await updateDoc(s.docs[0].ref, { compras: increment(1), atualizadoEm: new Date() });
     }
 
-    // ---- Autocomplete: clientes por prefixo ----
-    async function sugerirClientes(prefixo) {
-      const p = (prefixo || "").trim();
-      if (!p) return [];
-      const q = query(
-        collection(db, "clientes"),
-        orderBy("nome"),
-        startAt(p),
-        endAt(p + "\uf8ff"),
-        limit(20)
-      );
-      const snap = await getDocs(q);
-      return snap.docs.map(d => (d.data().nome || "").toString()).filter(Boolean);
+    async function carregarSugestoesProdutosDoCliente() {
+      const nome = document.getElementById("cliente").value.trim();
+      const listaProdutos = document.getElementById("listaProdutos");
+      if (!listaProdutos) return;
+      const nomes = await produtosDoCliente(nome);
+      listaProdutos.innerHTML = nomes.map(p => `<option value="${p}"></option>`).join("");
     }
 
-    // ---- Carregar lista de produtos (dinâmica) ----
-    async function carregarProdutos() {
-      try {
-        const q = query(collection(db, "produtos"), orderBy("nome"), limit(300));
-        const snap = await getDocs(q);
-        return snap.docs.map(d => (d.data().nome || "").toString()).filter(Boolean);
-      } catch (e) {
-        console.warn("Não foi possível carregar 'produtos' do Firestore. Usando lista local.");
-        return [];
-      }
+    async function popularClientesMaisUsados() {
+      const lista = await clientesMaisUsados();
+      document.getElementById("listaClientes").innerHTML = lista.map(n => `<option value="${n}"></option>`).join("");
     }
 
-    // ---- Inicialização global: login + carregar datalists ----
-    async function initAuthAndLists() {
-      await loginAnonimo();
-
-      // Produtos
-      let produtos = await carregarProdutos();
-      if (!produtos || produtos.length === 0) {
-        produtos = [
-          "AGULHA DESOSSADA KG","CHOP TUPINIQUIM PILSEN 1L","COSTELA GAUCHA KG","COSTELINHA SUINA KG",
-          "GALINHA CAIPIRA CONG. KG","MAMINHA BOVINA KG","PERNIL SUINO KG","TULIPA TEMPERADA KG","VAZIO GAUCHO KG"
-        ];
-      }
-      const dlProd = document.getElementById("listaProdutos");
-      if (dlProd) dlProd.innerHTML = produtos.map(p => `<option value="${p}"></option>`).join("");
-
-      // Clientes (carrega 50 mais recentes por conveniência)
-      try {
-        const snap = await getDocs(query(collection(db, "clientes"), orderBy("nome"), limit(50)));
-        const nomes = snap.docs.map(d => (d.data().nome || "").toString()).filter(Boolean);
-        const dlCli = document.getElementById("listaClientes");
-        if (dlCli) dlCli.innerHTML = nomes.map(n => `<option value="${n}"></option>`).join("");
-      } catch (e) {
-        console.warn("Não foi possível carregar clientes iniciais:", e);
-      }
-    }
-
-    // Expor para scripts não-module
     window.salvarCliente = salvarCliente;
     window.buscarEnderecoCliente = buscarEnderecoCliente;
     window.buscarUltimoPreco = buscarUltimoPreco;
     window.registrarPrecoCliente = registrarPrecoCliente;
-    window.sugerirClientes = sugerirClientes;
-    window.initAuthAndLists = initAuthAndLists;
-
-    // Faz login e carrega listas assim que o auth estiver pronto
-    onAuthStateChanged(auth, () => { initAuthAndLists().catch(console.error); });
+    window.carregarSugestoesProdutosDoCliente = carregarSugestoesProdutosDoCliente;
+    window.popularClientesMaisUsados = popularClientesMaisUsados;
   </script>
 
-  <!-- APP / UI -->
+  <!-- App + PDF -->
   <script>
-    // ====== Estado ======
-    let itens = [
-      { produto: "", tipo: "KG", quantidade: 0, preco: 0, total: 0, obs: "" }
-    ];
-    window.itens = itens; // para outras funções enxergarem
+    let itens = [{ produto: "", tipo: "KG", quantidade: 0, preco: 0, total: 0, obs: "" }];
 
-    const LISTA_PRODUTOS_ID = "listaProdutos";
+    /* Logo do repositório -> base64 com cache diário */
+    const LOGO_PATH = 'Serra-Nobre_3.png';
+    const LOGO_KEY  = 'logoBase64';
+    function blobToDataURL(blob){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(blob);});}
+    function logoVersionParam(){const d=new Date();return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;}
+    async function fetchRepoLogoAsBase64(){const resp=await fetch(`${LOGO_PATH}?v=${logoVersionParam()}`,{cache:'reload'});if(!resp.ok)throw new Error('Logo não carregou');return blobToDataURL(await resp.blob());}
+    async function ensureRepoLogoCached(){let b64=localStorage.getItem(LOGO_KEY);if(!b64){try{b64=await fetchRepoLogoAsBase64();localStorage.setItem(LOGO_KEY,b64);}catch(_){b64="";}}return b64;}
+    async function getLogoBase64(){return localStorage.getItem(LOGO_KEY) || await ensureRepoLogoCached();}
+    function guessImageFormatFromDataURL(u){return u.startsWith('data:image/jpeg')||u.startsWith('data:image/jpg')?'JPEG':'PNG';}
 
-    // ====== Boot confiável (iOS também) ======
-    function initUI() {
+    document.addEventListener('DOMContentLoaded', async () => {
+      await ensureRepoLogoCached();
       renderItens();
-      const sel = document.getElementById('pagamento');
-      if (sel) {
-        sel.addEventListener('change', function () {
-          document.getElementById('pagamentoOutro').style.display =
-            (this.value === 'OUTRO') ? '' : 'none';
-        });
-      }
+      document.getElementById('pagamento').addEventListener('change', function(){
+        document.getElementById('pagamentoOutro').style.display = (this.value === 'OUTRO') ? '' : 'none';
+      });
+    });
 
-      // Autocomplete incremental de clientes
-      const clienteInput = document.getElementById('cliente');
-      if (clienteInput) {
-        let debounce;
-        clienteInput.addEventListener('input', () => {
-          clearTimeout(debounce);
-          debounce = setTimeout(async () => {
-            const termo = clienteInput.value.trim();
-            if (!termo) return;
-            try {
-              const sugestoes = await (window.sugerirClientes ? window.sugerirClientes(termo) : []);
-              const dl = document.getElementById('listaClientes');
-              if (dl && Array.isArray(sugestoes)) {
-                dl.innerHTML = sugestoes.map(n => `<option value="${n}"></option>`).join('');
-              }
-            } catch (e) { /* silencioso */ }
-          }, 200);
-        });
-      }
-
-      // Se o módulo firebase já carregou, inicia listas
-      if (typeof window.initAuthAndLists === 'function') {
-        window.initAuthAndLists().catch(console.error);
-      }
+    function criarSelectProduto(i){
+      return `<input list="listaProdutos" class="produto" data-index="${i}"
+               placeholder="Digite ou selecione"
+               value="${itens[i].produto || ''}"
+               onblur="preencherUltimoPreco(${i})"/>`;
     }
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initUI);
-    } else { initUI(); }
-
-    // ====== UI helpers ======
-    function criarSelectProduto(i) {
-      return `<input list="${LISTA_PRODUTOS_ID}" class="produto" data-index="${i}"
-                placeholder="Digite ou selecione"
-                value="${itens[i].produto || ''}"
-                onblur="preencherUltimoPreco(${i})"
-                onchange="preencherUltimoPreco(${i})"/>`;
+    function criarTipoSelect(i){
+      return `<select class="tipo-select" data-index="${i}" onchange="atualizarTipo(${i}, this.value)">
+        <option value="KG" ${itens[i].tipo === 'KG' ? 'selected' : ''}>KG</option>
+        <option value="UN" ${itens[i].tipo === 'UN' ? 'selected' : ''}>UN</option>
+      </select>`;
     }
 
-    function criarTipoSelect(i) {
-      return `
-        <select class="tipo-select" data-index="${i}" onchange="atualizarTipo(${i}, this.value)">
-          <option value="KG" ${itens[i].tipo === 'KG' ? 'selected' : ''}>KG</option>
-          <option value="UN" ${itens[i].tipo === 'UN' ? 'selected' : ''}>UN</option>
-        </select>
-      `;
-    }
-
-    function renderItens() {
+    function renderItens(){
       salvarCamposAntesRender();
       const container = document.getElementById("itens");
-      if (!container) return;
       container.innerHTML = "";
       itens.forEach((item, i) => {
         container.innerHTML += `
-          <div class="item">
-            <label>Produto:</label>
-            ${criarSelectProduto(i)}
-            <label>Tipo:</label>
-            ${criarTipoSelect(i)}
-            <label>Quantidade:</label>
-            <input type="number" step="0.01" class="quantidade" data-index="${i}"
-                   value="${item.quantidade || ''}" oninput="calcularItem(${i})"/>
-            <label>Preço Unitário:</label>
-            <input type="number" step="0.01" class="preco" data-index="${i}"
-                   value="${item.preco || ''}" oninput="calcularItem(${i})"/>
-            <label>Observação do item:</label>
-            <textarea class="obsItem" data-index="${i}">${item.obs || ''}</textarea>
-            <p class="total">Total do Item: R$ <span id="totalItem_${i}">${(item.total || 0).toFixed(2)}</span></p>
-            <button class="remove" onclick="removerItem(${i})">Remover Item</button>
-          </div>`;
+        <div class="item">
+          <label>Produto:</label>
+          ${criarSelectProduto(i)}
+          <label>Tipo:</label>
+          ${criarTipoSelect(i)}
+          <label>Quantidade:</label>
+          <input type="number" step="0.01" class="quantidade" data-index="${i}" value="${item.quantidade || ''}" oninput="calcularItem(${i})"/>
+          <label>Preço Unitário:</label>
+          <input type="number" step="0.01" class="preco" data-index="${i}" value="${item.preco || ''}" oninput="calcularItem(${i})"/>
+          <label>Observação do item:</label>
+          <textarea class="obsItem" data-index="${i}">${item.obs || ''}</textarea>
+          <p class="total">Total do Item: R$ <span id="totalItem_${i}">${(item.total || 0).toFixed(2)}</span></p>
+          <button class="remove" onclick="removerItem(${i})">Remover Item</button>
+        </div>`;
       });
+      if (!document.getElementById("listaProdutos")) {
+        const dl = document.createElement("datalist"); dl.id = "listaProdutos"; document.body.appendChild(dl);
+      }
     }
 
-    function atualizarTipo(i, valor) {
-      itens[i].tipo = valor;
-      calcularItem(i);
-    }
-
-    function salvarCamposAntesRender() {
+    function atualizarTipo(i,v){ itens[i].tipo=v; calcularItem(i); }
+    function salvarCamposAntesRender(){
       document.querySelectorAll(".item").forEach((el, idx) => {
         if (typeof itens[idx] === "undefined") return;
-        let prod = el.querySelector(".produto")?.value || "";
-        let tipo = el.querySelector(".tipo-select")?.value || "KG";
-        let qtd = el.querySelector(".quantidade")?.value || 0;
-        let preco = el.querySelector(".preco")?.value || 0;
-        let obs = el.querySelector(".obsItem")?.value || "";
+        const prod  = el.querySelector(".produto")?.value || "";
+        const tipo  = el.querySelector(".tipo-select")?.value || "KG";
+        const qtd   = el.querySelector(".quantidade")?.value || 0;
+        const preco = el.querySelector(".preco")?.value || 0;
+        const obs   = el.querySelector(".obsItem")?.value || "";
         itens[idx] = {
-          produto: prod,
-          tipo: tipo,
+          produto: prod, tipo: tipo,
           quantidade: parseFloat(qtd) || 0,
           preco: parseFloat(preco) || 0,
           obs: obs,
           total: (parseFloat(qtd) || 0) * (parseFloat(preco) || 0)
         };
       });
+      window.itens = itens;
     }
-
-    function adicionarItem() {
-      salvarCamposAntesRender();
-      itens.push({ produto: "", tipo: "KG", quantidade: 0, preco: 0, total: 0, obs: "" });
-      renderItens();
-    }
-
-    function removerItem(i) {
-      salvarCamposAntesRender();
-      itens.splice(i, 1);
-      if (itens.length === 0) itens.push({ produto: "", tipo: "KG", quantidade: 0, preco: 0, total: 0, obs: "" });
-      renderItens();
-    }
-
-    function calcularItem(i) {
+    function adicionarItem(){ salvarCamposAntesRender(); itens.push({ produto:"", tipo:"KG", quantidade:0, preco:0, total:0, obs:"" }); renderItens(); }
+    function removerItem(i){ salvarCamposAntesRender(); itens.splice(i,1); if(!itens.length) itens.push({ produto:"", tipo:"KG", quantidade:0, preco:0, total:0, obs:"" }); renderItens(); }
+    function calcularItem(i){
       const tipo = document.querySelectorAll(".tipo-select")[i].value;
-      const q = parseFloat(document.querySelectorAll(".quantidade")[i].value) || 0;
-      const p = parseFloat(document.querySelectorAll(".preco")[i].value) || 0;
-      itens[i].quantidade = q;
-      itens[i].preco = p;
+      const q = document.querySelectorAll(".quantidade")[i].value || 0;
+      const p = document.querySelectorAll(".preco")[i].value || 0;
+      itens[i].quantidade = parseFloat(q) || 0;
+      itens[i].preco = parseFloat(p) || 0;
       itens[i].tipo = tipo;
-      itens[i].total = q * p;
-      const el = document.getElementById(`totalItem_${i}`);
-      if (el) el.innerText = itens[i].total ? itens[i].total.toFixed(2) : "—";
+      itens[i].total = (parseFloat(q) || 0) * (parseFloat(p) || 0);
+      document.getElementById(`totalItem_${i}`).innerText = itens[i].total ? itens[i].total.toFixed(2) : "—";
     }
+    function camposObrigatoriosPreenchidos(){return document.getElementById("cliente").value.trim() && document.getElementById("endereco").value.trim() && document.getElementById("entrega").value && document.getElementById("horaEntrega").value;}
 
-    function camposObrigatoriosPreenchidos() {
-      return (
-        document.getElementById("cliente").value.trim() &&
-        document.getElementById("endereco").value.trim() &&
-        document.getElementById("entrega").value &&
-        document.getElementById("horaEntrega").value
-      );
+    // Helpers PDF
+    function formatarData(s){ if(!s) return ""; const [a,m,d]=s.split("-"); return `${d}/${m}/${a.slice(-2)}`; }
+    function diaDaSemanaExtenso(s){ if(!s) return ""; const d=new Date(s+"T00:00:00"); return d.toLocaleDateString('pt-BR',{weekday:'long'}).toUpperCase(); }
+    function splitToWidth(doc,t,w){ return doc.splitTextToSize(t||"", w); }
+    const PADY=3, LINE=5;
+    function drawCenteredMultiline(doc,lines,cx,top,rowH,step=LINE,pad=PADY){ const usable=Math.max(0,rowH-2*pad); const block=(lines.length-1)*step; let y0=top+pad+(usable-block)/2; for(let i=0;i<lines.length;i++) doc.text(lines[i],cx,y0+i*step,{align:"center"}); }
+    function underline(doc,x,y,text,size){ const prev=doc.getFontSize(); if(size) doc.setFontSize(size); const w=doc.getTextWidth(text); doc.line(x,y+0.8,x+w,y+0.8); if(size) doc.setFontSize(prev); }
+
+    async function preencherEnderecoCliente(){ const n=document.getElementById("cliente").value.trim(); if(!n||typeof window.buscarEnderecoCliente!=="function")return; const e=await window.buscarEnderecoCliente(n); if(e) document.getElementById("endereco").value=e; }
+    window.preencherEnderecoCliente = preencherEnderecoCliente;
+
+    async function preencherUltimoPreco(index){
+      const nome=document.getElementById("cliente").value.trim();
+      const el=document.querySelectorAll(".produto")[index];
+      if(!el) return; const prod=el.value.trim();
+      if(!nome||!prod||typeof window.buscarUltimoPreco!=="function") return;
+      const preco=await window.buscarUltimoPreco(nome, prod);
+      if(preco!==null){ const input=document.querySelectorAll(".preco")[index]; if(!input) return; input.value=preco; itens[index].preco=parseFloat(preco)||0; calcularItem(index); }
     }
+    window.preencherUltimoPreco = preencherUltimoPreco;
 
-    function formatarData(dataStr) {
-      if (!dataStr) return "";
-      const [a, m, d] = dataStr.split("-");
-      return `${d}/${m}/${a.slice(-2)}`;
-    }
-
-    function centralizaTexto(doc, text, x, y, width, linhas) {
-      let texto = doc.splitTextToSize(text, width - 2);
-      if (texto.length > linhas) texto = texto.slice(0, linhas);
-      let offsetY = (10 * linhas - texto.length * 8) / 2 + 5;
-      for (let l = 0; l < texto.length; l++) {
-        doc.text(texto[l], x + width / 2, y + offsetY + l * 8, { align: "center" });
-      }
-    }
-
-    // ====== Integrações Firebase expostas pelo módulo ======
-    async function preencherEnderecoCliente() {
-      const nomeCliente = document.getElementById("cliente").value.trim();
-      if (!nomeCliente || !window.buscarEnderecoCliente) return;
-      const endereco = await window.buscarEnderecoCliente(nomeCliente);
-      if (endereco) document.getElementById("endereco").value = endereco;
-    }
-
-    async function preencherUltimoPreco(index) {
-      const nomeCliente = document.getElementById("cliente").value.trim();
-      const produtoEl = document.querySelectorAll(".produto")[index];
-      if (!produtoEl) return;
-      const produto = produtoEl.value.trim();
-      if (!nomeCliente || !produto || !window.buscarUltimoPreco) return;
-
-      const preco = await window.buscarUltimoPreco(nomeCliente, produto);
-      if (preco !== null) {
-        const precoInput = document.querySelectorAll(".preco")[index];
-        if (!precoInput) return;
-        precoInput.value = preco;
-        if (window.itens && window.itens[index]) {
-          window.itens[index].preco = parseFloat(preco);
-        }
-        calcularItem(index);
-      }
-    }
-
-    // ====== PDF / COMPARTILHAR ======
-    async function gerarPDF(apenasSalvar = false) {
-      if (!camposObrigatoriosPreenchidos()) {
-        alert("Preencha todos os campos obrigatórios: Cliente, Endereço, Data de Entrega e Horário.");
-        return;
-      }
-      salvarCamposAntesRender();
-
-      const nomeCliente = document.getElementById("cliente").value.trim();
-      const dataEntregaBr = document.getElementById("entrega").value;
-      const [ano, mes, dia] = dataEntregaBr.split("-");
-      const dataFormatada = `${dia}-${mes}-${ano}`;
-      const nomeArquivo = `Pedido_${nomeCliente.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '')}_${dataFormatada}.pdf`;
-
+    async function montarPDF(){
       const { jsPDF } = window.jspdf;
-      const margemX = 2;
-      const larguraCaixa = 68;
-      let y = 10;
+      const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:[72,297] });
 
-      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [72, 297] });
+      const margemX=2, larguraCaixa=68;
+      const W_PROD=23.5, W_QDE=13, W_UNIT=13, W_TOTAL=18.5;
+      let y=10;
 
-      // Logo
-      try {
-        let imgLogo = new Image();
-        imgLogo.src = 'Serra-Nobre_3.png';
-        doc.setFontSize(7);
-        doc.setFont(undefined, "bold");
-        doc.addImage(imgLogo, "PNG", 20, y, 32, 12, '', 'FAST');
-        y += 14;
-      } catch (e) { y += 2; }
+      try{ const b64=await getLogoBase64(); if(b64){ doc.addImage(b64, guessImageFormatFromDataURL(b64), 20, y, 32, 12, '', 'FAST'); y+=14; } else { y+=2; } }catch(_){ y+=2; }
 
-      // Cliente
       doc.setDrawColor(0); doc.setLineWidth(0.2);
-      doc.rect(margemX, y, larguraCaixa, 10, "S");
-      doc.text("CLIENTE", margemX + larguraCaixa / 2, y + 4.0, { align: "center" });
-      doc.setFontSize(8); doc.setFont(undefined, "normal");
+
+      doc.setFont("helvetica","bold"); doc.setFontSize(8);
+      doc.rect(margemX,y,larguraCaixa,10,"S");
+      doc.text("CLIENTE", margemX+larguraCaixa/2, y+4.2, {align:"center"});
+      doc.setFont("helvetica","normal"); doc.setFontSize(8);
       centralizaTexto(doc, document.getElementById("cliente").value, margemX, y-3, larguraCaixa, 2);
-      y += 11;
+      y+=11;
 
-      // Endereço
-      doc.setFont(undefined, "bold");
-      doc.rect(margemX, y, larguraCaixa, 10, "S");
-      doc.text("ENDEREÇO", margemX + larguraCaixa / 2, y + 4.0, { align: "center" });
-      doc.setFontSize(8); doc.setFont(undefined, "normal");
+      doc.setFont("helvetica","bold"); doc.setFontSize(8);
+      doc.rect(margemX,y,larguraCaixa,10,"S");
+      doc.text("ENDEREÇO", margemX+larguraCaixa/2, y+4.2, {align:"center"});
+      doc.setFont("helvetica","normal"); doc.setFontSize(8);
       centralizaTexto(doc, document.getElementById("endereco").value, margemX, y-3, larguraCaixa, 2);
-      y += 11;
+      y+=11;
 
-      // Data/Hora
-      doc.setFont(undefined, "bold");
-      doc.rect(margemX, y, larguraCaixa / 2, 10, "S");
-      doc.rect(margemX + larguraCaixa / 2, y, larguraCaixa / 2, 10, "S");
-      doc.setFontSize(7);
-      doc.text("DATA ENTREGA", margemX + larguraCaixa / 4, y + 4, { align: "center" });
-      doc.text("HORÁRIO ENTREGA", margemX + (3 * larguraCaixa) / 4, y + 4, { align: "center" });
-      doc.setFont(undefined, "normal"); doc.setFontSize(8);
-      doc.text(formatarData(document.getElementById("entrega").value), margemX + larguraCaixa / 4, y + 8, { align: "center" });
-      doc.text(document.getElementById("horaEntrega").value, margemX + (3 * larguraCaixa) / 4, y + 8, { align: "center" });
-      doc.setFontSize(7);
-      y += 10;
+      const diaSemana = diaDaSemanaExtenso(document.getElementById("entrega").value);
+      doc.rect(margemX,y,larguraCaixa,10,"S");
+      doc.setFont("helvetica","bold"); doc.setFontSize(9);
+      doc.text("DIA DA SEMANA:", margemX+3, y+6);
+      doc.text(diaSemana, margemX+larguraCaixa/2+12, y+6, {align:"center"});
+      y+=11;
 
-      // Entrega/Retirada
-      y += 2; doc.setLineWidth(1.1);
-      doc.rect(margemX + larguraCaixa * 0.235, y, larguraCaixa * 0.53, 10, "S");
-      doc.setLineWidth(0.2); doc.setFontSize(10); doc.setFont(undefined, "bold");
-      const tipoEntrega = document.querySelector('input[name="tipoEntrega"]:checked').value;
-      doc.text(tipoEntrega, margemX + larguraCaixa / 2, y + 6.5, { align: "center" });
-      y += 12;
+      doc.setFont("helvetica","bold"); doc.setFontSize(7);
+      doc.rect(margemX,y,larguraCaixa/2,10,"S");
+      doc.rect(margemX+larguraCaixa/2,y,larguraCaixa/2,10,"S");
+      doc.text("DATA ENTREGA", margemX+larguraCaixa/4, y+4, {align:"center"});
+      doc.text("HORÁRIO ENTREGA", margemX+3*larguraCaixa/4, y+4, {align:"center"});
+      doc.setFont("helvetica","normal"); doc.setFontSize(9);
+      doc.text(formatarData(document.getElementById("entrega").value), margemX+larguraCaixa/4, y+8, {align:"center"});
+      doc.text(document.getElementById("horaEntrega").value, margemX+3*larguraCaixa/4, y+8, {align:"center"});
+      y+=12;
 
-      // Tabela itens
-      const larguraProduto = 23.5, larguraQde = 13, larguraUnit = 13, larguraTotal = 18.5;
-      doc.setFontSize(7); doc.setFont(undefined, "bold"); doc.setDrawColor(0); doc.setLineWidth(0.2);
-      doc.rect(margemX, y, larguraProduto, 10, "S");
-      doc.rect(margemX + larguraProduto, y, larguraQde, 10, "S");
-      doc.rect(margemX + larguraProduto + larguraQde, y, larguraUnit, 10, "S");
-      doc.rect(margemX + larguraProduto + larguraQde + larguraUnit, y, larguraTotal, 10, "S");
-      doc.text("PRODUTO", margemX + larguraProduto / 2, y + 6, { align: "center" });
-      doc.text("QDE", margemX + larguraProduto + larguraQde / 2, y + 6, { align: "center" });
-      doc.text("R$ UNIT.", margemX + larguraProduto + larguraQde + larguraUnit / 2, y + 6, { align: "center" });
-      const valorX = margemX + larguraProduto + larguraQde + larguraUnit + larguraTotal / 2;
-      doc.text("VALOR", valorX, y + 4, { align: "center" });
-      doc.text("PRODUTO", valorX, y + 8.5, { align: "center" });
-      y += 12;
+      doc.setLineWidth(1.1);
+      doc.rect(margemX+larguraCaixa*0.235, y, larguraCaixa*0.53, 10, "S");
+      doc.setLineWidth(0.2);
+      doc.setFont("helvetica","bold"); doc.setFontSize(10);
+      const tipoEntrega=document.querySelector('input[name="tipoEntrega"]:checked').value;
+      doc.text(tipoEntrega, margemX+larguraCaixa/2, y+6.5, {align:"center"});
+      y+=12;
+
+      doc.setFont("helvetica","bold"); doc.setFontSize(7);
+      doc.rect(margemX,y,W_PROD,10,"S");
+      doc.rect(margemX+W_PROD,y,W_QDE,10,"S");
+      doc.rect(margemX+W_PROD+W_QDE,y,W_UNIT,10,"S");
+      doc.rect(margemX+W_PROD+W_QDE+W_UNIT,y,W_TOTAL,10,"S");
+      doc.text("PRODUTO", margemX+W_PROD/2, y+6, {align:"center"});
+      doc.text("QDE", margemX+W_PROD+W_QDE/2, y+6, {align:"center"});
+      doc.text("R$ UNIT.", margemX+W_PROD+W_QDE+W_UNIT/2, y+6, {align:"center"});
+      const valorX=margemX+W_PROD+W_QDE+W_UNIT+W_TOTAL/2;
+      doc.text("VALOR", valorX, y+4, {align:"center"});
+      doc.text("PRODUTO", valorX, y+8.5, {align:"center"});
+      y+=12;
 
       let totalGeral = 0;
-      doc.setFont(undefined, "normal"); doc.setFontSize(7);
+      doc.setFont("helvetica","normal"); doc.setFontSize(9);
 
-      for (let i = 0; i < itens.length; i++) {
-        const prod = itens[i].produto || "";
-        const qtd = String(itens[i].quantidade || "");
-        const tipo = itens[i].tipo || "KG";
-        const preco = (parseFloat(itens[i].preco) || 0).toFixed(2);
-        const total = (parseFloat(itens[i].total) || 0).toFixed(2);
-        const qtdDisplay = qtd ? `${qtd} ${tipo}` : "";
-        const precoDisplay = itens[i].preco ? "R$ " + preco : "—";
-        const totalDisplay = (itens[i].preco && itens[i].quantidade) ? "R$ " + total : "—";
+      for (let i=0;i<itens.length;i++){
+        const it = itens[i];
+        const prod = it.produto || "";
+        const qtd  = (it.quantidade || 0).toString();
+        const tipo = it.tipo || "KG";
+        const precoNum = parseFloat(it.preco) || 0;
+        const totalNum = (parseFloat(it.quantidade)||0) * precoNum;
 
-        let prodLines = doc.splitTextToSize(prod, larguraProduto - 2);
-        if (prodLines.length > 2) prodLines = prodLines.slice(0, 2);
-        let rowHeight = Math.max(10, 8 * prodLines.length);
+        const prodLines = splitToWidth(doc, prod, W_PROD-2).slice(0,3);
+        const rowH = Math.max(14, prodLines.length*5 + 2*3);
 
-        doc.rect(margemX, y, larguraProduto, rowHeight, "S");
-        doc.rect(margemX + larguraProduto, y, larguraQde, rowHeight, "S");
-        doc.rect(margemX + larguraProduto + larguraQde, y, larguraUnit, rowHeight, "S");
-        doc.rect(margemX + larguraProduto + larguraQde + larguraUnit, y, larguraTotal, rowHeight, "S");
+        doc.rect(margemX,y,W_PROD,rowH,"S");
+        doc.rect(margemX+W_PROD,y,W_QDE,rowH,"S");
+        doc.rect(margemX+W_PROD+W_QDE,y,W_UNIT,rowH,"S");
+        doc.rect(margemX+W_PROD+W_QDE+W_UNIT,y,W_TOTAL,rowH,"S");
 
-        for (let l = 0; l < prodLines.length; l++) {
-          let prodY = y + 5 + l * (prodLines.length > 1 ? 5 : 8);
-          doc.text(prodLines[l], margemX + larguraProduto / 2, prodY, { align: "center" });
+        drawCenteredMultiline(doc, prodLines, margemX+W_PROD/2, y, rowH);
+
+        const qtdLines = qtd ? [qtd, tipo] : [""];
+        drawCenteredMultiline(doc, qtdLines, margemX+W_PROD+W_QDE/2, y, rowH);
+
+        const precoLines = precoNum ? ["R$", precoNum.toFixed(2).replace(".", ",")] : ["—"];
+        drawCenteredMultiline(doc, precoLines, margemX+W_PROD+W_QDE+W_UNIT/2, y, rowH);
+
+        const totalLines = (precoNum && it.quantidade) ? ["R$", totalNum.toFixed(2).replace(".", ",")] : ["—"];
+        drawCenteredMultiline(doc, totalLines, margemX+W_PROD+W_QDE+W_UNIT+W_TOTAL/2, y, rowH);
+
+        y += rowH;
+
+        const obs = (it.obs || "").trim();
+        if (obs){
+          const titulo="OBSERVAÇÕES:";
+          const corpo = obs.toUpperCase();
+          const corpoLines = splitToWidth(doc, corpo, larguraCaixa-6);
+          const obsH = 9 + corpoLines.length*5;
+          doc.rect(margemX,y,larguraCaixa,obsH,"S");
+          doc.setFont("helvetica","bold"); doc.setFontSize(9);
+          const tx=margemX+3, ty=y+6;
+          doc.text(titulo, tx, ty); underline(doc, tx, ty, titulo, 9);
+          let baseY=y+12; corpoLines.forEach((ln,ix)=>doc.text(ln, margemX+3, baseY+ix*5));
+          doc.setFont("helvetica","normal");
+          y += obsH;
         }
-        doc.text(qtdDisplay, margemX + larguraProduto + larguraQde / 2, y + rowHeight / 2 + 2, { align: "center" });
-        doc.text(precoDisplay, margemX + larguraProduto + larguraQde + larguraUnit / 2, y + rowHeight / 2 + 2, { align: "center" });
-        doc.text(totalDisplay, margemX + larguraProduto + larguraQde + larguraUnit + larguraTotal / 2, y + rowHeight / 2 + 2, { align: "center" });
 
-        // Obs item
-        const obs = itens[i].obs || "";
-        if (obs.trim() !== "") {
-          y += rowHeight;
-          let obsLines = doc.splitTextToSize(obs, larguraCaixa - 4);
-          let obsHeight = 5 + obsLines.length * 4;
-          doc.rect(margemX, y, larguraCaixa, obsHeight, "S");
-          doc.setFont(undefined, "bold"); doc.text("OBSERVAÇÕES:", margemX + 3, y + 5.5);
-          doc.setFont(undefined, "normal");
-          for (let ol = 0; ol < obsLines.length; ol++) {
-            doc.text(obsLines[ol], margemX + 25, y + 5.5 + ol * 4);
-          }
-          y += obsHeight;
-        } else {
-          y += rowHeight;
-        }
-
-        if (tipo === "UN") {
-          doc.setFont(undefined, "italic");
-          doc.text("(*) ESTE ITEM ESTÁ EM UNIDADES! (NÃO EM KG).", margemX + 5, y + 4);
-          doc.setFont(undefined, "normal");
+        if (tipo === "UN"){
+          doc.setFontSize(7); doc.setFont("helvetica","italic");
+          doc.text("(*) ESTE ITEM ESTÁ EM UNIDADES! (NÃO EM KG).", margemX+5, y+4);
+          doc.setFont("helvetica","normal"); doc.setFontSize(9);
           y += 4;
         }
-        totalGeral += (parseFloat(itens[i].total) || 0);
+
+        totalGeral += totalNum;
         if (i < itens.length - 1) y += 2;
       }
 
-      // Pagamento
       y += 2;
-      doc.setFont(undefined, "bold"); doc.rect(margemX, y, larguraCaixa, 10, "S");
-      let pagamento = document.getElementById("pagamento").value;
-      if (pagamento === "OUTRO") pagamento = document.getElementById("pagamentoOutro").value || "OUTRO";
-      doc.text("FORMA DE PAGAMENTO", margemX + larguraCaixa / 2, y + 4.0, { align: "center" });
-      doc.setFontSize(10); doc.text(pagamento, margemX + larguraCaixa / 2, y + 8, { align: "center" });
+      doc.setFont("helvetica","bold"); doc.setFontSize(7);
+      doc.rect(margemX,y,larguraCaixa,10,"S");
+      doc.text("FORMA DE PAGAMENTO", margemX+larguraCaixa/2, y+4, {align:"center"});
+      doc.setFont("helvetica","normal"); doc.setFontSize(10);
+      let pagamento=document.getElementById("pagamento").value;
+      if(pagamento==="OUTRO") pagamento=document.getElementById("pagamentoOutro").value;
+      doc.text(pagamento, margemX+larguraCaixa/2, y+8, {align:"center"});
       y += 13;
 
-      // Total
-      doc.setFont(undefined, "bold"); doc.setLineWidth(1.1);
-      doc.rect(margemX, y, larguraCaixa, 12, "S");
-      doc.text("TOTAL DO PEDIDO", margemX + larguraCaixa / 2, y + 4.5, { align: "center" });
-      doc.setFontSize(10); doc.text("R$ " + totalGeral.toFixed(2), margemX + larguraCaixa / 2, y + 9, { align: "center" });
+      doc.setFont("helvetica","bold"); doc.setLineWidth(1.1);
+      doc.rect(margemX,y,larguraCaixa,12,"S");
+      doc.text("TOTAL DO PEDIDO", margemX+larguraCaixa/2, y+4.5, {align:"center"});
+      doc.setFontSize(10);
+      doc.text("R$ " + totalGeral.toFixed(2), margemX+larguraCaixa/2, y+9, {align:"center"});
       y += 15;
 
-      // Obs geral
-      const obsGeral = document.getElementById("obsGeral").value;
-      if (obsGeral && obsGeral.trim() !== "") {
-        doc.setFont(undefined, "bold"); doc.setDrawColor(0); doc.setLineWidth(0.2);
-        let obsLines = doc.splitTextToSize(obsGeral, larguraCaixa - 4);
-        let obsHeight = 7 + obsLines.length * 5;
-        doc.rect(margemX, y, larguraCaixa, obsHeight, "S");
-        doc.text("OBS: PEDIDO", margemX + 6, y + 6);
-        doc.setFont(undefined, "normal"); doc.setFontSize(9);
-        for (let l = 0; l < obsLines.length; l++) {
-          doc.text(obsLines[l], margemX + 6, y + 11 + l * 5);
-        }
-        y += obsHeight + 3;
+      const obsG=(document.getElementById("obsGeral").value||"").trim();
+      if (obsG){
+        const titulo="OBSERVAÇÃO DO PEDIDO:";
+        const corpo=obsG.toUpperCase();
+        const corpoLines=splitToWidth(doc, corpo, larguraCaixa-6);
+        const h=9+corpoLines.length*5;
+        doc.rect(margemX,y,larguraCaixa,h,"S");
+        doc.setFont("helvetica","bold"); doc.setFontSize(9);
+        const tx=margemX+3, ty=y+6;
+        doc.text(titulo, tx, ty); underline(doc, tx, ty, titulo, 9);
+        let baseY=y+12; corpoLines.forEach((ln,ix)=>doc.text(ln, margemX+3, baseY+ix*5));
+        doc.setFont("helvetica","normal");
+        y += h + 3;
       }
 
-      // Salvar cliente + registrar histórico
-      if (window.salvarCliente) {
-        window.salvarCliente(
+      if (typeof window.salvarCliente === "function") {
+        await window.salvarCliente(
           document.getElementById("cliente").value.trim(),
           document.getElementById("endereco").value.trim()
         );
       }
-      try {
-        const nomeCli = document.getElementById("cliente").value.trim();
-        await Promise.all(
-          itens
-            .filter(i => (i?.produto || "").trim() && !isNaN(parseFloat(i?.preco)))
-            .map(i => window.registrarPrecoCliente
-              ? window.registrarPrecoCliente(nomeCli, String(i.produto).trim(), parseFloat(i.preco))
-              : Promise.resolve()
-            )
-        );
-      } catch (err) {
-        console.error("Erro ao registrar histórico:", err);
-      }
+      try{
+        const nomeCli=document.getElementById("cliente").value.trim();
+        if (typeof window.registrarPrecoCliente === "function") {
+          await Promise.all(
+            itens.filter(i=> (i?.produto||"").trim() && !isNaN(parseFloat(i?.preco)))
+                 .map(i=> window.registrarPrecoCliente(nomeCli, String(i.produto).trim(), parseFloat(i.preco)))
+          );
+        }
+      }catch(e){ console.error(e); }
 
-      if (apenasSalvar) {
-        doc.save(nomeArquivo);
+      const nomeCliente=document.getElementById("cliente").value.trim();
+      const dataEntregaBr=document.getElementById("entrega").value;
+      const [ano,mes,dia]=dataEntregaBr.split("-");
+      const nomeArquivo=`Pedido_${nomeCliente.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'')}_${dia}-${mes}-${ano}.pdf`;
+
+      return { doc, nomeArquivo };
+    }
+
+    function centralizaTexto(doc, text, x, y, width, linhas){
+      let texto=doc.splitTextToSize(text||"", width-2);
+      if (texto.length>linhas) texto=texto.slice(0,linhas);
+      let offsetY=(10*linhas - texto.length*8)/2 + 5;
+      for (let l=0;l<texto.length;l++){
+        doc.text(texto[l], x+width/2, y+offsetY+l*8, {align:"center"});
+      }
+    }
+
+    async function gerarPDF(apenasSalvar=false){
+      if (!camposObrigatoriosPreenchidos()) { alert("Preencha Cliente, Endereço, Data e Horário."); return; }
+      salvarCamposAntesRender();
+      const { doc, nomeArquivo } = await montarPDF();
+      if (apenasSalvar) doc.save(nomeArquivo); else window.open(doc.output('bloburl'), '_blank');
+    }
+    window.gerarPDF = gerarPDF;
+
+    async function compartilharPDF(){
+      if (!camposObrigatoriosPreenchidos()) { alert("Preencha Cliente, Endereço, Data e Horário."); return; }
+      salvarCamposAntesRender();
+      const { doc, nomeArquivo } = await montarPDF();
+      if (navigator.canShare && window.Blob){
+        const blob = await doc.output("blob");
+        const file = new File([blob], nomeArquivo, { type: "application/pdf" });
+        if (navigator.canShare({ files:[file] })) await navigator.share({ files:[file], title:"Pedido Serra Nobre", text:"Segue pedido em PDF" });
+        else alert("Seu dispositivo não permite compartilhamento direto de PDF. Salve e envie manualmente.");
       } else {
-        window.open(doc.output('bloburl'), '_blank');
+        alert("Seu navegador não suporta compartilhamento direto de PDF. Salve e envie manualmente.");
       }
     }
+    window.compartilharPDF = compartilharPDF;
 
-    async function compartilharPDF() {
-      if (!camposObrigatoriosPreenchidos()) {
-        alert("Preencha todos os campos obrigatórios: Cliente, Endereço, Data de Entrega e Horário.");
-        return;
-      }
-      await gerarPDF(false); // abre em nova aba; iOS Share direto de Blob é limitado, por isso usamos o PDF aberto
-    }
-  </script>
-
-  <script>
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function() {
+      window.addEventListener('load', ()=> {
         navigator.serviceWorker.register('sw.js').catch(()=>{});
       });
     }
   </script>
+
+  <datalist id="listaProdutos"></datalist>
 </body>
 </html>
