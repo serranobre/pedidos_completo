@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Serra Nobre" />
   <link rel="manifest" href="manifest.json" />
-  <title>PEDIDO V2.5</title>
+  <title>PEDIDO V2.5.2</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background: #f4f4f4; }
     h1 { text-align: right; margin-bottom: 10px; font-size: 30px; }
@@ -40,7 +40,7 @@
 </head>
 <body>
   <img src="Serra-Nobre_3.png" alt="Logo" class="logo-header" onerror="this.style.display='none'">
-  <h1>V2.5</h1>
+  <h1>V2.5.2</h1>
 
   <div class="field-group">
     <label>Cliente:</label>
@@ -98,120 +98,187 @@
   <!-- jsPDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-  <!-- Firebase (module) -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-    import {
-      getFirestore, collection, addDoc, getDocs, query, where, orderBy, limit,
-      updateDoc, increment
-    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+  <!-- Firebase (module): App + Firestore + App Check + Auth -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+  import {
+    getFirestore, collection, addDoc, getDocs, query, where, orderBy, limit,
+    updateDoc, increment
+  } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+  import {
+    initializeAppCheck, ReCaptchaV3Provider
+  } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app-check.js";
+  import {
+    getAuth, signInAnonymously, onAuthStateChanged
+  } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyB3zBW_WhVfNpX5uoJCq-6WysE5XKYKZt4",
-      authDomain: "serranobrepedidos.firebaseapp.com",
-      projectId: "serranobrepedidos",
-      storageBucket: "serranobrepedidos.firebasestorage.app",
-      messagingSenderId: "948939268023",
-      appId: "1:948939268023:web:3f1f6c18f2c047c82b1232"
-    };
+  /* ===== Config Firebase ===== */
+  const firebaseConfig = {
+    apiKey: "AIzaSyB3zBW_WhVfNpX5uoJCq-6WysE5XKYKZt4",
+    authDomain: "serranobrepedidos.firebaseapp.com",
+    projectId: "serranobrepedidos",
+    storageBucket: "serranobrepedidos.firebasestorage.app",
+    messagingSenderId: "948939268023",
+    appId: "1:948939268023:web:3f1f6c18f2c047c82b1232"
+  };
 
-    const app = initializeApp(firebaseConfig);
-    const db  = getFirestore(app);
+  const app = initializeApp(firebaseConfig);
 
-    async function salvarCliente(nome, endereco) {
-      const nomeNorm = (nome || "").trim();
-      const enderecoNorm = (endereco || "").trim();
-      if (!nomeNorm) return;
-      const qCli = query(collection(db, "clientes"), where("nome", "==", nomeNorm), limit(1));
-      const snap = await getDocs(qCli);
-      if (!snap.empty) {
-        const ref = snap.docs[0].ref;
-        const atual = snap.docs[0].data();
-        const campos = { atualizadoEm: new Date() };
-        if ((atual.endereco || "") !== enderecoNorm) campos.endereco = enderecoNorm;
-        await updateDoc(ref, campos);
-      } else {
-        await addDoc(collection(db, "clientes"), { nome: nomeNorm, endereco: enderecoNorm, compras: 0, criadoEm: new Date() });
-      }
-    }
+  /* ===== App Check (reCAPTCHA v3) =====
+     - Use sua Site Key pública (v3) aqui:
+  */
+  initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider("6Lf0MK0rAAAAACI68fwbg7RDERSlL0AW5zKd-sDA"),
+    isTokenAutoRefreshEnabled: true
+  });
 
-    async function buscarEnderecoCliente(nomeCliente) {
-      const nome = (nomeCliente || "").trim();
-      if (!nome) return "";
-      const q = query(collection(db, "clientes"), where("nome", "==", nome), limit(1));
-      const s = await getDocs(q);
-      return s.empty ? "" : (s.docs[0].data().endereco || "");
-    }
-
-    async function clientesMaisUsados(limitQtd = 50) {
-      const lista = [];
-      const qs = await getDocs(collection(db, "clientes"));
-      qs.forEach(d => {
-        const x = d.data();
-        if ((x?.nome || "").trim()) lista.push({ nome: x.nome.trim(), compras: x.compras || 0 });
+  /* ===== Auth anônima (login automático) ===== */
+  const auth = getAuth(app);
+  const authReady = new Promise((resolve) => {
+    onAuthStateChanged(auth, (user) => {
+      if (user) resolve(user);
+      else signInAnonymously(auth).catch((e) => {
+        console.error("Falha ao entrar anonimamente:", e);
       });
-      lista.sort((a,b)=> b.compras - a.compras || a.nome.localeCompare(b.nome));
-      return lista.slice(0, limitQtd).map(x => x.nome);
-    }
+    });
+  });
 
-    async function buscarUltimoPreco(clienteNome, produtoNome) {
-      const nomeCli  = (clienteNome || "").trim();
-      const nomeProd = (produtoNome || "").trim();
-      if (!nomeCli || !nomeProd) return null;
-      const q = query(
-        collection(db, "historico_precos"),
-        where("cliente", "==", nomeCli),
-        where("produto", "==", nomeProd),
-        orderBy("data", "desc"),
-        limit(1)
-      );
-      const qs = await getDocs(q);
-      if (qs.empty) return null;
-      const dados = qs.docs[0].data();
-      return typeof dados.preco === "number" ? dados.preco : parseFloat(dados.preco);
-    }
+  /* Firestore (usar somente após authReady) */
+  const db = getFirestore(app);
 
-    async function produtosDoCliente(nomeCliente) {
-      const nome = (nomeCliente || "").trim();
-      if (!nome) return [];
-      const set = new Set();
-      const q = query(collection(db, "historico_precos"), where("cliente", "==", nome), orderBy("data", "desc"), limit(1000));
-      const qs = await getDocs(q);
-      qs.forEach(d => { const p = (d.data().produto || "").trim(); if (p) set.add(p); });
-      return [...set].sort((a,b)=>a.localeCompare(b));
-    }
+  /* Expor uma Promise global p/ os outros scripts aguardarem */
+  window.firebaseReady = authReady;
 
-    async function registrarPrecoCliente(clienteNome, produtoNome, preco) {
-      const nomeCli  = (clienteNome || "").trim();
-      const nomeProd = (produtoNome || "").trim();
-      const valor    = parseFloat(preco);
-      if (!nomeCli || !nomeProd || isNaN(valor)) return;
-      await addDoc(collection(db, "historico_precos"), { cliente: nomeCli, produto: nomeProd, preco: valor, data: new Date() });
-      const qCli = query(collection(db, "clientes"), where("nome", "==", nomeCli), limit(1));
-      const s = await getDocs(qCli);
-      if (!s.empty) await updateDoc(s.docs[0].ref, { compras: increment(1), atualizadoEm: new Date() });
-    }
+  /* ========= Funções Firestore ========= */
 
-    async function carregarSugestoesProdutosDoCliente() {
-      const nome = document.getElementById("cliente").value.trim();
-      const listaProdutos = document.getElementById("listaProdutos");
-      if (!listaProdutos) return;
-      const nomes = await produtosDoCliente(nome);
-      listaProdutos.innerHTML = nomes.map(p => `<option value="${p}"></option>`).join("");
-    }
+  // Upsert de cliente
+  async function salvarCliente(nome, endereco) {
+    await authReady;
+    const nomeNorm = (nome || "").trim();
+    const enderecoNorm = (endereco || "").trim();
+    if (!nomeNorm) return;
 
-    async function popularClientesMaisUsados() {
-      const lista = await clientesMaisUsados();
-      document.getElementById("listaClientes").innerHTML = lista.map(n => `<option value="${n}"></option>`).join("");
-    }
+    const qCli = query(collection(db, "clientes"), where("nome", "==", nomeNorm), limit(1));
+    const snap = await getDocs(qCli);
 
-    window.salvarCliente = salvarCliente;
-    window.buscarEnderecoCliente = buscarEnderecoCliente;
-    window.buscarUltimoPreco = buscarUltimoPreco;
-    window.registrarPrecoCliente = registrarPrecoCliente;
-    window.carregarSugestoesProdutosDoCliente = carregarSugestoesProdutosDoCliente;
-    window.popularClientesMaisUsados = popularClientesMaisUsados;
-  </script>
+    if (!snap.empty) {
+      const ref = snap.docs[0].ref;
+      const atual = snap.docs[0].data();
+      const campos = { atualizadoEm: new Date() };
+      if ((atual.endereco || "") !== enderecoNorm) campos.endereco = enderecoNorm;
+      await updateDoc(ref, campos);
+    } else {
+      await addDoc(collection(db, "clientes"), {
+        nome: nomeNorm, endereco: enderecoNorm, compras: 0, criadoEm: new Date()
+      });
+    }
+  }
+
+  // Buscar endereço pelo nome do cliente
+  async function buscarEnderecoCliente(nomeCliente) {
+    await authReady;
+    const nome = (nomeCliente || "").trim();
+    if (!nome) return "";
+    const q = query(collection(db, "clientes"), where("nome", "==", nome), limit(1));
+    const s = await getDocs(q);
+    return s.empty ? "" : (s.docs[0].data().endereco || "");
+  }
+
+  // Top clientes por "compras"
+  async function clientesMaisUsados(limitQtd = 50) {
+    await authReady;
+    const lista = [];
+    const qs = await getDocs(collection(db, "clientes"));
+    qs.forEach(d => {
+      const x = d.data();
+      if ((x?.nome || "").trim()) lista.push({ nome: x.nome.trim(), compras: x.compras || 0 });
+    });
+    lista.sort((a,b)=> b.compras - a.compras || a.nome.localeCompare(b.nome));
+    return lista.slice(0, limitQtd).map(x => x.nome);
+  }
+
+  // Último preço para (cliente, produto)
+  async function buscarUltimoPreco(clienteNome, produtoNome) {
+    await authReady;
+    const nomeCli  = (clienteNome || "").trim();
+    const nomeProd = (produtoNome || "").trim();
+    if (!nomeCli || !nomeProd) return null;
+
+    const q = query(
+      collection(db, "historico_precos"),
+      where("cliente", "==", nomeCli),
+      where("produto", "==", nomeProd),
+      orderBy("data", "desc"),
+      limit(1)
+    );
+    const qs = await getDocs(q);
+    if (qs.empty) return null;
+    const dados = qs.docs[0].data();
+    return typeof dados.preco === "number" ? dados.preco : parseFloat(dados.preco);
+  }
+
+  // Lista de produtos já usados por um cliente (para popular datalist)
+  async function produtosDoCliente(nomeCliente) {
+    await authReady;
+    const nome = (nomeCliente || "").trim();
+    if (!nome) return [];
+    const set = new Set();
+    const q = query(
+      collection(db, "historico_precos"),
+      where("cliente", "==", nome),
+      orderBy("data", "desc"),
+      limit(1000)
+    );
+    const qs = await getDocs(q);
+    qs.forEach(d => { const p = (d.data().produto || "").trim(); if (p) set.add(p); });
+    return [...set].sort((a,b)=>a.localeCompare(b));
+  }
+
+  // Registrar preço no histórico + incrementar "compras" do cliente
+  async function registrarPrecoCliente(clienteNome, produtoNome, preco) {
+    await authReady;
+    const nomeCli  = (clienteNome || "").trim();
+    const nomeProd = (produtoNome || "").trim();
+    const valor    = parseFloat(preco);
+    if (!nomeCli || !nomeProd || isNaN(valor)) return;
+
+    await addDoc(collection(db, "historico_precos"), {
+      cliente: nomeCli, produto: nomeProd, preco: valor, data: new Date()
+    });
+
+    const qCli = query(collection(db, "clientes"), where("nome", "==", nomeCli), limit(1));
+    const s = await getDocs(qCli);
+    if (!s.empty) {
+      await updateDoc(s.docs[0].ref, { compras: increment(1), atualizadoEm: new Date() });
+    }
+  }
+
+  // Preenche datalist de produtos para o cliente digitado
+  async function carregarSugestoesProdutosDoCliente() {
+    await authReady;
+    const nome = document.getElementById("cliente").value.trim();
+    const listaProdutos = document.getElementById("listaProdutos");
+    if (!listaProdutos) return;
+    const nomes = await produtosDoCliente(nome);
+    listaProdutos.innerHTML = nomes.map(p => `<option value="${p}"></option>`).join("");
+  }
+
+  // Preenche datalist de clientes mais usados quando o input recebe foco
+  async function popularClientesMaisUsados() {
+    await authReady;
+    const lista = await clientesMaisUsados();
+    document.getElementById("listaClientes").innerHTML =
+      lista.map(n => `<option value="${n}"></option>`).join("");
+  }
+
+  // Expor funções para o script não-module
+  window.salvarCliente = salvarCliente;
+  window.buscarEnderecoCliente = buscarEnderecoCliente;
+  window.buscarUltimoPreco = buscarUltimoPreco;
+  window.registrarPrecoCliente = registrarPrecoCliente;
+  window.carregarSugestoesProdutosDoCliente = carregarSugestoesProdutosDoCliente;
+  window.popularClientesMaisUsados = popularClientesMaisUsados;
+</script>
 
   <!-- App + PDF -->
   <script>
