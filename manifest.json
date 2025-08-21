@@ -1,42 +1,29 @@
 {
-  "name": "Pedidos Serra Nobre",
+  "name": "Serra Nobre – Pedidos",
   "short_name": "Serra Nobre",
-  "description": "Sistema de pedidos otimizado do Serra Nobre",
-  "start_url": ".",
+  "description": "Pedido rápido com PDF, histórico por cliente e PWA offline para estáticos.",
+  "id": "/",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#f4f4f4",
-  "theme_color": "#008000",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#105d1a",
   "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ],
+  "shortcuts": [
     {
-      "src": "icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    },
-    {
-      "src": "favicon-96x96.png",
-      "sizes": "96x96",
-      "type": "image/png"
-    },
-    {
-      "src": "apple-touch-icon.png",
-      "sizes": "180x180",
-      "type": "image/png"
-    },
-    {
-      "src": "favicon.ico",
-      "sizes": "48x48 32x32 16x16",
-      "type": "image/x-icon"
-    },
-    {
-      "src": "favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
+      "name": "Novo pedido",
+      "short_name": "Pedido",
+      "url": "./index.html",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
-  ]
+  ],
+  "categories": ["business", "productivity"],
+  "prefer_related_applications": false
 }
