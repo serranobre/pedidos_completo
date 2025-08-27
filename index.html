@@ -4,96 +4,143 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SERRA NOBRE V3.0</title>
+
+  <!-- PWA -->
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png">
+
   <style>
-    body { font-family: Arial, sans-serif; margin:0; padding:10px; background:#f4f4f4; }
-    header { display:flex; gap:12px; align-items:center; }
-    h1 { margin:0 auto; font-size:24px; }
-    .logo-header { width:240px; display:block; margin:10px auto; }
-    .top-actions { margin:10px 0; display:flex; gap:8px; }
-    .top-actions a, .top-actions button { padding:10px 12px; border-radius:8px; border:0; cursor:pointer; }
-    .btn { background:#0ea5a6; color:#fff; }
-    .btn.secondary { background:#0f766e; color:#fff; }
-    input, select, textarea { width:100%; padding:8px; margin:5px 0; box-sizing:border-box; }
-    .item { border:1px solid #ccc; padding:10px; background:#fff; margin-bottom:10px; }
-    .total { font-weight:bold; font-size:1.2em; }
-    button.action { width:100%; padding:10px; background:#008000; color:#fff; border:none; font-size:1em; margin-top:5px; border-radius:6px; }
-    .remove { background:#c0392b; }
-    .pdf-btn { background:#005580; margin-top:10px; }
-    .pdf-btn.salvar { background:#3d7311; }
-    .pdf-btn.compartilhar { background:#b06912; }
-    .field-group { margin-bottom:12px; }
-    #freteValor { font-weight:bold; color:#333; }
+    :root{
+      --c1:#0ea5a6; /* teal */
+      --c2:#0f766e; /* teal darker */
+      --ok:#008000;
+      --danger:#c0392b;
+      --pdf:#005580;
+      --save:#3d7311;
+      --share:#b06912;
+    }
+    *{ box-sizing:border-box }
+    body{ font-family: Arial, sans-serif; margin:0; padding:10px; background:#f4f4f4; color:#111; }
+    header{
+      display:flex; align-items:center; gap:12px; padding:6px 0;
+      border-bottom:1px solid #e5e7eb; margin-bottom:8px;
+    }
+    .logo-header{ width:180px; display:block }
+    .top-actions{ display:flex; gap:8px; align-items:center }
+    .top-actions a, .top-actions button{
+      padding:10px 12px; border-radius:8px; border:0; cursor:pointer;
+      background:var(--c1); color:#fff; text-decoration:none; font-weight:600;
+    }
+    .top-actions .secondary{ background:var(--c2) }
+    /* Título à direita */
+    h1{ margin:0 0 0 auto; font-size:20px; text-align:right; white-space:nowrap }
+
+    .content{ max-width:900px; margin:10px auto }
+    label{ font-weight:600; display:block; margin-top:8px }
+    input, select, textarea{ width:100%; padding:10px; margin:5px 0; border:1px solid #d1d5db; border-radius:8px; background:#fff }
+    textarea{ min-height:80px; resize:vertical }
+
+    .row{ display:grid; grid-template-columns: 1fr 120px 140px; gap:10px }
+    .item{ border:1px solid #e5e7eb; padding:10px; background:#fff; border-radius:10px; margin-bottom:10px }
+    .total{ font-weight:bold; font-size:1.05em; margin:8px 0 0 }
+    .action{ width:100%; padding:12px; background:var(--ok); color:#fff; border:none; font-size:1em; margin-top:8px; border-radius:10px; font-weight:700; cursor:pointer }
+    .remove{ background:var(--danger) }
+    .pdf-btn{ width:100%; padding:12px; border:none; border-radius:10px; color:#fff; font-weight:700; cursor:pointer; margin-top:10px }
+    .pdf-btn.gen{ background:var(--pdf) }
+    .pdf-btn.salvar{ background:var(--save) }
+    .pdf-btn.compartilhar{ background:var(--share) }
+    .pill{ display:inline-block; padding:4px 8px; border-radius:999px; background:#eef2ff; color:#1e3a8a; font-size:12px; font-weight:700 }
+
+    .muted{ color:#6b7280; font-size:0.9em }
+    #freteValor{ font-weight:700; color:#111 }
+
+    .flex{ display:flex; align-items:center; gap:10px; flex-wrap:wrap }
+
+    @media(max-width:720px){
+      .row{ grid-template-columns: 1fr 1fr 1fr }
+      .logo-header{ width:130px }
+      h1{ font-size:16px }
+    }
     @media(max-width:450px){
-      h1 { font-size:1.1em; }
-      .logo-header { width:120px; }
-      button.action { font-size:0.9em; }
+      .row{ grid-template-columns: 1fr }
     }
   </style>
 </head>
 <body>
-  <img src="Serra-Nobre_3.png" alt="Logo" class="logo-header" onerror="this.style.display='none'">
   <header>
+    <img src="Serra-Nobre_3.png" alt="Logo" class="logo-header" onerror="this.style.display='none'">
     <div class="top-actions">
-      <a class="btn" href="relatorios.html">Relatórios</a>
+      <a href="relatorios.html" class="secondary" title="Abrir relatórios">Relatórios</a>
     </div>
     <h1>SERRA NOBRE V3.0</h1>
   </header>
 
-  <div class="field-group">
-    <label>Cliente:</label>
-    <input type="text" id="cliente" autocomplete="off" required />
+  <div class="content">
+    <!-- Cliente + Endereço com autocomplete -->
+    <label for="cliente">Cliente <span class="pill">autocomplete</span></label>
+    <input id="cliente" list="listaClientes" autocomplete="off" required placeholder="Digite para buscar..." />
+    <datalist id="listaClientes"></datalist>
+
+    <label for="endereco">Endereço <span class="pill">autocomplete</span></label>
+    <input id="endereco" list="listaEnderecos" autocomplete="off" required placeholder="Rua, número, bairro..." />
+    <datalist id="listaEnderecos"></datalist>
+
+    <div class="flex">
+      <div style="flex:1;min-width:200px">
+        <label for="entrega">Data de Entrega</label>
+        <input type="date" id="entrega" required/>
+      </div>
+      <div style="flex:1;min-width:160px">
+        <label for="horaEntrega">Horário de Entrega</label>
+        <input type="time" id="horaEntrega" required/>
+      </div>
+      <div style="flex:1;min-width:200px">
+        <label for="pagamento">Forma de Pagamento</label>
+        <select id="pagamento">
+          <option value="PIX">PIX</option>
+          <option value="DINHEIRO">DINHEIRO</option>
+          <option value="CARTÃO (LEVAR MAQUINA)">CARTÃO (LEVAR MAQUINA)</option>
+          <option value="A PRAZO">A PRAZO</option>
+        </select>
+      </div>
+    </div>
+
+    <hr style="margin:14px 0"/>
+
+    <div id="itens"></div>
+    <button class="action" id="btnAddItem">Adicionar Item</button>
+
+    <hr style="margin:14px 0"/>
+
+    <div class="flex" style="align-items:flex-end">
+      <div style="flex:1;min-width:200px">
+        <label>Valor do Frete</label>
+        <div id="freteValor" class="muted">—</div>
+      </div>
+      <div class="muted">Calculado a partir do endereço e subtotal</div>
+    </div>
+
+    <label for="obsGeral">Observação geral do pedido</label>
+    <textarea id="obsGeral" placeholder="Ex.: cortar mais fino, levar sacolinha extra..."></textarea>
+
+    <button class="pdf-btn gen" id="btnGerar">Gerar PDF</button>
+    <button class="pdf-btn salvar" id="btnSalvar">Salvar PDF</button>
+    <button class="pdf-btn compartilhar" id="btnCompartilhar">Compartilhar PDF</button>
   </div>
 
-  <div class="field-group">
-    <label>Endereço:</label>
-    <input type="text" id="endereco" autocomplete="off" required/>
-  </div>
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" referrerpolicy="no-referrer"></script>
 
-  <div class="field-group">
-    <label>Data de Entrega:</label>
-    <input type="date" id="entrega" required/>
-  </div>
-
-  <div class="field-group">
-    <label>Horário de Entrega:</label>
-    <input type="time" id="horaEntrega" required/>
-  </div>
-
-  <div id="itens"></div>
-  <button class="action" onclick="adicionarItem()">Adicionar Item</button>
-
-  <hr/>
-  <label>Forma de Pagamento:</label>
-  <select id="pagamento">
-    <option value="PIX">PIX</option>
-    <option value="DINHEIRO">DINHEIRO</option>
-    <option value="CARTÃO (LEVAR MAQUINA)">CARTÃO (LEVAR MAQUINA)</option>
-    <option value="A PRAZO">A PRAZO</option>
-  </select>
-
-  <hr/>
-  <label>Valor do Frete:</label>
-  <div id="freteValor">—</div>
-
-  <hr/>
-  <label>Observação geral do pedido:</label>
-  <textarea id="obsGeral"></textarea>
-  <hr/>
-
-  <button class="pdf-btn" onclick="gerarPDF(false)">Gerar PDF</button>
-  <button class="pdf-btn salvar" onclick="gerarPDF(true)">Salvar PDF</button>
-  <button class="pdf-btn compartilhar" onclick="compartilharPDF()">Compartilhar PDF</button>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <!-- Firebase (modular v11) para salvar pedidos -->
+  <!-- Firebase (modular v11) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
-    import { getFirestore, collection, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+    import {
+      getFirestore, collection, doc, setDoc, getDocs, query, orderBy, limit, where, serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
-    // >>>>> SUBSTITUA pelo seu config do Firebase (mesmo usado nos relatórios) <<<<<
+    // ====================== CONFIG FIREBASE =========================
+    // >>>>> SUBSTITUA PELO SEU CONFIG (o mesmo dos relatórios) <<<<<
     const firebaseConfig = {
       apiKey: "SUA_API_KEY",
       authDomain: "SEU_PROJETO.firebaseapp.com",
@@ -102,102 +149,232 @@
       messagingSenderId: "XXXX",
       appId: "1:XXXX:web:YYYY"
     };
+    // ===============================================================
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    let authReady = new Promise((resolve) => {
-      onAuthStateChanged(auth, (u)=>{
-        if(u) resolve(true);
-      });
-      signInAnonymously(auth).catch(()=>{});
+    const authReady = new Promise((resolve) => {
+      onAuthStateChanged(auth, (u)=>{ if(u) resolve(true); });
+      signInAnonymously(auth).catch((e)=>console.warn("Anon auth falhou:", e));
     });
 
-    // ====== Lógica da página ======
-    window.itens = [{ produto:"", quantidade:0, preco:0, total:0 }];
+    // ------- Estado ----------
+    const state = {
+      itens: [{ produto:"", quantidade:0, preco:0, total:0 }],
+      cachePrecos: new Map(),     // produto -> precoUnit (último)
+      clientes: [],               // [{nome, endereco?}]
+      enderecos: []               // strings
+    };
 
+    // ------- UI helpers -------
+    const $ = (sel)=>document.querySelector(sel);
+    const $$ = (sel)=>Array.from(document.querySelectorAll(sel));
+
+    // ------- Render Itens -------
     function renderItens(){
-      const c = document.getElementById("itens");
+      const c = $("#itens");
       c.innerHTML = "";
-      window.itens.forEach((it,i)=>{
-        c.innerHTML += `
-          <div class="item">
-            <label>Produto:</label>
-            <input type="text" class="produto" data-i="${i}" value="${it.produto}" oninput="salvarCampos()"/>
-            <label>Qtd:</label>
-            <input type="number" step="0.01" class="quant" data-i="${i}" value="${it.quantidade}" oninput="salvarCampos()"/>
-            <label>Preço Unit:</label>
-            <input type="number" step="0.01" class="preco" data-i="${i}" value="${it.preco}" oninput="salvarCampos()"/>
-            <p class="total">Total Item: R$ <span>${it.total.toFixed(2)}</span></p>
-            <button class="remove action" onclick="removerItem(${i})">Remover</button>
+      state.itens.forEach((it,i)=>{
+        const total = (Number(it.quantidade||0) * Number(it.preco||0)) || 0;
+        c.insertAdjacentHTML("beforeend", `
+          <div class="item" data-i="${i}">
+            <div class="row">
+              <div>
+                <label>Produto</label>
+                <input type="text" class="produto" list="listaProdutos" placeholder="Ex.: Vazio Gaúcho KG" value="${it.produto}">
+              </div>
+              <div>
+                <label>Qtd</label>
+                <input type="number" class="quant" step="0.01" min="0" value="${it.quantidade||0}">
+              </div>
+              <div>
+                <label>Preço Unit</label>
+                <input type="number" class="preco" step="0.01" min="0" value="${it.preco||0}">
+              </div>
+            </div>
+            <p class="total">Total Item: R$ <span>${total.toFixed(2)}</span></p>
+            <button class="action remove">Remover</button>
           </div>
-        `;
+        `);
       });
-      atualizarFreteUI();
-    }
-    window.renderItens = renderItens;
 
-    function salvarCampos(){
-      document.querySelectorAll(".item").forEach((el,idx)=>{
-        const p = el.querySelector(".produto").value;
-        const q = parseFloat(el.querySelector(".quant").value)||0;
-        const pr= parseFloat(el.querySelector(".preco").value)||0;
-        window.itens[idx] = { produto:p, quantidade:q, preco:pr, total:q*pr };
-        el.querySelector(".total span").textContent = (q*pr).toFixed(2);
+      // Listeners de cada item
+      $$(".item").forEach(el=>{
+        const idx = Number(el.dataset.i);
+        const inpProd = el.querySelector(".produto");
+        const inpQtd  = el.querySelector(".quant");
+        const inpPre  = el.querySelector(".preco");
+        const totalEl = el.querySelector(".total span");
+        const btnRem  = el.querySelector(".remove");
+
+        // Ao trocar produto, se houver preço em cache, aplica
+        inpProd.addEventListener("change", ()=>{
+          const p = (inpProd.value||"").trim();
+          if(state.cachePrecos.has(p)){
+            inpPre.value = state.cachePrecos.get(p).toFixed(2);
+          }
+          syncLinha();
+          atualizarFreteUI();
+        });
+
+        [inpQtd, inpPre, inpProd].forEach(ip=>{
+          ip.addEventListener("input", ()=>{
+            syncLinha();
+            atualizarFreteUI();
+          });
+        });
+
+        function syncLinha(){
+          const prod = (inpProd.value||"").trim();
+          const qtd  = parseFloat(inpQtd.value)||0;
+          const pre  = parseFloat(inpPre.value)||0;
+          const tot  = qtd*pre;
+          state.itens[idx] = { produto:prod, quantidade:qtd, preco:pre, total:tot };
+          totalEl.textContent = tot.toFixed(2);
+        }
+
+        btnRem.addEventListener("click", ()=>{
+          state.itens.splice(idx,1);
+          if(!state.itens.length) state.itens.push({ produto:"", quantidade:0, preco:0, total:0 });
+          renderItens();
+          atualizarFreteUI();
+        });
       });
-      atualizarFreteUI();
     }
-    window.salvarCampos = salvarCampos;
 
-    function adicionarItem(){ window.itens.push({ produto:"",quantidade:0,preco:0,total:0 }); renderItens(); }
-    function removerItem(i){ window.itens.splice(i,1); if(!window.itens.length) window.itens.push({ produto:"",quantidade:0,preco:0,total:0 }); renderItens(); }
-    window.adicionarItem = adicionarItem;
-    window.removerItem   = removerItem;
+    // ------- Add item -------
+    function adicionarItem(){
+      state.itens.push({ produto:"", quantidade:0, preco:0, total:0 });
+      renderItens();
+    }
 
-    // === Frete Backend (Vercel API) ===
+    // ------- Datalists -------
+    const dlClientes  = $("#listaClientes");
+    const dlEnderecos = $("#listaEnderecos");
+    // Produtos: você pode popular por conveniência; aqui deixo vazio e deixo que o cache de histórico alimente via typing
+    const dlProdutos  = document.createElement("datalist");
+    dlProdutos.id = "listaProdutos";
+    document.body.appendChild(dlProdutos);
+
+    function preencherDatalist(el, arr){
+      el.innerHTML = "";
+      arr.forEach(v=>{
+        const opt = document.createElement("option");
+        opt.value = v;
+        el.appendChild(opt);
+      });
+    }
+
+    // ------- Carregar clientes (/clientes) -------
+    async function carregarClientes(){
+      try{
+        await authReady;
+        const snap = await getDocs(collection(db, "clientes"));
+        const nomes = [];
+        const endrs = new Set();
+        snap.forEach(docu=>{
+          const d = docu.data()||{};
+          if(d.nome) nomes.push(d.nome);
+          if(d.endereco) endrs.add(d.endereco);
+          if(Array.isArray(d.enderecos)){
+            d.enderecos.filter(Boolean).forEach(e=>endrs.add(e));
+          }
+        });
+        state.clientes = nomes.sort((a,b)=>a.localeCompare(b));
+        state.enderecos = Array.from(endrs).sort((a,b)=>a.localeCompare(b));
+        preencherDatalist(dlClientes, state.clientes);
+        preencherDatalist(dlEnderecos, state.enderecos);
+      }catch(e){
+        console.warn("Falha ao carregar clientes/endereços:", e);
+      }
+    }
+
+    // ------- Carregar últimos preços por produto (/historico_precos) -------
+    async function carregarUltimosPrecos(){
+      try{
+        await authReady;
+        // Heurística: busca últimos 500 registros, ordenados por createdAt desc,
+        // e guarda o primeiro preço visto para cada produto.
+        const qSnap = await getDocs(query(collection(db, "historico_precos"), orderBy("createdAt","desc"), limit(500)));
+        const vistos = new Set();
+        const produtosParaDL = new Set();
+        qSnap.forEach(docu=>{
+          const d = docu.data()||{};
+          const prod = d.produto || d.nome || d.item || null;
+          const preco = Number(d.preco || d.precoUnitario || d.valor || 0);
+          if(prod && !vistos.has(prod) && preco>0){
+            vistos.add(prod);
+            state.cachePrecos.set(prod, preco);
+            produtosParaDL.add(prod);
+          }
+        });
+        // Preenche datalist de produtos
+        preencherDatalist(dlProdutos, Array.from(produtosParaDL).sort((a,b)=>a.localeCompare(b)));
+      }catch(e){
+        console.warn("Falha ao carregar históricos de preços:", e);
+      }
+    }
+
+    // ------- Frete API -------
+    // Se estiver no Vercel (mesmo domínio), usamos rota relativa. Se não, tente fallback absoluto.
+    const FALLBACK_API_BASE = ""; // ex.: "https://seu-app.vercel.app" (deixe vazio se for mesmo domínio)
     async function calcularFrete(endereco, totalItens){
-      const resp = await fetch("/api/calcular-entrega", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ enderecoTexto:endereco, totalItens })
-      });
-      if(!resp.ok) throw new Error("Erro frete");
-      return await resp.json();
+      const payload = { enderecoTexto:endereco, totalItens };
+      const doFetch = async (url)=>{
+        const resp = await fetch(url, {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify(payload)
+        });
+        if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return resp.json();
+      };
+      try{
+        return await doFetch("/api/calcular-entrega");
+      }catch(e1){
+        if(FALLBACK_API_BASE){
+          try{
+            return await doFetch(`${FALLBACK_API_BASE}/api/calcular-entrega`);
+          }catch(e2){ /* cai no final */ }
+        }
+        console.warn("Frete: tentativa relativa falhou", e1);
+        throw e1;
+      }
     }
 
     async function atualizarFreteUI(){
       try{
-        const end = document.getElementById("endereco").value.trim();
-        if(!end) { document.getElementById("freteValor").textContent = "—"; return; }
-        const tot = window.itens.reduce((s,it)=>s+it.total,0);
-        const r = await calcularFrete(end, tot);
-        document.getElementById("freteValor").textContent =
-          r.valorBase==null ? "—" : `R$ ${r.valorBase.toFixed(2)} ${r.labelIsencao||""}`;
-        window.__frete = r;
+        const end = $("#endereco").value.trim();
+        if(!end){
+          $("#freteValor").textContent = "—";
+          window.__frete = null;
+          return;
+        }
+        const subtotal = state.itens.reduce((s,it)=>s + (Number(it.total)||0), 0);
+        const r = await calcularFrete(end, subtotal);
+        $("#freteValor").textContent = r?.valorBase==null ? "—" : `R$ ${Number(r.valorBase||0).toFixed(2)} ${r.labelIsencao||""}`;
+        window.__frete = r || { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"" };
       }catch(e){
-        document.getElementById("freteValor").textContent = "—";
-        console.error(e);
+        console.error("Erro no frete:", e);
+        $("#freteValor").textContent = "—";
+        window.__frete = { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"" };
       }
     }
-    window.atualizarFreteUI = atualizarFreteUI;
 
-    // === Salvar pedido no Firestore ===
+    // ------- Salvar Pedido -------
     async function savePedido(payload){
       await authReady;
       const id = `${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
-      await setDoc(doc(collection(db, "pedidos"), id), {
-        ...payload,
-        createdAt: serverTimestamp()
-      });
+      await setDoc(doc(collection(db, "pedidos"), id), { ...payload, createdAt: serverTimestamp() });
       return id;
     }
-    window.savePedido = savePedido;
 
-    // === PDF helpers ===
+    // ------- Util: img -> dataURL -------
     async function imgToDataURL(src){
       try{
-        const r = await fetch(src);
+        const r = await fetch(src, { cache:"no-cache" });
         const b = await r.blob();
         return await new Promise((res,rej)=>{
           const fr = new FileReader();
@@ -208,42 +385,52 @@
       }catch(_){ return null; }
     }
 
-    async function gerarPDF(apenasSalvar=false){
+    // ------- PDF / Compartilhamento -------
+    function formatarDDMMAAAA(iso){
+      if(!iso) return "";
+      const [y,m,d] = iso.split("-");
+      return `${d}-${m}-${y}`;
+    }
+
+    async function gerarPDFBase(){
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
 
-      const cliente = document.getElementById("cliente").value.trim();
-      const endereco= document.getElementById("endereco").value.trim();
-      const entregaISO = document.getElementById("entrega").value;
-      const hora    = document.getElementById("horaEntrega").value;
-      const pagamento = document.getElementById("pagamento").value;
-      const obs     = document.getElementById("obsGeral").value.trim();
-      const totalItens = window.itens.reduce((s,it)=>s+it.total,0);
+      const cliente  = $("#cliente").value.trim();
+      const endereco = $("#endereco").value.trim();
+      const entregaISO = $("#entrega").value;
+      const hora     = $("#horaEntrega").value;
+      const pagamento= $("#pagamento").value;
+      const obs      = $("#obsGeral").value.trim();
 
-      // Frete (se ainda não calculado)
-      let frete = window.__frete || { valorBase:0, valorCobravel:0, labelIsencao:"" };
-      try {
-        if (!window.__frete) frete = await calcularFrete(endereco, totalItens);
-      } catch(e){ console.error("Frete falhou", e); }
-      const totalPedido = totalItens + (frete.valorCobravel||0);
+      // Frete
+      const subtotal = state.itens.reduce((s,it)=>s + (Number(it.total)||0), 0);
+      let frete = window.__frete;
+      if(!frete){
+        try{ frete = await calcularFrete(endereco, subtotal); }
+        catch(e){ frete = { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"" }; }
+      }
+      const totalPedido = subtotal + Number(frete?.valorCobravel||0);
 
-      // Salvar pedido no Firestore (ENTREGA por padrão; ajuste se tiver retirada)
+      // Salvar pedido no Firestore
       const payload = {
         cliente,
         pagamento,
-        itens: window.itens.map(i=>({ produto:i.produto, tipo:"KG", quantidade:i.quantidade, precoUnit:i.preco, total:i.total, obs:"" })),
+        itens: state.itens.map(i=>({
+          produto:i.produto, tipo:"KG", quantidade:i.quantidade, precoUnit:i.preco, total:i.total, obs:""
+        })),
         totalPedido: Number(totalPedido.toFixed(2)),
         entrega: {
           tipo: "ENTREGA",
           endereco,
-          km: frete.km ?? null,
-          min: frete.min ?? null,
-          valorBase: frete.valorBase ?? 0,
-          valorCobravel: frete.valorCobravel ?? 0,
-          isento: !!frete.isento,
+          km: frete?.km ?? null,
+          min: frete?.min ?? null,
+          valorBase: frete?.valorBase ?? 0,
+          valorCobravel: frete?.valorCobravel ?? 0,
+          isento: !!frete?.isento,
           status: "PENDENTE",
-          tier: frete.tier || null,
-          labelIsencao: frete.labelIsencao || ""
+          tier: frete?.tier || null,
+          labelIsencao: frete?.labelIsencao || ""
         },
         dataEntregaISO: entregaISO,
         horaEntrega: hora,
@@ -251,55 +438,113 @@
         status: "ABERTO",
         vendedor: "Leo"
       };
-      try { await savePedido(payload); } catch(e) { console.warn("Não salvou no Firestore (ver regras/config):", e); }
+      try{ await savePedido(payload); }catch(e){ console.warn("Não salvou no Firestore (ver regras/config):", e); }
 
-      // --- PDF ---
-      // Logo grande (dobrado)
+      // Layout PDF
       const logo = await imgToDataURL("Serra-Nobre_3.png") || await imgToDataURL("icons/icon-192.png");
       if (logo) {
-        try {
-          doc.addImage(logo, "PNG", 65, 10, 80, 30); // logo maior que o normal
-        } catch(_) {}
+        try { doc.addImage(logo, "PNG", 65, 10, 80, 30); } catch(_) {}
       }
       doc.setFontSize(16);
       doc.text("SERRA NOBRE V3.0", 105, 48, {align:"center"});
 
-      // Dados
       doc.setFontSize(12);
       doc.text(`Cliente: ${cliente}`, 10, 60);
       doc.text(`Endereço: ${endereco}`, 10, 68);
-      doc.text(`Entrega: ${entregaISO} ${hora}`, 10, 76);
+      const dataBR = formatarDDMMAAAA(entregaISO);
+      doc.text(`Entrega: ${dataBR} ${hora}`, 10, 76);
 
       // Itens
       let y = 90;
-      window.itens.forEach(it=>{
-        doc.text(`${it.produto} - ${it.quantidade} x R$ ${it.preco.toFixed(2)} = R$ ${it.total.toFixed(2)}`, 10, y);
+      state.itens.forEach(it=>{
+        const linha = `${it.produto} - ${it.quantidade} x R$ ${Number(it.preco||0).toFixed(2)} = R$ ${Number(it.total||0).toFixed(2)}`;
+        doc.text(linha, 10, y);
         y += 8;
       });
 
-      // Pagamento
       y += 4;
       doc.text(`Pagamento: ${pagamento}`, 10, y); y+=8;
+      doc.text(`Frete: R$ ${Number(frete?.valorBase||0).toFixed(2)} ${frete?.labelIsencao||""}`, 10, y); y+=8;
 
-      // Frete (após forma de pagamento)
-      doc.text(`Frete: R$ ${(frete.valorBase??0).toFixed(2)} ${frete.labelIsencao||""}`, 10, y); y+=8;
-
-      // Total
       doc.setFontSize(14);
-      doc.text(`TOTAL: R$ ${totalPedido.toFixed(2)}`, 10, y);
+      doc.text(`TOTAL: R$ ${Number(totalPedido||0).toFixed(2)}`, 10, y);
 
       if(obs){ y+=10; doc.setFontSize(10); doc.text(`Obs: ${obs}`, 10, y); }
 
-      const nomeArq = `Pedido_${cliente.replace(/\s+/g,'_')}.pdf`;
-      if(apenasSalvar) doc.save(nomeArq); else window.open(doc.output("bloburl"), "_blank");
+      const nomeArq = `Pedido_${cliente.replace(/\s+/g,'_')}_${dataBR||"sem-data"}.pdf`;
+      return { doc, nomeArq };
     }
-    window.gerarPDF = gerarPDF;
-    window.compartilharPDF = async ()=>{ await gerarPDF(false); };
 
-    document.addEventListener("DOMContentLoaded", ()=>{
-      renderItens();
-      document.getElementById("endereco").addEventListener("blur", atualizarFreteUI);
-      if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js'); }
+    async function gerarPDFAbrir(){
+      const { doc } = await gerarPDFBase();
+      const url = doc.output("bloburl");
+      window.open(url, "_blank");
+    }
+
+    async function gerarPDFSalvar(){
+      const { doc, nomeArq } = await gerarPDFBase();
+      doc.save(nomeArq);
+    }
+
+    async function compartilharPDF(){
+      try{
+        const { doc, nomeArq } = await gerarPDFBase();
+        const blob = doc.output("blob");
+        if(navigator.canShare && navigator.canShare({ files: [new File([blob], nomeArq, {type:"application/pdf"})] })){
+          const file = new File([blob], nomeArq, {type:"application/pdf"});
+          await navigator.share({ files:[file], title:"Pedido Serra Nobre", text:"Segue o pedido em PDF." });
+        }else{
+          // Fallback: abre em nova aba
+          const url = URL.createObjectURL(blob);
+          window.open(url, "_blank");
+          setTimeout(()=>URL.revokeObjectURL(url), 20000);
+        }
+      }catch(e){
+        console.error("Compartilhar falhou:", e);
+      }
+    }
+
+    // ------- Eventos -------
+    $("#btnAddItem").addEventListener("click", adicionarItem);
+    $("#btnGerar").addEventListener("click", gerarPDFAbrir);
+    $("#btnSalvar").addEventListener("click", gerarPDFSalvar);
+    $("#btnCompartilhar").addEventListener("click", compartilharPDF);
+
+    $("#endereco").addEventListener("blur", atualizarFreteUI);
+    // recalc ao digitar algo relevante também
+    ["input","change"].forEach(evt=>{
+      $("#cliente").addEventListener(evt, ()=>{/* reservado para futura lógica */});
+      $("#endereco").addEventListener(evt, ()=>{/* reservado */});
+    });
+
+    // ------- Boot -------
+    document.addEventListener("DOMContentLoaded", async ()=>{
+      try{
+        renderItens();
+        await Promise.all([carregarClientes(), carregarUltimosPrecos()]);
+        // Sugere preço ao digitar um produto igual ao cache
+        document.body.addEventListener("blur", (ev)=>{
+          if(ev.target && ev.target.classList && ev.target.classList.contains("produto")){
+            const val = ev.target.value.trim();
+            if(state.cachePrecos.has(val)){
+              const wrap = ev.target.closest(".item");
+              const inpPre = wrap?.querySelector(".preco");
+              if(inpPre && (!inpPre.value || Number(inpPre.value)==0)){
+                inpPre.value = state.cachePrecos.get(val).toFixed(2);
+                inpPre.dispatchEvent(new Event("input"));
+              }
+            }
+          }
+        }, true);
+
+        // SW
+        if ('serviceWorker' in navigator) {
+          try{ await navigator.serviceWorker.register('sw.js'); }
+          catch(e){ console.warn("SW falhou:", e); }
+        }
+      }catch(e){
+        console.error("Falha na inicialização:", e);
+      }
     });
   </script>
 </body>
