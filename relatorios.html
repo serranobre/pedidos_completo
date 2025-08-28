@@ -5,28 +5,38 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Relatórios — Serra Nobre V3.0</title>
   <style>
-    body{ margin:0; font-family:System-ui, -apple-system, Segoe UI, Roboto, Ubuntu; background:#f1f5f9; color:#0f172a }
-    header{ display:flex; align-items:center; gap:12px; padding:12px 16px; background:#0f766e; color:#fff }
-    header h1{ margin:0; font-size:18px; }
+    :root{
+      --teal:#0f766e; --teal-600:#0ea5a6; --ink:#0f172a; --muted:#64748b; --bg:#f1f5f9; --line:#e2e8f0;
+    }
+    *{box-sizing:border-box}
+    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu; background:var(--bg); color:var(--ink) }
+    header{ display:flex; align-items:center; gap:12px; padding:12px 16px; background:var(--teal); color:#fff }
+    header a{ color:#fff; text-decoration:none }
+    header h1{ margin:0; font-size:18px }
     main{ max-width:1200px; margin:16px auto; padding:0 12px 40px }
     .card{ background:#fff; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,.06); padding:14px }
     .filters{ display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px }
     label{ font-size:12px; color:#334155; display:block; margin-bottom:4px }
-    input, select{ width:100%; padding:8px; border:1px solid #e2e8f0; border-radius:8px; outline:0 }
-    .actions{ display:flex; gap:8px; margin-top:8px; flex-wrap:wrap }
-    .btn{ border:1px solid #0ea5a6; background:#0ea5a6; color:#fff; padding:8px 12px; border-radius:8px; cursor:pointer }
-    .btn.ghost{ background:#fff; color:#0ea5a6 }
-    .table-wrap{ margin-top:14px; overflow:auto; border-radius:10px; border:1px solid #e2e8f0 }
-    table{ width:100%; min-width:960px; border-collapse:collapse; background:#fff }
-    thead th{ position:sticky; top:0; background:#f8fafc; border-bottom:1px solid #e2e8f0; text-align:left; font-size:12px; color:#334155; padding:10px }
-    tbody td{ border-bottom:1px solid #f1f5f9; padding:10px; font-size:14px }
-    .login { max-width:380px; margin:50px auto; background:#fff; padding:18px; border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,.08) }
-    .muted{ color:#64748b; font-size:12px }
+    input, select{ width:100%; padding:8px; border:1px solid var(--line); border-radius:8px; outline:0; background:#fff }
+    .actions{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap }
+    .btn{ border:1px solid var(--teal-600); background:var(--teal-600); color:#fff; padding:8px 12px; border-radius:8px; cursor:pointer }
+    .btn.ghost{ background:#fff; color:var(--teal-600) }
+    .btn.warning{ background:#0b5; border-color:#0b5 }
+    .btn.gray{ background:#475569; border-color:#475569 }
+    .table-wrap{ margin-top:14px; overflow:auto; border-radius:10px; border:1px solid var(--line) }
+    table{ width:100%; min-width:1000px; border-collapse:collapse; background:#fff }
+    thead th{ position:sticky; top:0; background:#f8fafc; border-bottom:1px solid var(--line); text-align:left; font-size:12px; color:#334155; padding:10px }
+    tbody td{ border-bottom:1px solid #f1f5f9; padding:10px; font-size:14px; vertical-align:top }
+    tfoot td{ background:#f8fafc; font-weight:600; padding:10px; border-top:1px solid var(--line) }
+    .login { max-width:360px; margin:50px auto; background:#fff; padding:18px; border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,.08) }
+    .muted{ color:var(--muted); font-size:12px }
+    @media (max-width: 880px){ .filters{grid-template-columns:repeat(3,minmax(0,1fr))} }
+    @media (max-width: 520px){ .filters{grid-template-columns:repeat(2,minmax(0,1fr))} }
   </style>
 </head>
 <body>
   <header>
-    <a href="index.html" style="color:#fff;text-decoration:none;">← Voltar</a>
+    <a href="index.html">← Voltar</a>
     <h1>Relatórios — Serra Nobre V3.0</h1>
     <div style="margin-left:auto"></div>
     <button id="btnSair" class="btn ghost" style="display:none">Sair</button>
@@ -41,14 +51,10 @@
         <div><label>Horário — de</label><input type="time" id="fHoraIni"></div>
         <div><label>Horário — até</label><input type="time" id="fHoraFim"></div>
         <div><label>Cliente (contém)</label><input type="text" id="fCliente" placeholder="ex.: mercado"></div>
-        <div>
-          <label>Status</label>
+        <div><label>Status</label>
           <select id="fStatus">
             <option value="">Todos</option>
-            <option>ABERTO</option>
-            <option>EM_ANDAMENTO</option>
-            <option>ENTREGUE</option>
-            <option>CANCELADO</option>
+            <option>ABERTO</option><option>EM_ANDAMENTO</option><option>ENTREGUE</option><option>CANCELADO</option>
           </select>
         </div>
       </div>
@@ -56,6 +62,9 @@
       <div class="actions">
         <button class="btn" id="btnBuscar">Buscar</button>
         <button class="btn ghost" id="btnLimpar">Limpar</button>
+        <button class="btn warning" id="btnCSV" title="Exportar resultados para CSV">Exportar CSV</button>
+        <button class="btn gray" id="btnPDF" title="Imprimir / salvar em PDF">Imprimir / PDF</button>
+        <button class="btn ghost" id="btnShare" title="Compartilhar CSV" style="display:none">Compartilhar CSV</button>
       </div>
 
       <div class="table-wrap">
@@ -67,28 +76,36 @@
             </tr>
           </thead>
           <tbody id="tbody"></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3" id="ftCount">0 pedidos</td>
+              <td></td>
+              <td id="ftTotal">R$ 0,00</td>
+              <td colspan="3"></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </section>
   </main>
 
-  <!-- LOGIN (usuário fixo Leo, só senha) -->
+  <!-- LOGIN (apenas senha) -->
   <section id="login" class="login">
     <h3>Entrar</h3>
-    <div class="muted" style="margin:4px 0 8px">Usuário: <b>Leo</b></div>
     <div style="display:grid; gap:8px; margin-top:8px">
-      <input id="pass" type="password" placeholder="Senha" autocomplete="current-password" />
+      <input id="pass" type="password" placeholder="Senha" inputmode="numeric" />
       <button class="btn" id="btnLogin">Entrar</button>
       <div id="err" class="muted"></div>
     </div>
   </section>
 
+  <!-- Firebase + App (sem App Check) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
     import { getFirestore, collection, query, where, getDocs, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
-    // === Firebase (mesmo do index) ===
+    // Mesma config do index
     const firebaseConfig = {
       apiKey: "AIzaSyB3zBW_WhVfNpX5uoJCq-6WysE5XKYKZt4",
       authDomain: "serranobrepedidos.firebaseapp.com",
@@ -102,101 +119,163 @@
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    // === UI helpers ===
-    const $  = (id)=>document.getElementById(id);
+    // Gate local (apenas senha)
+    const FIX_USER = "Leo";
+    const FIX_PASS = "081008";
+
+    const $ = (id)=>document.getElementById(id);
     const showApp = (show)=>{
       $("app").style.display   = show ? "" : "none";
       $("login").style.display = show ? "none" : "";
       $("btnSair").style.display = show ? "" : "none";
-      if (show) { $("err").textContent = ""; }
     };
 
-    onAuthStateChanged(auth, (u)=> showApp(!!u) );
-
-    // === Login local (usuário fixo Leo) + Auth anônima ===
-    const FIX_PASS = "081008";
+    // login: valida senha local e então faz auth anônima no Firebase
     $("btnLogin").onclick = async ()=>{
       $("err").textContent = "";
       const p = $("pass").value.trim();
-      if (!p) { $("err").textContent = "Informe a senha."; return; }
       if (p !== FIX_PASS) { $("err").textContent = "Senha inválida."; return; }
-      try{
-        await signInAnonymously(auth);
-      }catch(e){
-        console.error(e);
-        $("err").textContent = "Falha ao autenticar no Firebase. Verifique App Check / domínios.";
-      }
+      try { await signInAnonymously(auth); }
+      catch(e){ console.error(e); $("err").textContent = "Não foi possível conectar ao Firebase."; return; }
     };
-    $("btnSair").onclick = ()=> signOut(auth);
 
-    // === Busca de pedidos (com fallback sem índice) ===
-    async function buscarPedidos(){
-      const di = $("fDataIni").value; // YYYY-MM-DD
-      const df = $("fDataFim").value;
-      const hi = $("fHoraIni").value;
-      const hf = $("fHoraFim").value;
-      const cliente = $("fCliente").value.trim().toUpperCase();
-      const status  = $("fStatus").value;
+    $("btnSair").onclick = async ()=>{ await signOut(auth); };
 
-      let qRef = collection(db, "pedidos");
-      const conds = [];
-      if (di) conds.push(where("dataEntregaISO", ">=", di));
-      if (df) conds.push(where("dataEntregaISO", "<=", df));
-      if (status) conds.push(where("status", "==", status));
+    onAuthStateChanged(auth, (u)=> showApp(!!u));
 
-      let snap;
-      try {
-        // pode requerer índice composto (status + orderBy)
-        qRef = conds.length
-          ? query(qRef, ...conds, orderBy("dataEntregaISO", "desc"), limit(500))
-          : query(qRef, orderBy("dataEntregaISO", "desc"), limit(500));
-        snap = await getDocs(qRef);
-      } catch (e) {
-        console.warn("Query com índice falhou, usando fallback:", e?.message||e);
-        // fallback: remove status do server e filtra no cliente
-        const onlyDateConds = [];
-        if (di) onlyDateConds.push(where("dataEntregaISO", ">=", di));
-        if (df) onlyDateConds.push(where("dataEntregaISO", "<=", df));
-        qRef = onlyDateConds.length
-          ? query(collection(db,"pedidos"), ...onlyDateConds, orderBy("dataEntregaISO","desc"), limit(500))
-          : query(collection(db,"pedidos"), orderBy("dataEntregaISO","desc"), limit(500));
-        snap = await getDocs(qRef);
+    /* =================== BUSCA =================== */
+    function rowToCSV(cols){ return cols.map(v=>{
+      const s = (v ?? "").toString().replaceAll('"','""');
+      return `"${s}"`;
+    }).join(",");
+    }
+
+    function renderRows(docs){
+      const tbody = $("tbody");
+      if (!docs.length){
+        tbody.innerHTML = `<tr><td colspan="8">Sem resultados.</td></tr>`;
+        $("ftCount").textContent = "0 pedidos";
+        $("ftTotal").textContent = "R$ 0,00";
+        return {csv:""};
       }
-
+      let total = 0;
       const rows = [];
-      snap.forEach(d=>{
-        const x = d.data();
-        if (hi && (x.horaEntrega || "") < hi) return;
-        if (hf && (x.horaEntrega || "") > hf) return;
-        if (cliente && !(x.cliente||"").toUpperCase().includes(cliente)) return;
-        if (status && x.status !== status) return; // caso fallback tenha sido usado
+      const csvLines = [rowToCSV(["Data","Hora","Cliente","Itens","Total (R$)","Status","Pagamento","Entrega"])];
+
+      for (const x of docs){
+        const itensCount = Array.isArray(x.itens) ? x.itens.length : 0;
+        const tot = Number(x.totalPedido||0);
+        total += tot;
 
         rows.push(`
           <tr>
             <td>${x.dataEntregaISO||""}</td>
             <td>${x.horaEntrega||""}</td>
             <td>${x.cliente||""}</td>
-            <td>${(x.itens||[]).length}</td>
-            <td>${Number(x.totalPedido||0).toFixed(2)}</td>
+            <td>${itensCount}</td>
+            <td>${tot.toFixed(2)}</td>
             <td>${x.status||""}</td>
             <td>${x.pagamento||""}</td>
             <td>${x.entrega?.tipo||""}</td>
-          </tr>
-        `);
-      });
+          </tr>`);
 
-      $("tbody").innerHTML = rows.join("") || `<tr><td colspan="8">Sem resultados.</td></tr>`;
+        csvLines.push(rowToCSV([
+          x.dataEntregaISO||"", x.horaEntrega||"", x.cliente||"",
+          itensCount, tot.toFixed(2), x.status||"", x.pagamento||"",
+          x.entrega?.tipo||""
+        ]));
+      }
+      tbody.innerHTML = rows.join("");
+      $("ftCount").textContent = `${docs.length} pedido(s)`;
+      $("ftTotal").textContent = `R$ ${total.toFixed(2)}`;
+
+      return { csv: csvLines.join("\n") };
     }
 
-    $("btnBuscar").onclick = buscarPedidos;
+    async function buscar(){
+      const di = $("fDataIni").value;
+      const df = $("fDataFim").value;
+      const hi = $("fHoraIni").value;
+      const hf = $("fHoraFim").value;
+      const cliente = $("fCliente").value.trim().toUpperCase();
+      const status  = $("fStatus").value.trim();
+
+      let ref = collection(db, "pedidos");
+      let qRef;
+      // Se informar período, consulta por dataEntregaISO; senão, usa createdAt (pega antigos)
+      if (di || df){
+        const conds = [];
+        if (di) conds.push(where("dataEntregaISO", ">=", di));
+        if (df) conds.push(where("dataEntregaISO", "<=", df));
+        if (status) conds.push(where("status", "==", status));
+        if (conds.length) qRef = query(ref, ...conds, orderBy("dataEntregaISO", "desc"), limit(1000));
+        else             qRef = query(ref, orderBy("dataEntregaISO", "desc"), limit(1000));
+      } else {
+        // sem período: ordena por createdAt desc e (opcionalmente) filtra status depois
+        qRef = query(ref, orderBy("createdAt", "desc"), limit(1000));
+      }
+
+      const snap = await getDocs(qRef);
+      const list = [];
+      snap.forEach(d => list.push({ id:d.id, ...d.data() }));
+
+      // Filtros em memória (hora, cliente contém, status quando não usado no where)
+      const out = list.filter(x=>{
+        if (hi && (x.horaEntrega || "") < hi) return false;
+        if (hf && (x.horaEntrega || "") > hf) return false;
+        if (cliente && !(x.cliente||"").toUpperCase().includes(cliente)) return false;
+        if (!di && !df && status && (x.status||"") !== status) return false;
+        return true;
+      });
+
+      const { csv } = renderRows(out);
+      window.__csv = csv; // para exportar/compartilhar
+    }
+
+    $("btnBuscar").onclick = buscar;
+
     $("btnLimpar").onclick = ()=>{
       ["fDataIni","fDataFim","fHoraIni","fHoraFim","fCliente"].forEach(id=>$(id).value="");
       $("fStatus").value = "";
       $("tbody").innerHTML = "";
+      $("ftCount").textContent = "0 pedidos";
+      $("ftTotal").textContent = "R$ 0,00";
+      window.__csv = "";
     };
 
-    // Opcional: carregar automaticamente ao logar
-    onAuthStateChanged(auth, (u)=> { if(u) buscarPedidos(); });
+    /* =================== EXPORTAÇÃO =================== */
+    $("btnCSV").onclick = ()=>{
+      const csv = window.__csv || "";
+      if(!csv){ alert("Faça uma busca primeiro."); return; }
+      const blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
+      const url  = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `relatorio_pedidos_${new Date().toISOString().slice(0,10)}.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 20000);
+    };
+
+    // Compartilhar CSV quando suportado
+    if (navigator.canShare){
+      $("btnShare").style.display = "";
+      $("btnShare").onclick = ()=>{
+        const csv = window.__csv || "";
+        if(!csv){ alert("Faça uma busca primeiro."); return; }
+        const file = new File([csv], `relatorio_pedidos_${Date.now()}.csv`, { type:"text/csv" });
+        if (navigator.canShare({ files:[file] })){
+          navigator.share({ files:[file], title:"Relatório Serra Nobre", text:"Segue o relatório em CSV." });
+        } else {
+          alert("Seu dispositivo não permite compartilhar arquivo CSV.");
+        }
+      };
+    }
+
+    // Imprimir / PDF (use a opção 'Salvar como PDF' do navegador)
+    $("btnPDF").onclick = ()=>{
+      if (!$("tbody").children.length){ alert("Faça uma busca primeiro."); return; }
+      window.print();
+    };
   </script>
 </body>
 </html>
