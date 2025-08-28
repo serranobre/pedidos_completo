@@ -1,5 +1,6 @@
-// api/calcular-entrega.js (PATCHED - robusto, com CORS e mensagens claras)
+// api/calcular-entrega.js
 /* eslint-disable */
+// Regras de preço por distância/tempo
 const PRICE_RULES = [
   { kmMax: 1.5,   minMax: 10,  preco: 15,  nome: "0–1.5km / até 10min" },
   { kmMax: 3.0,   minMax: 20,  preco: 20,  nome: "1.501–3.0km / até 20min" },
@@ -8,25 +9,61 @@ const PRICE_RULES = [
   { kmMax: 9.99,  minMax: 60,  preco: 50,  nome: "7–9.99km / até 60min" },
   { kmMax: 15.0,  minMax: 90,  preco: 60,  nome: "10–15km / até 90min" },
 ];
+
+// Tabela de isenção por nível (opcional via env ISENCAO_NIVEL)
 const ISENCAO_NIVEIS = { 1:250, 2:250, 3:300, 4:400, 5:500, 6:500, 7:null };
 
+// CORS
 function cors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
+// Cache em memória simples
 const mem = new Map();
 const memo = (k,v)=>{ mem.set(k,{v,t:Date.now()}); return v; };
-const getMemo = (k,ttl=30*60*1000)=>{ const x=mem.get(k); if(!x) return null; if(Date.now()-x.t>ttl){mem.delete(k);return null;} return x.v; };
+const getMemo = (k,ttl=30*60*1000)=>{
+  const x=mem.get(k); if(!x) return null;
+  if(Date.now()-x.t>ttl){ mem.delete(k); return null; }
+  return x.v;
+};
 
+/**
+ * Regra solicitada:
+ * - Se o texto NÃO tiver cidade explícita, assume "Porto Alegre - RS, Brasil".
+ * - Se tiver cidade explícita (ex.: ", Canoas", ", Gravataí"), usa a cidade informada.
+ * - Se mencionar Porto Alegre sem estado, completa com ", RS, Brasil".
+ */
+function normalizaEnderecoComCidade(text) {
+  const raw = String(text||"").trim();
+  if (!raw) return "Porto Alegre - RS, Brasil";
+
+  const t = raw.replace(/\s+/g, " ");
+
+  // já menciona Porto Alegre?
+  if (/porto\s*alegre/i.test(t)) {
+    return /(RS|Rio Grande do Sul)/i.test(t) ? t : `${t}, RS, Brasil`;
+  }
+
+  // heurística: existe uma "cidade" após vírgula no fim?
+  // aceita: "..., Canoas", "..., Cachoeirinha - RS", "..., Novo Hamburgo, RS"
+  const TEM_CIDADE = /,\s*([A-Za-zÀ-ÿ'.\-\s]{2,})(?:\s*-\s*[A-Za-z]{2})?(?:\s*,\s*Brasil)?\s*$/i;
+  if (TEM_CIDADE.test(t)) return t;
+
+  // sem cidade -> força Porto Alegre
+  return `${t}, Porto Alegre - RS, Brasil`;
+}
+
+// Geocodificação ORS
 async function geocodeORS(text){
   const key = process.env.ORS_API_KEY;
   if(!key) throw new Error("CONFIG: Defina ORS_API_KEY nas variáveis do Vercel.");
   const cacheKey = "geo:"+text.toLowerCase();
-  const c=getMemo(cacheKey); if(c) return c;
+  const c = getMemo(cacheKey); if(c) return c;
+
   const url = "https://api.openrouteservice.org/geocode/search";
-  const r = await fetch(url+"?text="+encodeURIComponent(text)+"&size=1&lang=pt", {
+  const r = await fetch(`${url}?text=${encodeURIComponent(text)}&size=1&lang=pt`, {
     headers: { "Authorization": key }
   });
   if(!r.ok) throw new Error("GEOCODE_FAIL: "+r.status+" "+(await r.text()));
@@ -37,6 +74,7 @@ async function geocodeORS(text){
   return memo(cacheKey, { lat, lng });
 }
 
+// Rota (km/min) via ORS
 async function orsRouteKmMin(origin, dest){
   const key = process.env.ORS_API_KEY;
   if(!key) throw new Error("CONFIG: Defina ORS_API_KEY nas variáveis do Vercel.");
@@ -58,17 +96,20 @@ async function orsRouteKmMin(origin, dest){
   return { km, min };
 }
 
+// Aplica tabela de preço
 function aplicaTabela(km,min){
   for(const r of PRICE_RULES){ if(km<=r.kmMax && min<=r.minMax) return { valorBase:r.preco, tier:r.nome }; }
   return { valorBase:null, tier:"FORA_DA_AREA" };
 }
 
+// Handler Vercel
 export default async function handler(req,res){
   cors(res);
   if(req.method==="OPTIONS"){ res.status(200).end(); return; }
 
   try{
     if(req.method!=="POST") return res.status(405).json({error:"Use POST"});
+
     const body = typeof req.body==="string" ? JSON.parse(req.body) : (req.body||{});
     const { enderecoTexto, totalItens } = body;
     if(!enderecoTexto) return res.status(400).json({error:"enderecoTexto obrigatório"});
@@ -76,13 +117,19 @@ export default async function handler(req,res){
     const provider = (process.env.USE_PROVIDER||"ors").toLowerCase();
     if(provider!=="ors") return res.status(400).json({error:"Apenas ORS habilitado. Defina USE_PROVIDER=ors"});
 
-    const originAddress = process.env.ORIGIN_ADDRESS || "Porto Alegre, RS";
-    const origin = await geocodeORS(originAddress);
-    const dest   = await geocodeORS(enderecoTexto);
+    // Normalização de cidade (POA como default)
+    const enderecoNormalizado = normalizaEnderecoComCidade(enderecoTexto);
 
+    // Origem (endereço da loja)
+    const originAddress = process.env.ORIGIN_ADDRESS || "Porto Alegre - RS, Brasil";
+    const origin = await geocodeORS(originAddress);
+    const dest   = await geocodeORS(enderecoNormalizado);
+
+    // Distância/tempo e precificação
     const { km, min } = await orsRouteKmMin(origin, dest);
     const { valorBase, tier } = aplicaTabela(km, min);
 
+    // Isenção (opcional)
     const nivel = Number(process.env.ISENCAO_NIVEL||"1");
     const isencaoMin = ISENCAO_NIVEIS[nivel] ?? null;
     const isento = (isencaoMin!=null) && (Number(totalItens)>=isencaoMin);
@@ -90,8 +137,14 @@ export default async function handler(req,res){
     const labelIsencao  = isento ? `(ISENTO de frete – pedido ≥ R$ ${Number(isencaoMin).toFixed(2)})` : "";
 
     return res.status(200).json({
-      status:"OK", km:+km.toFixed(2), min:Math.round(min),
-      valorBase, valorCobravel, isento, labelIsencao, tier
+      status:"OK",
+      km:+km.toFixed(2),
+      min:Math.round(min),
+      valorBase,
+      valorCobravel,
+      isento,
+      labelIsencao,
+      tier
     });
   }catch(e){
     console.error(e);
