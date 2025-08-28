@@ -63,7 +63,7 @@
         <button class="btn" id="btnBuscar">Buscar</button>
         <button class="btn ghost" id="btnLimpar">Limpar</button>
         <button class="btn warning" id="btnCSV" title="Exportar resultados para CSV">Exportar CSV</button>
-        <button class="btn gray" id="btnPDF" title="Imprimir / salvar em PDF">Imprimir / PDF</button>
+        <button class="btn gray" id="btnPDF" title="Gerar PDF">Gerar PDF</button>
         <button class="btn ghost" id="btnShare" title="Compartilhar CSV" style="display:none">Compartilhar CSV</button>
       </div>
 
@@ -89,7 +89,7 @@
     </section>
   </main>
 
-  <!-- LOGIN (apenas senha) -->
+  <!-- LOGIN (apenas senha, sem dicas) -->
   <section id="login" class="login">
     <h3>Entrar</h3>
     <div style="display:grid; gap:8px; margin-top:8px">
@@ -99,13 +99,16 @@
     </div>
   </section>
 
+  <!-- jsPDF para PDF de relatório -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
   <!-- Firebase + App (sem App Check) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
     import { getFirestore, collection, query, where, getDocs, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
-    // Mesma config do index
+    // ==== MESMO CONFIG DO INDEX (real) ====
     const firebaseConfig = {
       apiKey: "AIzaSyB3zBW_WhVfNpX5uoJCq-6WysE5XKYKZt4",
       authDomain: "serranobrepedidos.firebaseapp.com",
@@ -120,17 +123,15 @@
     const db   = getFirestore(app);
 
     // Gate local (apenas senha)
-    const FIX_USER = "Leo";
     const FIX_PASS = "081008";
-
     const $ = (id)=>document.getElementById(id);
+
     const showApp = (show)=>{
       $("app").style.display   = show ? "" : "none";
       $("login").style.display = show ? "none" : "";
       $("btnSair").style.display = show ? "" : "none";
     };
 
-    // login: valida senha local e então faz auth anônima no Firebase
     $("btnLogin").onclick = async ()=>{
       $("err").textContent = "";
       const p = $("pass").value.trim();
@@ -140,7 +141,6 @@
     };
 
     $("btnSair").onclick = async ()=>{ await signOut(auth); };
-
     onAuthStateChanged(auth, (u)=> showApp(!!u));
 
     /* =================== BUSCA =================== */
@@ -189,7 +189,7 @@
       $("ftCount").textContent = `${docs.length} pedido(s)`;
       $("ftTotal").textContent = `R$ ${total.toFixed(2)}`;
 
-      return { csv: csvLines.join("\n") };
+      return { csv: csvLines.join("\n"), total };
     }
 
     async function buscar(){
@@ -202,7 +202,7 @@
 
       let ref = collection(db, "pedidos");
       let qRef;
-      // Se informar período, consulta por dataEntregaISO; senão, usa createdAt (pega antigos)
+
       if (di || df){
         const conds = [];
         if (di) conds.push(where("dataEntregaISO", ">=", di));
@@ -211,7 +211,7 @@
         if (conds.length) qRef = query(ref, ...conds, orderBy("dataEntregaISO", "desc"), limit(1000));
         else             qRef = query(ref, orderBy("dataEntregaISO", "desc"), limit(1000));
       } else {
-        // sem período: ordena por createdAt desc e (opcionalmente) filtra status depois
+        // sem período: ordena por createdAt desc (funciona com os antigos)
         qRef = query(ref, orderBy("createdAt", "desc"), limit(1000));
       }
 
@@ -219,7 +219,7 @@
       const list = [];
       snap.forEach(d => list.push({ id:d.id, ...d.data() }));
 
-      // Filtros em memória (hora, cliente contém, status quando não usado no where)
+      // Filtros em memória
       const out = list.filter(x=>{
         if (hi && (x.horaEntrega || "") < hi) return false;
         if (hf && (x.horaEntrega || "") > hf) return false;
@@ -230,6 +230,7 @@
 
       const { csv } = renderRows(out);
       window.__csv = csv; // para exportar/compartilhar
+      window.__rows = out;
     }
 
     $("btnBuscar").onclick = buscar;
@@ -241,6 +242,7 @@
       $("ftCount").textContent = "0 pedidos";
       $("ftTotal").textContent = "R$ 0,00";
       window.__csv = "";
+      window.__rows = [];
     };
 
     /* =================== EXPORTAÇÃO =================== */
@@ -256,7 +258,6 @@
       setTimeout(()=>URL.revokeObjectURL(url), 20000);
     };
 
-    // Compartilhar CSV quando suportado
     if (navigator.canShare){
       $("btnShare").style.display = "";
       $("btnShare").onclick = ()=>{
@@ -271,10 +272,73 @@
       };
     }
 
-    // Imprimir / PDF (use a opção 'Salvar como PDF' do navegador)
+    // ====== PDF real via jsPDF ======
     $("btnPDF").onclick = ()=>{
-      if (!$("tbody").children.length){ alert("Faça uma busca primeiro."); return; }
-      window.print();
+      const rows = window.__rows || [];
+      if (!rows.length){ alert("Faça uma busca primeiro."); return; }
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
+
+      doc.setFont("helvetica","bold"); doc.setFontSize(14);
+      doc.text("Relatório de Pedidos — Serra Nobre", 10, 12);
+      doc.setFontSize(10); doc.setFont("helvetica","normal");
+      const periodo = (()=> {
+        const di = $("fDataIni").value, df=$("fDataFim").value;
+        if (di || df) return `Período: ${di||'...'} a ${df||'...'}`;
+        return "Período: (todos por criação recente)";
+      })();
+      doc.text(periodo, 10, 18);
+
+      const headers = ["Data","Hora","Cliente","Itens","Total (R$)","Status","Pagto.","Entrega"];
+      const colX = [10, 30, 50, 140, 160, 185, 215, 240]; // posições x
+      const rowH = 7;
+      let y = 26;
+
+      // header
+      doc.setFont("helvetica","bold");
+      for(let i=0;i<headers.length;i++){ doc.text(headers[i], colX[i], y); }
+      doc.setLineWidth(0.2); doc.line(10, y+2, 285, y+2);
+      doc.setFont("helvetica","normal");
+
+      y += 6;
+      let totalGeral = 0;
+
+      const drawRow = (r)=>{
+        if (y > 190){ // quebra de página simples
+          doc.addPage("a4","landscape");
+          doc.setFont("helvetica","bold"); doc.setFontSize(10);
+          for(let i=0;i<headers.length;i++){ doc.text(headers[i], colX[i], 12); }
+          doc.line(10, 14, 285, 14);
+          doc.setFont("helvetica","normal"); y = 20;
+        }
+        const itensCount = Array.isArray(r.itens) ? r.itens.length : 0;
+        const tot = Number(r.totalPedido||0); totalGeral += tot;
+
+        doc.text(r.dataEntregaISO||"", colX[0], y);
+        doc.text(r.horaEntrega||"", colX[1], y);
+        const cliente = (r.cliente||"").toString();
+        const clienteBreak = doc.splitTextToSize(cliente, colX[3]-colX[2]-2);
+        doc.text(clienteBreak, colX[2], y);
+        doc.text(String(itensCount), colX[3], y);
+        doc.text(tot.toFixed(2), colX[4], y);
+        doc.text(r.status||"", colX[5], y);
+        doc.text(r.pagamento||"", colX[6], y);
+        doc.text(r.entrega?.tipo||"", colX[7], y);
+
+        y += Math.max(rowH, (clienteBreak.length)*5);
+        doc.setDrawColor(230); doc.line(10, y-2, 285, y-2);
+        doc.setDrawColor(0);
+      };
+
+      rows.forEach(drawRow);
+
+      // total
+      doc.setFont("helvetica","bold");
+      doc.text(`Total de pedidos: ${rows.length}`, 10, y+8);
+      doc.text(`Soma (R$): ${totalGeral.toFixed(2)}`, 80, y+8);
+
+      doc.save(`relatorio_serranobre_${new Date().toISOString().slice(0,10)}.pdf`);
     };
   </script>
 </body>
