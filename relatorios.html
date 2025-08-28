@@ -32,6 +32,7 @@
     <button id="btnSair" class="btn ghost" style="display:none">Sair</button>
   </header>
 
+  <!-- APP -->
   <main id="app" style="display:none">
     <section class="card">
       <div class="filters">
@@ -39,11 +40,15 @@
         <div><label>Data entrega — até</label><input type="date" id="fDataFim"></div>
         <div><label>Horário — de</label><input type="time" id="fHoraIni"></div>
         <div><label>Horário — até</label><input type="time" id="fHoraFim"></div>
-        <div><label>Cliente (contém)</label><input type="text" id="fCliente"></div>
-        <div><label>Status</label>
+        <div><label>Cliente (contém)</label><input type="text" id="fCliente" placeholder="ex.: mercado"></div>
+        <div>
+          <label>Status</label>
           <select id="fStatus">
             <option value="">Todos</option>
-            <option>ABERTO</option><option>EM_ANDAMENTO</option><option>ENTREGUE</option><option>CANCELADO</option>
+            <option>ABERTO</option>
+            <option>EM_ANDAMENTO</option>
+            <option>ENTREGUE</option>
+            <option>CANCELADO</option>
           </select>
         </div>
       </div>
@@ -67,12 +72,12 @@
     </section>
   </main>
 
+  <!-- LOGIN (usuário fixo Leo, só senha) -->
   <section id="login" class="login">
     <h3>Entrar</h3>
-    <p class="muted">Usuário: <b>Leo</b> &nbsp; Senha: <b>081008</b></p>
+    <div class="muted" style="margin:4px 0 8px">Usuário: <b>Leo</b></div>
     <div style="display:grid; gap:8px; margin-top:8px">
-      <input id="user" placeholder="Usuário" />
-      <input id="pass" type="password" placeholder="Senha" />
+      <input id="pass" type="password" placeholder="Senha" autocomplete="current-password" />
       <button class="btn" id="btnLogin">Entrar</button>
       <div id="err" class="muted"></div>
     </div>
@@ -80,50 +85,53 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+    import { getAuth, signInAnonymously, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
     import { getFirestore, collection, query, where, getDocs, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
-    // >>>>> SUBSTITUA pelo seu config do Firebase (mesmo do index) <<<<<
+    // === Firebase (mesmo do index) ===
     const firebaseConfig = {
-      apiKey: "SUA_API_KEY",
-      authDomain: "SEU_PROJETO.firebaseapp.com",
-      projectId: "SEU_PROJETO",
-      storageBucket: "SEU_PROJETO.appspot.com",
-      messagingSenderId: "XXXX",
-      appId: "1:XXXX:web:YYYY"
+      apiKey: "AIzaSyB3zBW_WhVfNpX5uoJCq-6WysE5XKYKZt4",
+      authDomain: "serranobrepedidos.firebaseapp.com",
+      projectId: "serranobrepedidos",
+      storageBucket: "serranobrepedidos.firebasestorage.app",
+      messagingSenderId: "948939268023",
+      appId: "1:948939268023:web:3f1f6c18f2c047c82b1232"
     };
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    const FIX_USER_EMAIL = "leo@serranobre.local";
-    const FIX_USER       = "Leo";
-    const FIX_PASS       = "081008";
+    // === UI helpers ===
+    const $  = (id)=>document.getElementById(id);
+    const showApp = (show)=>{
+      $("app").style.display   = show ? "" : "none";
+      $("login").style.display = show ? "none" : "";
+      $("btnSair").style.display = show ? "" : "none";
+      if (show) { $("err").textContent = ""; }
+    };
 
-    const $ = (id)=>document.getElementById(id);
-    const showApp = (show)=>{ $("app").style.display = show ? "" : "none"; $("login").style.display = show ? "none" : ""; $("btnSair").style.display = show ? "" : "none"; };
     onAuthStateChanged(auth, (u)=> showApp(!!u) );
 
+    // === Login local (usuário fixo Leo) + Auth anônima ===
+    const FIX_PASS = "081008";
     $("btnLogin").onclick = async ()=>{
       $("err").textContent = "";
-      const u = $("user").value.trim();
-      const p = $("pass").value;
-      if (u !== FIX_USER || p !== FIX_PASS) {
-        $("err").textContent = "Usuário ou senha inválidos.";
-        return;
-      }
-      try {
-        await signInWithEmailAndPassword(auth, FIX_USER_EMAIL, FIX_PASS);
-      } catch(e) {
-        $("err").textContent = "Falha ao autenticar no Firebase (verifique Authorized domains).";
+      const p = $("pass").value.trim();
+      if (!p) { $("err").textContent = "Informe a senha."; return; }
+      if (p !== FIX_PASS) { $("err").textContent = "Senha inválida."; return; }
+      try{
+        await signInAnonymously(auth);
+      }catch(e){
         console.error(e);
+        $("err").textContent = "Falha ao autenticar no Firebase. Verifique App Check / domínios.";
       }
     };
     $("btnSair").onclick = ()=> signOut(auth);
 
-    $("btnBuscar").onclick = async ()=>{
-      const di = $("fDataIni").value;
+    // === Busca de pedidos (com fallback sem índice) ===
+    async function buscarPedidos(){
+      const di = $("fDataIni").value; // YYYY-MM-DD
       const df = $("fDataFim").value;
       const hi = $("fHoraIni").value;
       const hf = $("fHoraFim").value;
@@ -135,16 +143,34 @@
       if (di) conds.push(where("dataEntregaISO", ">=", di));
       if (df) conds.push(where("dataEntregaISO", "<=", df));
       if (status) conds.push(where("status", "==", status));
-      if (conds.length) qRef = query(qRef, ...conds, orderBy("dataEntregaISO", "desc"), limit(500));
-      else qRef = query(qRef, orderBy("dataEntregaISO", "desc"), limit(500));
 
-      const qs = await getDocs(qRef);
+      let snap;
+      try {
+        // pode requerer índice composto (status + orderBy)
+        qRef = conds.length
+          ? query(qRef, ...conds, orderBy("dataEntregaISO", "desc"), limit(500))
+          : query(qRef, orderBy("dataEntregaISO", "desc"), limit(500));
+        snap = await getDocs(qRef);
+      } catch (e) {
+        console.warn("Query com índice falhou, usando fallback:", e?.message||e);
+        // fallback: remove status do server e filtra no cliente
+        const onlyDateConds = [];
+        if (di) onlyDateConds.push(where("dataEntregaISO", ">=", di));
+        if (df) onlyDateConds.push(where("dataEntregaISO", "<=", df));
+        qRef = onlyDateConds.length
+          ? query(collection(db,"pedidos"), ...onlyDateConds, orderBy("dataEntregaISO","desc"), limit(500))
+          : query(collection(db,"pedidos"), orderBy("dataEntregaISO","desc"), limit(500));
+        snap = await getDocs(qRef);
+      }
+
       const rows = [];
-      qs.forEach(d=>{
+      snap.forEach(d=>{
         const x = d.data();
         if (hi && (x.horaEntrega || "") < hi) return;
         if (hf && (x.horaEntrega || "") > hf) return;
         if (cliente && !(x.cliente||"").toUpperCase().includes(cliente)) return;
+        if (status && x.status !== status) return; // caso fallback tenha sido usado
+
         rows.push(`
           <tr>
             <td>${x.dataEntregaISO||""}</td>
@@ -155,16 +181,22 @@
             <td>${x.status||""}</td>
             <td>${x.pagamento||""}</td>
             <td>${x.entrega?.tipo||""}</td>
-          </tr>`);
+          </tr>
+        `);
       });
-      $("tbody").innerHTML = rows.join("") || `<tr><td colspan="8">Sem resultados.</td></tr>`;
-    };
 
+      $("tbody").innerHTML = rows.join("") || `<tr><td colspan="8">Sem resultados.</td></tr>`;
+    }
+
+    $("btnBuscar").onclick = buscarPedidos;
     $("btnLimpar").onclick = ()=>{
       ["fDataIni","fDataFim","fHoraIni","fHoraFim","fCliente"].forEach(id=>$(id).value="");
       $("fStatus").value = "";
       $("tbody").innerHTML = "";
     };
+
+    // Opcional: carregar automaticamente ao logar
+    onAuthStateChanged(auth, (u)=> { if(u) buscarPedidos(); });
   </script>
 </body>
 </html>
