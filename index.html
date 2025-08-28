@@ -9,9 +9,9 @@
   <link rel="shortcut icon" href="favicon.ico" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Serra Nobre" />
-  <!-- CORRIGIDO: caminho relativo para evitar 401 -->
+  <!-- caminho relativo corrigido -->
   <link rel="manifest" href="/manifest.json" />
-  <title>PEDIDOS V3.0.1</title>
+  <title>PEDIDOS V3.0.2</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background: #f4f4f4; }
     h1 { text-align: right; margin-bottom: 10px; font-size: 30px; }
@@ -29,10 +29,8 @@
     .field-group { margin-bottom: 12px; }
     .switch-box { display: flex; gap: 20px; justify-content: left; align-items: center; margin-bottom: 12px; }
     #pagamentoOutro { margin-top: 6px; }
-    /* linha pequena de ações */
     .top-actions { display:flex; gap:8px; margin:6px 0 10px; }
     .top-actions a { background:#0ea5a6; color:#fff; text-decoration:none; padding:8px 10px; border-radius:8px; font-weight:600; }
-    /* bloco frete */
     .muted{ color:#666; font-size:0.9em }
     #freteValor { font-weight: bold; }
     @media (max-width: 450px) {
@@ -48,9 +46,8 @@
 </head>
 <body>
   <img src="Serra-Nobre_3.png" alt="Logo" class="logo-header" onerror="this.style.display='none'">
-  <h1>PEDIDOS V3.0.1</h1>
+  <h1>PEDIDOS V3.0.2</h1>
 
-  <!-- atalho para relatórios -->
   <div class="top-actions">
     <a href="relatorios.html" title="Abrir Relatórios">Relatórios</a>
   </div>
@@ -66,7 +63,6 @@
   <div class="field-group">
     <label>Endereço:</label>
     <input type="text" id="endereco" autocomplete="off" required onblur="atualizarFreteUI()"/>
-    <!-- AVISO UX -->
     <small class="muted" id="hint-endereco">
       Se for outra cidade, inclua <b>o nome da cidade</b> no fim do endereço.
       Sem cidade, será considerado <b>Porto Alegre - RS</b>.
@@ -89,7 +85,6 @@
     <label><input type="radio" name="tipoEntrega" value="RETIRADA"> Retirada</label>
   </div>
 
-  <!-- bloco de frete -->
   <div class="field-group">
     <label>Valor do Frete:</label>
     <div id="freteValor" class="muted">—</div>
@@ -119,7 +114,6 @@
 
   <div id="resumo"></div>
 
-  <!-- jsPDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <!-- Firebase (module): App + Firestore + Auth (SEM App Check) -->
@@ -133,7 +127,6 @@
     getAuth, signInAnonymously, onAuthStateChanged
   } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 
-  /* ===== Config Firebase ===== */
   const firebaseConfig = {
     apiKey: "AIzaSyB3zBW_WhVfNpX5uoJCq-6WysE5XKYKZt4",
     authDomain: "serranobrepedidos.firebaseapp.com",
@@ -145,7 +138,6 @@
 
   const app = initializeApp(firebaseConfig);
 
-  /* ===== Auth anônima (login automático) ===== */
   const auth = getAuth(app);
   const authReady = new Promise((resolve) => {
     onAuthStateChanged(auth, (user) => {
@@ -156,11 +148,8 @@
     });
   });
 
-  /* Firestore (usar somente após authReady) */
   const db = getFirestore(app);
   window.firebaseReady = authReady;
-
-  /* ========= Funções Firestore ========= */
 
   // Upsert de cliente
   async function salvarCliente(nome, endereco) {
@@ -185,7 +174,7 @@
     }
   }
 
-  // Buscar endereço pelo nome do cliente
+  // Buscar endereço do cliente
   async function buscarEnderecoCliente(nomeCliente) {
     await authReady;
     const nome = (nomeCliente || "").trim();
@@ -208,7 +197,7 @@
     return lista.slice(0, limitQtd).map(x => x.nome);
   }
 
-  // Último preço
+  // Último preço do produto p/ cliente
   async function buscarUltimoPreco(clienteNome, produtoNome) {
     await authReady;
     const nomeCli  = (clienteNome || "").trim();
@@ -228,7 +217,7 @@
     return typeof dados.preco === "number" ? dados.preco : parseFloat(dados.preco);
   }
 
-  // Produtos do cliente
+  // Produtos já comprados pelo cliente
   async function produtosDoCliente(nomeCliente) {
     await authReady;
     const nome = (nomeCliente || "").trim();
@@ -264,7 +253,7 @@
     }
   }
 
-  // Salvar pedido pronto em /pedidos
+  // Salvar pedido em /pedidos
   async function savePedido(payload){
     await authReady;
     const id = `${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
@@ -272,7 +261,7 @@
     return id;
   }
 
-  // Expor funções globalmente para o script não-module / HTML inline
+  // Globais p/ script não-module
   window.salvarCliente = salvarCliente;
   window.buscarEnderecoCliente = buscarEnderecoCliente;
   window.buscarUltimoPreco = buscarUltimoPreco;
@@ -298,7 +287,7 @@
   <script>
     let itens = [{ produto: "", tipo: "KG", quantidade: 0, preco: 0, total: 0, obs: "" }];
 
-    /* Logo do repositório -> base64 com cache diário */
+    /* Logo -> base64 com cache diário */
     const LOGO_PATH = 'Serra-Nobre_3.png';
     const LOGO_KEY  = 'logoBase64';
     function blobToDataURL(blob){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(blob);});}
@@ -309,21 +298,18 @@
     function guessImageFormatFromDataURL(u){return u.startsWith('data:image/jpeg')||u.startsWith('data:image/jpg')?'JPEG':'PNG';}
 
     /* -------- FRETE -------- */
-    // Se não houver cidade, anexa "Porto Alegre - RS" no texto enviado à API (apenas UX)
     function appendPOA(str){
       const t = String(str||"").trim();
       if (!t) return t;
       if (/porto\s*alegre/i.test(t)) return t;
-      // Se já tem ", Cidade" no fim, mantém
       const TEM_CIDADE = /,\s*([A-Za-zÀ-ÿ'.\-\s]{2,})(?:\s*-\s*[A-Za-z]{2})?(?:\s*,\s*Brasil)?\s*$/i;
       if (TEM_CIDADE.test(t)) return t;
       return `${t}, Porto Alegre - RS`;
     }
 
-    const ABS_FRETE_BASE = "https://serranobre-iota.vercel.app"; // fallback absoluto
+    const ABS_FRETE_BASE = "https://serranobre-iota.vercel.app";
     async function calcularFrete(enderecoTexto, totalItens){
       const payload = { enderecoTexto, totalItens };
-      // tenta relativo
       try{
         const r = await fetch("/api/calcular-entrega", {
           method:"POST",
@@ -331,13 +317,12 @@
           body: JSON.stringify(payload)
         });
         if(!r.ok){
-          const txt = await r.text(); // LOGA corpo do erro
+          const txt = await r.text();
           console.error("Frete HTTP", r.status, txt);
           throw new Error("HTTP "+r.status);
         }
         return await r.json();
       }catch(e1){
-        // fallback absoluto
         try{
           const r2 = await fetch(`${ABS_FRETE_BASE}/api/calcular-entrega`, {
             method:"POST",
@@ -345,7 +330,7 @@
             body: JSON.stringify(payload)
           });
           if(!r2.ok){
-            const txt2 = await r2.text(); // LOGA corpo do erro
+            const txt2 = await r2.text();
             console.error("Frete ABS HTTP", r2.status, txt2);
             throw new Error("HTTP "+r2.status);
           }
@@ -362,7 +347,7 @@
       try{
         let end = document.getElementById("endereco").value.trim();
         if(!end){ document.getElementById("freteValor").textContent = "—"; window.__frete=null; return; }
-        end = appendPOA(end); // aplica regra de cidade padrão (POA) no front
+        end = appendPOA(end);
         const subtotal = itens.reduce((s,i)=> s + ((parseFloat(i.quantidade)||0) * (parseFloat(i.preco)||0)), 0);
         const r = await calcularFrete(end, subtotal);
         document.getElementById("freteValor").textContent =
@@ -454,7 +439,12 @@
       const tgt = document.getElementById(`totalItem_${i}`);
       if(tgt) tgt.innerText = itens[i].total ? itens[i].total.toFixed(2) : "—";
     }
-    function camposObrigatoriosPreenchidos(){return document.getElementById("cliente").value.trim() && document.getElementById("endereco").value.trim() && document.getElementById("entrega").value && document.getElementById("horaEntrega").value;}
+    function camposObrigatoriosPreenchidos(){
+      return document.getElementById("cliente").value.trim()
+          && document.getElementById("endereco").value.trim()
+          && document.getElementById("entrega").value
+          && document.getElementById("horaEntrega").value;
+    }
 
     // Helpers PDF
     function formatarData(s){ if(!s) return ""; const [a,m,d]=s.split("-"); return `${d}/${m}/${a.slice(-2)}`; }
@@ -495,7 +485,11 @@
       const W_PROD=23.5, W_QDE=13, W_UNIT=13, W_TOTAL=18.5;
       let y=10;
 
-      try{ const b64=await getLogoBase64(); if(b64){ doc.addImage(b64, guessImageFormatFromDataURL(b64), 20, y, 32, 12, '', 'FAST'); y+=14; } else { y+=2; } }catch(_){ y+=2; }
+      try{
+        const b64=await getLogoBase64();
+        if(b64){ doc.addImage(b64, guessImageFormatFromDataURL(b64), 20, y, 32, 12, '', 'FAST'); y+=14; }
+        else { y+=2; }
+      }catch(_){ y+=2; }
 
       doc.setDrawColor(0); doc.setLineWidth(0.2);
 
@@ -557,7 +551,7 @@
       for (let i=0;i<itens.length;i++){
         const it = itens[i];
         const prod = it.produto || "";
-        const qtd  = (it.quantidade || 0).toString();
+        theQtd  = (it.quantidade || 0).toString();
         const tipo = it.tipo || "KG";
         const precoNum = parseFloat(it.preco) || 0;
         const totalNum = (parseFloat(it.quantidade)||0) * precoNum;
@@ -572,7 +566,7 @@
 
         drawCenteredMultiline(doc, prodLines, margemX+W_PROD/2, y, rowH);
 
-        const qtdLines = qtd ? [qtd, tipo] : [""];
+        const qtdLines = theQtd ? [theQtd, tipo] : [""];
         drawCenteredMultiline(doc, qtdLines, margemX+W_PROD+W_QDE/2, y, rowH);
 
         const precoLines = precoNum ? ["R$", precoNum.toFixed(2).replace(".", ",")] : ["—"];
@@ -628,7 +622,6 @@
       doc.text(pagamento, margemX+larguraCaixa/2, y+8, {align:"center"});
       y += 13;
 
-      // linha do frete antes do total
       doc.setFont("helvetica","bold"); doc.setFontSize(7);
       doc.rect(margemX,y,larguraCaixa,10,"S");
       doc.text("FRETE", margemX+larguraCaixa/2, y+4, {align:"center"});
@@ -661,7 +654,6 @@
         y += h + 3;
       }
 
-      // Persistências + salvar /pedidos
       if (typeof window.salvarCliente === "function") {
         await window.salvarCliente(
           document.getElementById("cliente").value.trim(),
