@@ -1,4 +1,5 @@
-// api/calcular-entrega.js
+// api/calcular-entrega.js (PATCHED - robusto, com CORS e mensagens claras)
+/* eslint-disable */
 const PRICE_RULES = [
   { kmMax: 1.5,   minMax: 10,  preco: 15,  nome: "0–1.5km / até 10min" },
   { kmMax: 3.0,   minMax: 20,  preco: 20,  nome: "1.501–3.0km / até 20min" },
@@ -9,34 +10,52 @@ const PRICE_RULES = [
 ];
 const ISENCAO_NIVEIS = { 1:250, 2:250, 3:300, 4:400, 5:500, 6:500, 7:null };
 
+function cors(res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+
 const mem = new Map();
 const memo = (k,v)=>{ mem.set(k,{v,t:Date.now()}); return v; };
 const getMemo = (k,ttl=30*60*1000)=>{ const x=mem.get(k); if(!x) return null; if(Date.now()-x.t>ttl){mem.delete(k);return null;} return x.v; };
 
 async function geocodeORS(text){
-  const url = `https://api.openrouteservice.org/geocode/search?text=${encodeURIComponent(text)}&size=1`;
-  const c = getMemo(url); if(c) return c;
-  const r = await fetch(url, { headers:{ Authorization: process.env.ORS_API_KEY } });
-  if(!r.ok) throw new Error(`Geocode ORS ${r.status}`);
-  const j = await r.json(); const f = j.features?.[0];
-  if(!f) throw new Error("Endereço não encontrado");
-  const [lng,lat] = f.geometry.coordinates; return memo(url,{lat,lng});
+  const key = process.env.ORS_API_KEY;
+  if(!key) throw new Error("CONFIG: Defina ORS_API_KEY nas variáveis do Vercel.");
+  const cacheKey = "geo:"+text.toLowerCase();
+  const c=getMemo(cacheKey); if(c) return c;
+  const url = "https://api.openrouteservice.org/geocode/search";
+  const r = await fetch(url+"?text="+encodeURIComponent(text)+"&size=1&lang=pt", {
+    headers: { "Authorization": key }
+  });
+  if(!r.ok) throw new Error("GEOCODE_FAIL: "+r.status+" "+(await r.text()));
+  const data = await r.json();
+  const feat = data?.features?.[0];
+  if(!feat) throw new Error("GEOCODE_EMPTY");
+  const [lng,lat] = feat.geometry.coordinates;
+  return memo(cacheKey, { lat, lng });
 }
 
-async function routeORS(profile, origin, dest){
-  const body = { coordinates:[[origin.lng,origin.lat],[dest.lng,dest.lat]] };
-  const url  = `https://api.openrouteservice.org/v2/directions/${profile}`;
-  const ck = url+JSON.stringify(body); const c = getMemo(ck); if(c) return c;
+async function orsRouteKmMin(origin, dest){
+  const key = process.env.ORS_API_KEY;
+  if(!key) throw new Error("CONFIG: Defina ORS_API_KEY nas variáveis do Vercel.");
+  const prof = process.env.TRANSPORT_PROFILE || "driving-car";
+  const url = `https://api.openrouteservice.org/v2/directions/${prof}`;
+  const body = { coordinates: [[origin.lng, origin.lat], [dest.lng, dest.lat]], language:"pt" };
+
   const r = await fetch(url, {
     method:"POST",
-    headers:{ Authorization:process.env.ORS_API_KEY, "Content-Type":"application/json" },
+    headers:{ "Authorization": key, "Content-Type":"application/json" },
     body: JSON.stringify(body)
   });
-  if(!r.ok) throw new Error(`Rota ORS ${r.status}`);
-  const j = await r.json(); const s = j?.routes?.[0]?.summary;
-  if(!s) throw new Error("Sem resumo de rota");
-  const km = (s.distance||0)/1000, min = (s.duration||0)/60;
-  return memo(ck,{km,min});
+  if(!r.ok) throw new Error("ROUTE_FAIL: "+r.status+" "+(await r.text()));
+  const data = await r.json();
+  const s = data?.features?.[0]?.properties?.segments?.[0];
+  const km  = (s?.distance||0)/1000;
+  const min = Math.round((s?.duration||0)/60);
+  if(!km || !min) throw new Error("ROUTE_EMPTY");
+  return { km, min };
 }
 
 function aplicaTabela(km,min){
@@ -45,39 +64,38 @@ function aplicaTabela(km,min){
 }
 
 export default async function handler(req,res){
+  cors(res);
+  if(req.method==="OPTIONS"){ res.status(200).end(); return; }
+
   try{
     if(req.method!=="POST") return res.status(405).json({error:"Use POST"});
     const body = typeof req.body==="string" ? JSON.parse(req.body) : (req.body||{});
     const { enderecoTexto, totalItens } = body;
     if(!enderecoTexto) return res.status(400).json({error:"enderecoTexto obrigatório"});
 
-    if((process.env.USE_PROVIDER||"ors").toLowerCase()!=="ors")
-      return res.status(400).json({error:"Apenas ORS habilitado"});
+    const provider = (process.env.USE_PROVIDER||"ors").toLowerCase();
+    if(provider!=="ors") return res.status(400).json({error:"Apenas ORS habilitado. Defina USE_PROVIDER=ors"});
 
-    if(!process.env.ORS_API_KEY) throw new Error("ORS_API_KEY não configurado");
-    const originAddress   = process.env.ORIGIN_ADDRESS;
-    const transport       = process.env.TRANSPORT_PROFILE || "driving-car";
-    const isencaoNivel    = parseInt(process.env.ISENCAO_NIVEL||"1",10);
-    const isencaoMin      = ISENCAO_NIVEIS[isencaoNivel] ?? null;
-    if(!originAddress) throw new Error("ORIGIN_ADDRESS não configurado");
+    const originAddress = process.env.ORIGIN_ADDRESS || "Porto Alegre, RS";
+    const origin = await geocodeORS(originAddress);
+    const dest   = await geocodeORS(enderecoTexto);
 
-    const [orig,dest] = await Promise.all([ geocodeORS(originAddress), geocodeORS(enderecoTexto) ]);
-    const { km, min } = await routeORS(transport, orig, dest);
-    const { valorBase, tier } = aplicaTabela(km,min);
+    const { km, min } = await orsRouteKmMin(origin, dest);
+    const { valorBase, tier } = aplicaTabela(km, min);
 
-    if(valorBase==null){
-      return res.status(200).json({ status:"FORA_DA_AREA", km:+km.toFixed(2), min:Math.round(min),
-        valorBase:null, valorCobravel:null, isento:false, labelIsencao:"VERIFICAR", tier });
-    }
-
+    const nivel = Number(process.env.ISENCAO_NIVEL||"1");
+    const isencaoMin = ISENCAO_NIVEIS[nivel] ?? null;
     const isento = (isencaoMin!=null) && (Number(totalItens)>=isencaoMin);
     const valorCobravel = isento ? 0 : valorBase;
-    const labelIsencao  = isento ? "(ISENTO DE FRETE)" : "";
+    const labelIsencao  = isento ? `(ISENTO de frete – pedido ≥ R$ ${Number(isencaoMin).toFixed(2)})` : "";
 
-    return res.status(200).json({ status:"OK", km:+km.toFixed(2), min:Math.round(min),
-      valorBase, valorCobravel, isento, labelIsencao, tier });
+    return res.status(200).json({
+      status:"OK", km:+km.toFixed(2), min:Math.round(min),
+      valorBase, valorCobravel, isento, labelIsencao, tier
+    });
   }catch(e){
     console.error(e);
-    return res.status(500).json({ status:"ERRO", error:String(e) });
+    const msg = String(e?.message||e);
+    return res.status(500).json({ status:"ERRO", error: msg });
   }
 }
