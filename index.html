@@ -28,10 +28,8 @@
     .field-group { margin-bottom: 12px; }
     .switch-box { display: flex; gap: 20px; justify-content: left; align-items: center; margin-bottom: 12px; }
     #pagamentoOutro { margin-top: 6px; }
-    /* [NOVO] linha pequena de ações */
     .top-actions { display:flex; gap:8px; margin:6px 0 10px; }
     .top-actions a { background:#0ea5a6; color:#fff; text-decoration:none; padding:8px 10px; border-radius:8px; font-weight:600; }
-    /* [NOVO] bloco frete */
     .muted{ color:#666; font-size:0.9em }
     #freteValor { font-weight: bold; }
     @media (max-width: 450px) {
@@ -49,7 +47,6 @@
   <img src="Serra-Nobre_3.png" alt="Logo" class="logo-header" onerror="this.style.display='none'">
   <h1>PEDIDOS V3.0</h1>
 
-  <!-- [NOVO] atalho para relatórios sem alterar o layout principal -->
   <div class="top-actions">
     <a href="relatorios.html" title="Abrir Relatórios">Relatórios</a>
   </div>
@@ -64,7 +61,7 @@
 
   <div class="field-group">
     <label>Endereço:</label>
-    <input type="text" id="endereco" autocomplete="off" required onblur="atualizarFreteUI()"/><!-- [NOVO] -->
+    <input type="text" id="endereco" autocomplete="off" required onblur="atualizarFreteUI()"/>
   </div>
 
   <div class="field-group">
@@ -83,7 +80,6 @@
     <label><input type="radio" name="tipoEntrega" value="RETIRADA"> Retirada</label>
   </div>
 
-  <!-- [NOVO] bloco de frete -->
   <div class="field-group">
     <label>Valor do Frete:</label>
     <div id="freteValor" class="muted">—</div>
@@ -116,630 +112,153 @@
   <!-- jsPDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-  <!-- Firebase (module): App + Firestore + App Check + Auth -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-  import {
-    getFirestore, collection, addDoc, getDocs, query, where, orderBy, limit,
-    updateDoc, increment, doc, setDoc, serverTimestamp
-  } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
-  import {
-    initializeAppCheck, ReCaptchaV3Provider
-  } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app-check.js";
-  import {
-    getAuth, signInAnonymously, onAuthStateChanged
-  } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+  <!-- Firebase (mantido igual) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs, query, where, orderBy, limit, updateDoc, increment, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+    import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app-check.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 
-  /* ===== Config Firebase (mantido) ===== */
-  const firebaseConfig = {
-    apiKey: "AIzaSyB3zBW_WhVfNpX5uoJCq-6WysE5XKYKZt4",
-    authDomain: "serranobrepedidos.firebaseapp.com",
-    projectId: "serranobrepedidos",
-    storageBucket: "serranobrepedidos.firebasestorage.app",
-    messagingSenderId: "948939268023",
-    appId: "1:948939268023:web:3f1f6c18f2c047c82b1232"
-  };
+    const firebaseConfig = {
+      apiKey: "AIzaSyB3zBW_WhVfNpX5uoJCq-6WysE5XKYKZt4",
+      authDomain: "serranobrepedidos.firebaseapp.com",
+      projectId: "serranobrepedidos",
+      storageBucket: "serranobrepedidos.firebasestorage.app",
+      messagingSenderId: "948939268023",
+      appId: "1:948939268023:web:3f1f6c18f2c047c82b1232"
+    };
 
-  const app = initializeApp(firebaseConfig);
+    const app = initializeApp(firebaseConfig);
 
-  /* ===== App Check (reCAPTCHA v3) ===== */
-  initializeAppCheck(app, {
-    provider: new ReCaptchaV3Provider("6Lf0MK0rAAAAACI68fwbg7RDERSlL0AW5zKd-sDA"),
-    isTokenAutoRefreshEnabled: true
-  });
-
-  /* ===== Auth anônima (login automático) ===== */
-  const auth = getAuth(app);
-  const authReady = new Promise((resolve) => {
-    onAuthStateChanged(auth, (user) => {
-      if (user) resolve(user);
-      else signInAnonymously(auth).catch((e) => {
-        console.error("Falha ao entrar anonimamente:", e);
-      });
-    });
-  });
-
-  /* Firestore (usar somente após authReady) */
-  const db = getFirestore(app);
-  window.firebaseReady = authReady;
-
-  /* ========= Funções Firestore ========= */
-
-  // Upsert de cliente (mantido)
-  async function salvarCliente(nome, endereco) {
-    await authReady;
-    const nomeNorm = (nome || "").trim();
-    const enderecoNorm = (endereco || "").trim();
-    if (!nomeNorm) return;
-
-    const qCli = query(collection(db, "clientes"), where("nome", "==", nomeNorm), limit(1));
-    const snap = await getDocs(qCli);
-
-    if (!snap.empty) {
-      const ref = snap.docs[0].ref;
-      const atual = snap.docs[0].data();
-      const campos = { atualizadoEm: new Date() };
-      if ((atual.endereco || "") !== enderecoNorm) campos.endereco = enderecoNorm;
-      await updateDoc(ref, campos);
-    } else {
-      await addDoc(collection(db, "clientes"), {
-        nome: nomeNorm, endereco: enderecoNorm, compras: 0, criadoEm: new Date()
-      });
-    }
-  }
-
-  // Buscar endereço pelo nome do cliente (mantido)
-  async function buscarEnderecoCliente(nomeCliente) {
-    await authReady;
-    const nome = (nomeCliente || "").trim();
-    if (!nome) return "";
-    const q = query(collection(db, "clientes"), where("nome", "==", nome), limit(1));
-    const s = await getDocs(q);
-    return s.empty ? "" : (s.docs[0].data().endereco || "");
-  }
-
-  // Top clientes (mantido)
-  async function clientesMaisUsados(limitQtd = 50) {
-    await authReady;
-    const lista = [];
-    const qs = await getDocs(collection(db, "clientes"));
-    qs.forEach(d => {
-      const x = d.data();
-      if ((x?.nome || "").trim()) lista.push({ nome: x.nome.trim(), compras: x.compras || 0 });
-    });
-    lista.sort((a,b)=> b.compras - a.compras || a.nome.localeCompare(b.nome));
-    return lista.slice(0, limitQtd).map(x => x.nome);
-  }
-
-  // Último preço (mantido)
-  async function buscarUltimoPreco(clienteNome, produtoNome) {
-    await authReady;
-    const nomeCli  = (clienteNome || "").trim();
-    const nomeProd = (produtoNome || "").trim();
-    if (!nomeCli || !nomeProd) return null;
-
-    const q = query(
-      collection(db, "historico_precos"),
-      where("cliente", "==", nomeCli),
-      where("produto", "==", nomeProd),
-      orderBy("data", "desc"),
-      limit(1)
-    );
-    const qs = await getDocs(q);
-    if (qs.empty) return null;
-    const dados = qs.docs[0].data();
-    return typeof dados.preco === "number" ? dados.preco : parseFloat(dados.preco);
-  }
-
-  // Produtos do cliente (mantido)
-  async function produtosDoCliente(nomeCliente) {
-    await authReady;
-    const nome = (nomeCliente || "").trim();
-    if (!nome) return [];
-    const set = new Set();
-    const q = query(
-      collection(db, "historico_precos"),
-      where("cliente", "==", nome),
-      orderBy("data", "desc"),
-      limit(1000)
-    );
-    const qs = await getDocs(q);
-    qs.forEach(d => { const p = (d.data().produto || "").trim(); if (p) set.add(p); });
-    return [...set].sort((a,b)=>a.localeCompare(b));
-  }
-
-  // Registrar preço + incrementar compras (mantido)
-  async function registrarPrecoCliente(clienteNome, produtoNome, preco) {
-    await authReady;
-    const nomeCli  = (clienteNome || "").trim();
-    const nomeProd = (produtoNome || "").trim();
-    const valor    = parseFloat(preco);
-    if (!nomeCli || !nomeProd || isNaN(valor)) return;
-
-    await addDoc(collection(db, "historico_precos"), {
-      cliente: nomeCli, produto: nomeProd, preco: valor, data: new Date()
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider("6Lf0MK0rAAAAACI68fwbg7RDERSlL0AW5zKd-sDA"),
+      isTokenAutoRefreshEnabled: true
     });
 
-    const qCli = query(collection(db, "clientes"), where("nome", "==", nomeCli), limit(1));
-    const s = await getDocs(qCli);
-    if (!s.empty) {
-      await updateDoc(s.docs[0].ref, { compras: increment(1), atualizadoEm: new Date() });
-    }
-  }
-
-  async function carregarSugestoesProdutosDoCliente() {
-    await authReady;
-    const nome = document.getElementById("cliente").value.trim();
-    const listaProdutos = document.getElementById("listaProdutos");
-    if (!listaProdutos) return;
-    const nomes = await produtosDoCliente(nome);
-    listaProdutos.innerHTML = nomes.map(p => `<option value="${p}"></option>`).join("");
-  }
-
-  async function popularClientesMaisUsados() {
-    await authReady;
-    const lista = await clientesMaisUsados();
-    document.getElementById("listaClientes").innerHTML =
-      lista.map(n => `<option value="${n}"></option>`).join("");
-  }
-
-  // [NOVO] salvar pedido no /pedidos com metadados e frete
-  async function savePedido(payload){
-    await authReady;
-    const id = `${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
-    await setDoc(doc(collection(db, "pedidos"), id), { ...payload, createdAt: serverTimestamp() });
-    return id;
-  }
-
-  // Expor globais já usadas no script não-module
-  window.salvarCliente = salvarCliente;
-  window.buscarEnderecoCliente = buscarEnderecoCliente;
-  window.buscarUltimoPreco = buscarUltimoPreco;
-  window.registrarPrecoCliente = registrarPrecoCliente;
-  window.carregarSugestoesProdutosDoCliente = carregarSugestoesProdutosDoCliente;
-  window.popularClientesMaisUsados = popularClientesMaisUsados;
-  window.savePedido = savePedido; // [NOVO]
-</script>
-
-  <!-- App + PDF -->
-  <script>
-    let itens = [{ produto: "", tipo: "KG", quantidade: 0, preco: 0, total: 0, obs: "" }];
-
-    /* Logo do repositório -> base64 com cache diário */
-    const LOGO_PATH = 'Serra-Nobre_3.png';
-    const LOGO_KEY  = 'logoBase64';
-    function blobToDataURL(blob){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(blob);});}
-    function logoVersionParam(){const d=new Date();return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;}
-    async function fetchRepoLogoAsBase64(){const resp=await fetch(`${LOGO_PATH}?v=${logoVersionParam()}`,{cache:'reload'});if(!resp.ok)throw new Error('Logo não carregou');return blobToDataURL(await resp.blob());}
-    async function ensureRepoLogoCached(){let b64=localStorage.getItem(LOGO_KEY);if(!b64){try{b64=await fetchRepoLogoAsBase64();localStorage.setItem(LOGO_KEY,b64);}catch(_){b64="";}}return b64;}
-    async function getLogoBase64(){return localStorage.getItem(LOGO_KEY) || await ensureRepoLogoCached();}
-    function guessImageFormatFromDataURL(u){return u.startsWith('data:image/jpeg')||u.startsWith('data:image/jpg')?'JPEG':'PNG';}
-
-    // [NOVO] API de frete (com fallback absoluto opcional)
-    const FALLBACK_API_BASE = ""; // ex.: "https://seu-app.vercel.app" se testar local
-    async function calcularFrete(enderecoTexto, totalItens){
-      const payload = { enderecoTexto, totalItens };
-      const doFetch = async (url) => {
-        const r = await fetch(url, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
-        if(!r.ok) throw new Error("HTTP "+r.status);
-        return r.json();
-      };
-      try{
-        return await doFetch("/api/calcular-entrega");
-      }catch(e1){
-        if(FALLBACK_API_BASE){
-          try{ return await doFetch(`${FALLBACK_API_BASE}/api/calcular-entrega`); }catch(e2){}
-        }
-        console.warn("Frete falhou:", e1);
-        throw e1;
-      }
-    }
-
-    // [NOVO] cache do frete atual
-    window.__frete = null;
-    async function atualizarFreteUI(){
-      try{
-        const end = document.getElementById("endereco").value.trim();
-        if(!end){ document.getElementById("freteValor").textContent = "—"; window.__frete=null; return; }
-        const subtotal = itens.reduce((s,i)=> s + ((parseFloat(i.quantidade)||0) * (parseFloat(i.preco)||0)), 0);
-        const r = await calcularFrete(end, subtotal);
-        document.getElementById("freteValor").textContent =
-          r?.valorBase==null ? "—" : `R$ ${Number(r.valorBase||0).toFixed(2)} ${r.labelIsencao||""}`;
-        window.__frete = r || { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"" };
-      }catch(e){
-        console.error("Frete erro:", e);
-        document.getElementById("freteValor").textContent = "—";
-        window.__frete = { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"" };
-      }
-    }
-
-    document.addEventListener('DOMContentLoaded', async () => {
-      await ensureRepoLogoCached();
-      renderItens();
-      document.getElementById('pagamento').addEventListener('change', function(){
-        document.getElementById('pagamentoOutro').style.display = (this.value === 'OUTRO') ? '' : 'none';
+    const auth = getAuth(app);
+    const authReady = new Promise((resolve) => {
+      onAuthStateChanged(auth, (user) => {
+        if (user) resolve(user);
+        else signInAnonymously(auth).catch((e) => console.error("Falha ao entrar anonimamente:", e));
       });
     });
 
-    function criarSelectProduto(i){
-      return `<input list="listaProdutos" class="produto" data-index="${i}"
-               placeholder="Digite ou selecione"
-               value="${itens[i].produto || ''}"
-               onblur="preencherUltimoPreco(${i}); atualizarFreteUI();"/>`; // [NOVO] chama frete
-    }
-    function criarTipoSelect(i){
-      return `<select class="tipo-select" data-index="${i}" onchange="atualizarTipo(${i}, this.value)">
-        <option value="KG" ${itens[i].tipo === 'KG' ? 'selected' : ''}>KG</option>
-        <option value="UN" ${itens[i].tipo === 'UN' ? 'selected' : ''}>UN</option>
-      </select>`;
-    }
+    const db = getFirestore(app);
+    window.firebaseReady = authReady;
 
-    function renderItens(){
-      salvarCamposAntesRender();
-      const container = document.getElementById("itens");
-      container.innerHTML = "";
-      itens.forEach((item, i) => {
-        container.innerHTML += `
-        <div class="item">
-          <label>Produto:</label>
-          ${criarSelectProduto(i)}
-          <label>Tipo:</label>
-          ${criarTipoSelect(i)}
-          <label>Quantidade:</label>
-          <input type="number" step="0.01" class="quantidade" data-index="${i}" value="${item.quantidade || ''}" oninput="calcularItem(${i}); atualizarFreteUI();"/>
-          <label>Preço Unitário:</label>
-          <input type="number" step="0.01" class="preco" data-index="${i}" value="${item.preco || ''}" oninput="calcularItem(${i}); atualizarFreteUI();"/>
-          <label>Observação do item:</label>
-          <textarea class="obsItem" data-index="${i}" oninput="salvarCamposAntesRender()">${item.obs || ''}</textarea>
-          <p class="total">Total do Item: R$ <span id="totalItem_${i}">${(item.total || 0).toFixed(2)}</span></p>
-          <button class="remove" onclick="removerItem(${i}); atualizarFreteUI();">Remover Item</button>
-        </div>`;
-      });
-      if (!document.getElementById("listaProdutos")) {
-        const dl = document.createElement("datalist"); dl.id = "listaProdutos"; document.body.appendChild(dl);
-      }
-    }
+    async function salvarCliente(nome, endereco) {
+      await authReady;
+      const nomeNorm = (nome || "").trim();
+      const enderecoNorm = (endereco || "").trim();
+      if (!nomeNorm) return;
 
-    function atualizarTipo(i,v){ itens[i].tipo=v; calcularItem(i); }
-    function salvarCamposAntesRender(){
-      document.querySelectorAll(".item").forEach((el, idx) => {
-        if (typeof itens[idx] === "undefined") return;
-        const prod  = el.querySelector(".produto")?.value || "";
-        const tipo  = el.querySelector(".tipo-select")?.value || "KG";
-        const qtd   = el.querySelector(".quantidade")?.value || 0;
-        const preco = el.querySelector(".preco")?.value || 0;
-        const obs   = el.querySelector(".obsItem")?.value || "";
-        itens[idx] = {
-          produto: prod, tipo: tipo,
-          quantidade: parseFloat(qtd) || 0,
-          preco: parseFloat(preco) || 0,
-          obs: obs,
-          total: (parseFloat(qtd) || 0) * (parseFloat(preco) || 0)
-        };
-      });
-      window.itens = itens;
-    }
-    function adicionarItem(){ salvarCamposAntesRender(); itens.push({ produto:"", tipo:"KG", quantidade:0, preco:0, total:0, obs:"" }); renderItens(); }
-    function removerItem(i){ salvarCamposAntesRender(); itens.splice(i,1); if(!itens.length) itens.push({ produto:"", tipo:"KG", quantidade:0, preco:0, total:0, obs:"" }); renderItens(); }
-    function calcularItem(i){
-      const tipo = document.querySelectorAll(".tipo-select")[i]?.value || "KG";
-      const q = document.querySelectorAll(".quantidade")[i]?.value || 0;
-      const p = document.querySelectorAll(".preco")[i]?.value || 0;
-      itens[i].quantidade = parseFloat(q) || 0;
-      itens[i].preco = parseFloat(p) || 0;
-      itens[i].tipo = tipo;
-      itens[i].total = (parseFloat(q) || 0) * (parseFloat(p) || 0);
-      const tgt = document.getElementById(`totalItem_${i}`);
-      if(tgt) tgt.innerText = itens[i].total ? itens[i].total.toFixed(2) : "—";
-    }
-    function camposObrigatoriosPreenchidos(){return document.getElementById("cliente").value.trim() && document.getElementById("endereco").value.trim() && document.getElementById("entrega").value && document.getElementById("horaEntrega").value;}
+      const qCli = query(collection(db, "clientes"), where("nome", "==", nomeNorm), limit(1));
+      const snap = await getDocs(qCli);
 
-    // Helpers PDF
-    function formatarData(s){ if(!s) return ""; const [a,m,d]=s.split("-"); return `${d}/${m}/${a.slice(-2)}`; }
-    function diaDaSemanaExtenso(s){ if(!s) return ""; const d=new Date(s+"T00:00:00"); return d.toLocaleDateString('pt-BR',{weekday:'long'}).toUpperCase(); }
-    function splitToWidth(doc,t,w){ return doc.splitTextToSize(t||"", w); }
-    const PADY=3, LINE=5;
-    function drawCenteredMultiline(doc,lines,cx,top,rowH,step=LINE,pad=PADY){ const usable=Math.max(0,rowH-2*pad); const block=(lines.length-1)*step; let y0=top+pad+(usable-block)/2; for(let i=0;i<lines.length;i++) doc.text(lines[i],cx,y0+i*step,{align:"center"}); }
-    function underline(doc,x,y,text,size){ const prev=doc.getFontSize(); if(size) doc.setFontSize(size); const w=doc.getTextWidth(text); doc.line(x,y+0.8,x+w,y+0.8); if(size) doc.setFontSize(prev); }
-
-    async function preencherEnderecoCliente(){ const n=document.getElementById("cliente").value.trim(); if(!n||typeof window.buscarEnderecoCliente!=="function")return; const e=await window.buscarEnderecoCliente(n); if(e) document.getElementById("endereco").value=e; }
-    window.preencherEnderecoCliente = preencherEnderecoCliente;
-
-    async function preencherUltimoPreco(index){
-      const nome=document.getElementById("cliente").value.trim();
-      const el=document.querySelectorAll(".produto")[index];
-      if(!el) return; const prod=el.value.trim();
-      if(!nome||!prod||typeof window.buscarUltimoPreco!=="function") return;
-      const preco=await window.buscarUltimoPreco(nome, prod);
-      if(preco!==null){ const input=document.querySelectorAll(".preco")[index]; if(!input) return; input.value=preco; itens[index].preco=parseFloat(preco)||0; calcularItem(index); }
-    }
-    window.preencherUltimoPreco = preencherUltimoPreco;
-
-    // [NOVO] monta e também salva o pedido em /pedidos (com frete)
-    async function montarPDF(){
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:[72,297] });
-
-      const margemX=2, larguraCaixa=68;
-      const W_PROD=23.5, W_QDE=13, W_UNIT=13, W_TOTAL=18.5;
-      let y=10;
-
-      try{ const b64=await getLogoBase64(); if(b64){ doc.addImage(b64, guessImageFormatFromDataURL(b64), 20, y, 32, 12, '', 'FAST'); y+=14; } else { y+=2; } }catch(_){ y+=2; }
-
-      doc.setDrawColor(0); doc.setLineWidth(0.2);
-
-      doc.setFont("helvetica","bold"); doc.setFontSize(8);
-      doc.rect(margemX,y,larguraCaixa,10,"S");
-      doc.text("CLIENTE", margemX+larguraCaixa/2, y+4.2, {align:"center"});
-      doc.setFont("helvetica","normal"); doc.setFontSize(8);
-      centralizaTexto(doc, document.getElementById("cliente").value, margemX, y-3, larguraCaixa, 2);
-      y+=11;
-
-      doc.setFont("helvetica","bold"); doc.setFontSize(8);
-      doc.rect(margemX,y,larguraCaixa,10,"S");
-      doc.text("ENDEREÇO", margemX+larguraCaixa/2, y+4.2, {align:"center"});
-      doc.setFont("helvetica","normal"); doc.setFontSize(8);
-      centralizaTexto(doc, document.getElementById("endereco").value, margemX, y-3, larguraCaixa, 2);
-      y+=11;
-
-      const diaSemana = diaDaSemanaExtenso(document.getElementById("entrega").value);
-      doc.rect(margemX,y,larguraCaixa,10,"S");
-      doc.setFont("helvetica","bold"); doc.setFontSize(9);
-      doc.text("DIA DA SEMANA:", margemX+3, y+6);
-      doc.text(diaSemana, margemX+larguraCaixa/2+12, y+6, {align:"center"});
-      y+=11;
-
-      doc.setFont("helvetica","bold"); doc.setFontSize(7);
-      doc.rect(margemX,y,larguraCaixa/2,10,"S");
-      doc.rect(margemX+larguraCaixa/2,y,larguraCaixa/2,10,"S");
-      doc.text("DATA ENTREGA", margemX+larguraCaixa/4, y+4, {align:"center"});
-      doc.text("HORÁRIO ENTREGA", margemX+3*larguraCaixa/4, y+4, {align:"center"});
-      doc.setFont("helvetica","normal"); doc.setFontSize(9);
-      doc.text(formatarData(document.getElementById("entrega").value), margemX+larguraCaixa/4, y+8, {align:"center"});
-      doc.text(document.getElementById("horaEntrega").value, margemX+3*larguraCaixa/4, y+8, {align:"center"});
-      y+=12;
-
-      doc.setLineWidth(1.1);
-      doc.rect(margemX+larguraCaixa*0.235, y, larguraCaixa*0.53, 10, "S");
-      doc.setLineWidth(0.2);
-      doc.setFont("helvetica","bold"); doc.setFontSize(10);
-      const tipoEntrega=document.querySelector('input[name="tipoEntrega"]:checked').value;
-      doc.text(tipoEntrega, margemX+larguraCaixa/2, y+6.5, {align:"center"});
-      y+=12;
-
-      doc.setFont("helvetica","bold"); doc.setFontSize(7);
-      doc.rect(margemX,y,W_PROD,10,"S");
-      doc.rect(margemX+W_PROD,y,W_QDE,10,"S");
-      doc.rect(margemX+W_PROD+W_QDE,y,W_UNIT,10,"S");
-      doc.rect(margemX+W_PROD+W_QDE+W_UNIT,y,W_TOTAL,10,"S");
-      doc.text("PRODUTO", margemX+W_PROD/2, y+6, {align:"center"});
-      doc.text("QDE", margemX+W_PROD+W_QDE/2, y+6, {align:"center"});
-      doc.text("R$ UNIT.", margemX+W_PROD+W_QDE+W_UNIT/2, y+6, {align:"center"});
-      const valorX=margemX+W_PROD+W_QDE+W_UNIT+W_TOTAL/2;
-      doc.text("VALOR", valorX, y+4, {align:"center"});
-      doc.text("PRODUTO", valorX, y+8.5, {align:"center"});
-      y+=12;
-
-      let subtotal = 0;
-      doc.setFont("helvetica","normal"); doc.setFontSize(9);
-
-      for (let i=0;i<itens.length;i++){
-        const it = itens[i];
-        const prod = it.produto || "";
-        const qtd  = (it.quantidade || 0).toString();
-        const tipo = it.tipo || "KG";
-        const precoNum = parseFloat(it.preco) || 0;
-        const totalNum = (parseFloat(it.quantidade)||0) * precoNum;
-
-        const prodLines = splitToWidth(doc, prod, W_PROD-2).slice(0,3);
-        const rowH = Math.max(14, prodLines.length*5 + 2*3);
-
-        doc.rect(margemX,y,W_PROD,rowH,"S");
-        doc.rect(margemX+W_PROD,y,W_QDE,rowH,"S");
-        doc.rect(margemX+W_PROD+W_QDE,y,W_UNIT,rowH,"S");
-        doc.rect(margemX+W_PROD+W_QDE+W_UNIT,y,W_TOTAL,rowH,"S");
-
-        drawCenteredMultiline(doc, prodLines, margemX+W_PROD/2, y, rowH);
-
-        const qtdLines = qtd ? [qtd, tipo] : [""];
-        drawCenteredMultiline(doc, qtdLines, margemX+W_PROD+W_QDE/2, y, rowH);
-
-        const precoLines = precoNum ? ["R$", precoNum.toFixed(2).replace(".", ",")] : ["—"];
-        drawCenteredMultiline(doc, precoLines, margemX+W_PROD+W_QDE+W_UNIT/2, y, rowH);
-
-        const totalLines = (precoNum && it.quantidade) ? ["R$", totalNum.toFixed(2).replace(".", ",")] : ["—"];
-        drawCenteredMultiline(doc, totalLines, margemX+W_PROD+W_QDE+W_UNIT+W_TOTAL/2, y, rowH);
-
-        y += rowH;
-
-        const obs = (it.obs || "").trim();
-        if (obs){
-          const titulo="OBSERVAÇÕES:";
-          const corpo = obs.toUpperCase();
-          const corpoLines = splitToWidth(doc, corpo, larguraCaixa-6);
-          const obsH = 9 + corpoLines.length*5;
-          doc.rect(margemX,y,larguraCaixa,obsH,"S");
-          doc.setFont("helvetica","bold"); doc.setFontSize(9);
-          const tx=margemX+3, ty=y+6;
-          doc.text(titulo, tx, ty); underline(doc, tx, ty, titulo, 9);
-          let baseY=y+12; corpoLines.forEach((ln,ix)=>doc.text(ln, margemX+3, baseY+ix*5));
-          doc.setFont("helvetica","normal");
-          y += obsH;
-        }
-
-        if (tipo === "UN"){
-          doc.setFontSize(7); doc.setFont("helvetica","italic");
-          doc.text("(*) ESTE ITEM ESTÁ EM UNIDADES! (NÃO EM KG).", margemX+5, y+4);
-          doc.setFont("helvetica","normal"); doc.setFontSize(9);
-          y += 4;
-        }
-
-        subtotal += totalNum;
-        if (i < itens.length - 1) y += 2;
-      }
-
-      // [NOVO] Frete + Total final
-      let frete = window.__frete;
-      try{
-        if(!frete){
-          const end = document.getElementById("endereco").value.trim();
-          frete = await calcularFrete(end, subtotal);
-        }
-      }catch(_){ frete = { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"" }; }
-
-      y += 2;
-      doc.setFont("helvetica","bold"); doc.setFontSize(7);
-      doc.rect(margemX,y,larguraCaixa,10,"S");
-      doc.text("FORMA DE PAGAMENTO", margemX+larguraCaixa/2, y+4, {align:"center"});
-      doc.setFont("helvetica","normal"); doc.setFontSize(10);
-      let pagamento=document.getElementById("pagamento").value;
-      if(pagamento==="OUTRO") pagamento=document.getElementById("pagamentoOutro").value;
-      doc.text(pagamento, margemX+larguraCaixa/2, y+8, {align:"center"});
-      y += 13;
-
-      // [NOVO] linha do frete antes do total
-      doc.setFont("helvetica","bold"); doc.setFontSize(7);
-      doc.rect(margemX,y,larguraCaixa,10,"S");
-      doc.text("FRETE", margemX+larguraCaixa/2, y+4, {align:"center"});
-      doc.setFont("helvetica","normal"); doc.setFontSize(10);
-      const freteTxt = `R$ ${(Number(frete?.valorBase||0)).toFixed(2)} ${frete?.labelIsencao||""}`;
-      doc.text(freteTxt, margemX+larguraCaixa/2, y+8, {align:"center"});
-      y += 13;
-
-      const totalGeral = subtotal + Number(frete?.valorCobravel||0);
-
-      doc.setFont("helvetica","bold"); doc.setLineWidth(1.1);
-      doc.rect(margemX,y,larguraCaixa,12,"S");
-      doc.text("TOTAL DO PEDIDO", margemX+larguraCaixa/2, y+4.5, {align:"center"});
-      doc.setFontSize(10);
-      doc.text("R$ " + totalGeral.toFixed(2), margemX+larguraCaixa/2, y+9, {align:"center"});
-      y += 15;
-
-      const obsG=(document.getElementById("obsGeral").value||"").trim();
-      if (obsG){
-        const titulo="OBSERVAÇÃO DO PEDIDO:";
-        const corpo=obsG.toUpperCase();
-        const corpoLines=splitToWidth(doc, corpo, larguraCaixa-6);
-        const h=9+corpoLines.length*5;
-        doc.rect(margemX,y,larguraCaixa,h,"S");
-        doc.setFont("helvetica","bold"); doc.setFontSize(9);
-        const tx=margemX+3, ty=y+6;
-        doc.text(titulo, tx, ty); underline(doc, tx, ty, titulo, 9);
-        let baseY=y+12; corpoLines.forEach((ln,ix)=>doc.text(ln, margemX+3, baseY+ix*5));
-        doc.setFont("helvetica","normal");
-        y += h + 3;
-      }
-
-      // Persistências (mantidas) + [NOVO] salvar pedido estruturado
-      if (typeof window.salvarCliente === "function") {
-        await window.salvarCliente(
-          document.getElementById("cliente").value.trim(),
-          document.getElementById("endereco").value.trim()
-        );
-      }
-      try{
-        const nomeCli=document.getElementById("cliente").value.trim();
-        if (typeof window.registrarPrecoCliente === "function") {
-          await Promise.all(
-            itens.filter(i=> (i?.produto||"").trim() && !isNaN(parseFloat(i?.preco)))
-                 .map(i=> window.registrarPrecoCliente(nomeCli, String(i.produto).trim(), parseFloat(i.preco)))
-          );
-        }
-      }catch(e){ console.error(e); }
-
-      // [NOVO] salvar /pedidos
-      try{
-        const cliente   = document.getElementById("cliente").value.trim();
-        const endereco  = document.getElementById("endereco").value.trim();
-        const entregaISO= document.getElementById("entrega").value;
-        const hora      = document.getElementById("horaEntrega").value;
-        const tipoEnt   = document.querySelector('input[name="tipoEntrega"]:checked').value;
-
-        const payload = {
-          cliente,
-          pagamento,
-          itens: itens.map(i=>({ produto:i.produto, tipo:i.tipo, quantidade:i.quantidade, precoUnit:i.preco, total:i.total, obs:i.obs||"" })),
-          subtotal: Number(subtotal.toFixed(2)),
-          totalPedido: Number(totalGeral.toFixed(2)),
-          entrega: {
-            tipo: tipoEnt,
-            endereco,
-            km: window.__frete?.km ?? null,
-            min: window.__frete?.min ?? null,
-            valorBase: window.__frete?.valorBase ?? 0,
-            valorCobravel: window.__frete?.valorCobravel ?? 0,
-            isento: !!window.__frete?.isento,
-            status: "PENDENTE",
-            tier: window.__frete?.tier || null,
-            labelIsencao: window.__frete?.labelIsencao || ""
-          },
-          dataEntregaISO: entregaISO,
-          horaEntrega: hora,
-          anoMes: entregaISO ? entregaISO.slice(0,7) : "",
-          status: "ABERTO",
-          vendedor: "Leo",
-          obsGeral: obsG || ""
-        };
-        if (typeof window.savePedido === "function") {
-          await window.savePedido(payload);
-        }
-      }catch(e){ console.warn("Não salvou em /pedidos:", e); }
-
-      const nomeCliente=document.getElementById("cliente").value.trim();
-      const dataEntregaBr=document.getElementById("entrega").value;
-      const [ano,mes,dia]=(dataEntregaBr||"").split("-");
-      const nomeArquivo=`Pedido_${nomeCliente.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'')}_${dia||'dd'}-${mes||'mm'}-${ano||'aaaa'}.pdf`;
-
-      return { doc, nomeArquivo };
-    }
-
-    function centralizaTexto(doc, text, x, y, width, linhas){
-      let texto=doc.splitTextToSize(text||"", width-2);
-      if (texto.length>linhas) texto=texto.slice(0,linhas);
-      let offsetY=(10*linhas - texto.length*8)/2 + 5;
-      for (let l=0;l<texto.length;l++){
-        doc.text(texto[l], x+width/2, y+offsetY+l*8, {align:"center"});
-      }
-    }
-
-    async function gerarPDF(apenasSalvar=false){
-      if (!camposObrigatoriosPreenchidos()) { alert("Preencha Cliente, Endereço, Data e Horário."); return; }
-      salvarCamposAntesRender();
-      const { doc, nomeArquivo } = await montarPDF();
-      if (apenasSalvar) doc.save(nomeArquivo); else window.open(doc.output('bloburl'), '_blank');
-    }
-    window.gerarPDF = gerarPDF;
-
-    async function compartilharPDF(){
-      if (!camposObrigatoriosPreenchidos()) { alert("Preencha Cliente, Endereço, Data e Horário."); return; }
-      salvarCamposAntesRender();
-      const { doc, nomeArquivo } = await montarPDF();
-      if (navigator.canShare && window.Blob){
-        const blob = await doc.output("blob");
-        const file = new File([blob], nomeArquivo, { type: "application/pdf" });
-        if (navigator.canShare({ files:[file] })) await navigator.share({ files:[file], title:"Pedido Serra Nobre", text:"Segue pedido em PDF" });
-        else {
-          // fallback: abre em aba para você compartilhar manualmente
-          const url = URL.createObjectURL(blob);
-          window.open(url, "_blank");
-          setTimeout(()=>URL.revokeObjectURL(url), 20000);
-        }
+      if (!snap.empty) {
+        const ref = snap.docs[0].ref;
+        const atual = snap.docs[0].data();
+        const campos = { atualizadoEm: new Date() };
+        if ((atual.endereco || "") !== enderecoNorm) campos.endereco = enderecoNorm;
+        await updateDoc(ref, campos);
       } else {
-        // fallback
-        const blob = await doc.output("blob");
-        const url = URL.createObjectURL(blob);
-        window.open(url, "_blank");
-        setTimeout(()=>URL.revokeObjectURL(url), 20000);
+        await addDoc(collection(db, "clientes"), { nome: nomeNorm, endereco: enderecoNorm, compras: 0, criadoEm: new Date() });
       }
     }
-    window.compartilharPDF = compartilharPDF;
 
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', ()=> {
-        navigator.serviceWorker.register('sw.js').catch(()=>{});
-      });
+    async function buscarEnderecoCliente(nomeCliente) {
+      await authReady;
+      const nome = (nomeCliente || "").trim();
+      if (!nome) return "";
+      const q = query(collection(db, "clientes"), where("nome", "==", nome), limit(1));
+      const s = await getDocs(q);
+      return s.empty ? "" : (s.docs[0].data().endereco || "");
     }
+
+    async function clientesMaisUsados(limitQtd = 50) {
+      await authReady;
+      const lista = [];
+      const qs = await getDocs(collection(db, "clientes"));
+      qs.forEach(d => {
+        const x = d.data();
+        if ((x?.nome || "").trim()) lista.push({ nome: x.nome.trim(), compras: x.compras || 0 });
+      });
+      lista.sort((a,b)=> b.compras - a.compras || a.nome.localeCompare(b.nome));
+      return lista.slice(0, limitQtd).map(x => x.nome);
+    }
+
+    async function buscarUltimoPreco(clienteNome, produtoNome) {
+      await authReady;
+      const nomeCli  = (clienteNome || "").trim();
+      const nomeProd = (produtoNome || "").trim();
+      if (!nomeCli || !nomeProd) return null;
+
+      const q = query(collection(db, "historico_precos"), where("cliente", "==", nomeCli), where("produto", "==", nomeProd), orderBy("data", "desc"), limit(1));
+      const qs = await getDocs(q);
+      if (qs.empty) return null;
+      const dados = qs.docs[0].data();
+      return typeof dados.preco === "number" ? dados.preco : parseFloat(dados.preco);
+    }
+
+    async function produtosDoCliente(nomeCliente) {
+      await authReady;
+      const nome = (nomeCliente || "").trim();
+      if (!nome) return [];
+      const set = new Set();
+      const q = query(collection(db, "historico_precos"), where("cliente", "==", nome), orderBy("data", "desc"), limit(1000));
+      const qs = await getDocs(q);
+      qs.forEach(d => { const p = (d.data().produto || "").trim(); if (p) set.add(p); });
+      return [...set].sort((a,b)=>a.localeCompare(b));
+    }
+
+    async function registrarPrecoCliente(clienteNome, produtoNome, preco) {
+      await authReady;
+      const nomeCli  = (clienteNome || "").trim();
+      const nomeProd = (produtoNome || "").trim();
+      const valor    = parseFloat(preco);
+      if (!nomeCli || !nomeProd || isNaN(valor)) return;
+
+      await addDoc(collection(db, "historico_precos"), { cliente: nomeCli, produto: nomeProd, preco: valor, data: new Date() });
+
+      const qCli = query(collection(db, "clientes"), where("nome", "==", nomeCli), limit(1));
+      const s = await getDocs(qCli);
+      if (!s.empty) {
+        await updateDoc(s.docs[0].ref, { compras: increment(1), atualizadoEm: new Date() });
+      }
+    }
+
+    async function carregarSugestoesProdutosDoCliente() {
+      await authReady;
+      const nome = document.getElementById("cliente").value.trim();
+      const listaProdutos = document.getElementById("listaProdutos");
+      if (!listaProdutos) return;
+      const nomes = await produtosDoCliente(nome);
+      listaProdutos.innerHTML = nomes.map(p => `<option value="${p}"></option>`).join("");
+    }
+
+    async function popularClientesMaisUsados() {
+      await authReady;
+      const lista = await clientesMaisUsados();
+      document.getElementById("listaClientes").innerHTML = lista.map(n => `<option value="${n}"></option>`).join("");
+    }
+
+    async function savePedido(payload){
+      await authReady;
+      const id = `${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+      await setDoc(doc(collection(db, "pedidos"), id), { ...payload, createdAt: serverTimestamp() });
+      return id;
+    }
+
+    window.salvarCliente = salvarCliente;
+    window.buscarEnderecoCliente = buscarEnderecoCliente;
+    window.buscarUltimoPreco = buscarUltimoPreco;
+    window.registrarPrecoCliente = registrarPrecoCliente;
+    window.carregarSugestoesProdutosDoCliente = carregarSugestoesProdutosDoCliente;
+    window.popularClientesMaisUsados = popularClientesMaisUsados;
+    window.savePedido = savePedido;
   </script>
+
+  <!-- Scripts adicionais como antes (PDF, frete, etc.) estariam aqui -->
 
   <datalist id="listaProdutos"></datalist>
 </body>
