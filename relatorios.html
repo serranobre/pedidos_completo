@@ -152,18 +152,15 @@
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    // --- Acesso direto: autentica anonimamente e carrega a UI ---
-    async function ensureAnonAuth(){
-      return new Promise((resolve)=>{
-        onAuthStateChanged(auth, async (u)=>{
-          try{
-            if (!u) await signInAnonymously(auth);
-          }catch(_){}
-          resolve();
-        }, async (err)=>{
-          // fallback: tenta anônimo mesmo se onAuth falhar
-          try{ await signInAnonymously(auth); }catch(_){}
-          resolve();
+    // --- Acesso direto: autentica anonimamente e SÓ resolve quando tiver user ---
+    function ensureAnonAuth(){
+      return new Promise((resolve) => {
+        const unsub = onAuthStateChanged(auth, async (u) => {
+          if (u) { unsub(); resolve(u); return; }
+          try { await signInAnonymously(auth); }
+          catch (e) { console.error('Anon auth error:', e); }
+        }, (err) => {
+          console.error('onAuthStateChanged error:', err);
         });
       });
     }
@@ -416,40 +413,44 @@
     }
 
     async function buscar(){
-      const di = $("fDataIni").value;
-      const df = $("fDataFim").value;
-      const hi = $("fHoraIni").value;
-      const hf = $("fHoraFim").value;
-      const cliente = $("fCliente").value.trim().toUpperCase();
-      const tipoSel = $("fTipo").value.trim();
+      try{
+        const di = $("fDataIni").value;
+        const df = $("fDataFim").value;
+        const hi = $("fHoraIni").value;
+        const hf = $("fHoraFim").value;
+        const cliente = $("fCliente").value.trim().toUpperCase();
+        const tipoSel = $("fTipo").value.trim();
 
-      let ref = collection(db, "pedidos");
-      let qRef;
-
-      if (di || df){
+        let qRef = collection(db, "pedidos");
         const conds = [];
         if (di) conds.push(where("dataEntregaISO", ">=", di));
         if (df) conds.push(where("dataEntregaISO", "<=", df));
-        if (conds.length) qRef = query(ref, ...conds, orderBy("dataEntregaISO", "desc"), limit(1000));
-        else              qRef = query(ref, orderBy("dataEntregaISO", "desc"), limit(1000));
-      } else {
-        qRef = query(ref, orderBy("createdAt", "desc"), limit(1000));
+
+        if (conds.length){
+          qRef = query(qRef, ...conds, orderBy("dataEntregaISO", "desc"), limit(1000));
+        } else {
+          // fallback consistente (não depende de createdAt existir em todos)
+          qRef = query(qRef, orderBy("dataEntregaISO", "desc"), limit(1000));
+        }
+
+        const snap = await getDocs(qRef);
+        const list = [];
+        snap.forEach(d => list.push({ id:d.id, ...d.data() }));
+
+        const out = list.filter(x=>{
+          if (hi && (x.horaEntrega || "") < hi) return false;
+          if (hf && (x.horaEntrega || "") > hf) return false;
+          if (cliente && !(x.cliente||"").toUpperCase().includes(cliente)) return false;
+          if (tipoSel && ((x.entrega?.tipo||"").toUpperCase() !== tipoSel)) return false;
+          return true;
+        });
+
+        window.__rows = out;
+        renderRows(out);
+      }catch(e){
+        console.error('Erro ao buscar pedidos:', e);
+        alert('Não foi possível buscar pedidos. Veja o console do navegador para detalhes.');
       }
-
-      const snap = await getDocs(qRef);
-      const list = [];
-      snap.forEach(d => list.push({ id:d.id, ...d.data() }));
-
-      const out = list.filter(x=>{
-        if (hi && (x.horaEntrega || "") < hi) return false;
-        if (hf && (x.horaEntrega || "") > hf) return false;
-        if (cliente && !(x.cliente||"").toUpperCase().includes(cliente)) return false;
-        if (tipoSel && ((x.entrega?.tipo||"").toUpperCase() !== tipoSel)) return false;
-        return true;
-      });
-
-      window.__rows = out;
-      renderRows(out);
     }
 
     // Botões principais
@@ -633,7 +634,7 @@
     // ---- Inicialização: autentica e deixa pronto para buscar ----
     await ensureAnonAuth();
     // Opcional: já buscar ao abrir
-    // buscar();
+    // await buscar();
   </script>
 
   <!-- Registro do Service Worker (atualização rápida) -->
