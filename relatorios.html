@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Relatórios — Serra Nobre V3.0</title>
+  <title>Relatórios — Serra Nobre V3.1.0</title>
   <style>
     :root{
       --teal:#0f766e; --teal-600:#0ea5a6; --ink:#0f172a; --muted:#64748b; --bg:#f1f5f9; --line:#e2e8f0;
@@ -17,6 +17,7 @@
     .card{ background:#fff; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,.06); padding:14px }
     .filters{ display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px }
     label{ font-size:12px; color:#334155; display:block; margin-bottom:4px }
+    input, select, button{ font:inherit }
     input, select{ width:100%; padding:8px; border:1px solid var(--line); border-radius:8px; outline:0; background:#fff }
     .actions{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap }
     .btn{ border:1px solid var(--teal-600); background:var(--teal-600); color:#fff; padding:8px 12px; border-radius:8px; cursor:pointer }
@@ -30,14 +31,22 @@
     tfoot td{ background:#f8fafc; font-weight:600; padding:10px; border-top:1px solid var(--line) }
     .login { max-width:360px; margin:50px auto; background:#fff; padding:18px; border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,.08) }
     .muted{ color:var(--muted); font-size:12px }
+    .cell-inline{ display:flex; gap:6px; align-items:center }
+    .cell-inline input[type="number"]{ width:120px }
+    .cell-inline select{ width:auto }
+    .row-actions button{ padding:6px 10px }
     @media (max-width: 880px){ .filters{grid-template-columns:repeat(3,minmax(0,1fr))} }
     @media (max-width: 520px){ .filters{grid-template-columns:repeat(2,minmax(0,1fr))} }
   </style>
+  <!-- SheetJS p/ XLSX -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.19.3/dist/xlsx.full.min.js"></script>
+  <!-- jsPDF para PDF do relatório -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
   <header>
     <a href="index.html">← Voltar</a>
-    <h1>Relatórios — Serra Nobre V3.0</h1>
+    <h1>Relatórios — Serra Nobre V3.1.0</h1>
     <div style="margin-left:auto"></div>
     <button id="btnSair" class="btn ghost" style="display:none">Sair</button>
   </header>
@@ -51,10 +60,12 @@
         <div><label>Horário — de</label><input type="time" id="fHoraIni"></div>
         <div><label>Horário — até</label><input type="time" id="fHoraFim"></div>
         <div><label>Cliente (contém)</label><input type="text" id="fCliente" placeholder="ex.: mercado"></div>
-        <div><label>Status</label>
-          <select id="fStatus">
+        <div>
+          <label>Tipo (Entrega/Retirada)</label>
+          <select id="fTipo">
             <option value="">Todos</option>
-            <option>ABERTO</option><option>EM_ANDAMENTO</option><option>ENTREGUE</option><option>CANCELADO</option>
+            <option value="ENTREGA">ENTREGA</option>
+            <option value="RETIRADA">RETIRADA</option>
           </select>
         </div>
       </div>
@@ -62,17 +73,22 @@
       <div class="actions">
         <button class="btn" id="btnBuscar">Buscar</button>
         <button class="btn ghost" id="btnLimpar">Limpar</button>
-        <button class="btn warning" id="btnCSV" title="Exportar resultados para CSV">Exportar CSV</button>
+        <button class="btn warning" id="btnXLSX" title="Exportar resultados para XLSX">Exportar XLSX</button>
         <button class="btn gray" id="btnPDF" title="Gerar PDF">Gerar PDF</button>
-        <button class="btn ghost" id="btnShare" title="Compartilhar CSV" style="display:none">Compartilhar CSV</button>
       </div>
 
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Data</th><th>Hora</th><th>Cliente</th><th>Itens</th>
-              <th>Total (R$)</th><th>Status</th><th>Pagamento</th><th>Entrega</th>
+              <th>Data</th>
+              <th>Hora</th>
+              <th>Cliente</th>
+              <th>Itens</th>
+              <th>Total (R$) — editar</th>
+              <th>Tipo — editar</th>
+              <th>Pagamento</th>
+              <th>Ações</th>
             </tr>
           </thead>
           <tbody id="tbody"></tbody>
@@ -89,7 +105,7 @@
     </section>
   </main>
 
-  <!-- LOGIN (apenas senha, sem dicas) -->
+  <!-- LOGIN -->
   <section id="login" class="login">
     <h3>Entrar</h3>
     <div style="display:grid; gap:8px; margin-top:8px">
@@ -99,16 +115,16 @@
     </div>
   </section>
 
-  <!-- jsPDF para PDF de relatório -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
   <!-- Firebase + App (sem App Check) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
-    import { getFirestore, collection, query, where, getDocs, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+    import {
+      getFirestore, collection, query, where, getDocs, orderBy, limit,
+      updateDoc, doc, serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
-    // ==== MESMO CONFIG DO INDEX (real) ====
+    // ==== MESMA CONFIG DO INDEX ====
     const firebaseConfig = {
       apiKey: "AIzaSyB3zBW_WhVfNpX5uoJCq-6WysE5XKYKZt4",
       authDomain: "serranobrepedidos.firebaseapp.com",
@@ -122,7 +138,7 @@
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    // Gate local (apenas senha)
+    // ===== Gate local (senha obrigatória) =====
     const FIX_PASS = "081008";
     const $ = (id)=>document.getElementById(id);
 
@@ -144,52 +160,54 @@
     onAuthStateChanged(auth, (u)=> showApp(!!u));
 
     /* =================== BUSCA =================== */
-    function rowToCSV(cols){ return cols.map(v=>{
-      const s = (v ?? "").toString().replaceAll('"','""');
-      return `"${s}"`;
-    }).join(",");
-    }
-
     function renderRows(docs){
       const tbody = $("tbody");
       if (!docs.length){
         tbody.innerHTML = `<tr><td colspan="8">Sem resultados.</td></tr>`;
         $("ftCount").textContent = "0 pedidos";
         $("ftTotal").textContent = "R$ 0,00";
-        return {csv:""};
+        return;
       }
       let total = 0;
       const rows = [];
-      const csvLines = [rowToCSV(["Data","Hora","Cliente","Itens","Total (R$)","Status","Pagamento","Entrega"])];
 
       for (const x of docs){
         const itensCount = Array.isArray(x.itens) ? x.itens.length : 0;
         const tot = Number(x.totalPedido||0);
         total += tot;
 
+        const tipoAtual = (x?.entrega?.tipo || "").toUpperCase();
+        const tipoSel = `
+          <select class="tipoEdit" data-id="${x.id}">
+            <option value="ENTREGA" ${tipoAtual==="ENTREGA"?"selected":""}>ENTREGA</option>
+            <option value="RETIRADA" ${tipoAtual==="RETIRADA"?"selected":""}>RETIRADA</option>
+          </select>
+        `;
+
         rows.push(`
-          <tr>
+          <tr data-rowid="${x.id}">
             <td>${x.dataEntregaISO||""}</td>
             <td>${x.horaEntrega||""}</td>
-            <td>${x.cliente||""}</td>
+            <td>${(x.cliente||"")}</td>
             <td>${itensCount}</td>
-            <td>${tot.toFixed(2)}</td>
-            <td>${x.status||""}</td>
+            <td class="cell-inline">
+              <input class="totalEdit" data-id="${x.id}" type="number" step="0.01" value="${tot.toFixed(2)}" />
+            </td>
+            <td class="cell-inline">${tipoSel}</td>
             <td>${x.pagamento||""}</td>
-            <td>${x.entrega?.tipo||""}</td>
+            <td class="row-actions">
+              <button class="btn gray" data-action="save" data-id="${x.id}">Salvar</button>
+            </td>
           </tr>`);
-
-        csvLines.push(rowToCSV([
-          x.dataEntregaISO||"", x.horaEntrega||"", x.cliente||"",
-          itensCount, tot.toFixed(2), x.status||"", x.pagamento||"",
-          x.entrega?.tipo||""
-        ]));
       }
       tbody.innerHTML = rows.join("");
       $("ftCount").textContent = `${docs.length} pedido(s)`;
       $("ftTotal").textContent = `R$ ${total.toFixed(2)}`;
 
-      return { csv: csvLines.join("\n"), total };
+      // liga listeners dos botões "Salvar"
+      tbody.querySelectorAll('button[data-action="save"]').forEach(btn=>{
+        btn.addEventListener('click', ()=> salvarLinha(btn.dataset.id));
+      });
     }
 
     async function buscar(){
@@ -198,7 +216,7 @@
       const hi = $("fHoraIni").value;
       const hf = $("fHoraFim").value;
       const cliente = $("fCliente").value.trim().toUpperCase();
-      const status  = $("fStatus").value.trim();
+      const tipoSel = $("fTipo").value.trim(); // ENT/RET
 
       let ref = collection(db, "pedidos");
       let qRef;
@@ -207,11 +225,9 @@
         const conds = [];
         if (di) conds.push(where("dataEntregaISO", ">=", di));
         if (df) conds.push(where("dataEntregaISO", "<=", df));
-        if (status) conds.push(where("status", "==", status));
         if (conds.length) qRef = query(ref, ...conds, orderBy("dataEntregaISO", "desc"), limit(1000));
         else             qRef = query(ref, orderBy("dataEntregaISO", "desc"), limit(1000));
       } else {
-        // sem período: ordena por createdAt desc (funciona com os antigos)
         qRef = query(ref, orderBy("createdAt", "desc"), limit(1000));
       }
 
@@ -224,55 +240,112 @@
         if (hi && (x.horaEntrega || "") < hi) return false;
         if (hf && (x.horaEntrega || "") > hf) return false;
         if (cliente && !(x.cliente||"").toUpperCase().includes(cliente)) return false;
-        if (!di && !df && status && (x.status||"") !== status) return false;
+        if (tipoSel && ((x.entrega?.tipo||"").toUpperCase() !== tipoSel)) return false;
         return true;
       });
 
-      const { csv } = renderRows(out);
-      window.__csv = csv; // para exportar/compartilhar
-      window.__rows = out;
+      window.__rows = out; // para exportar
+      renderRows(out);
     }
 
     $("btnBuscar").onclick = buscar;
 
     $("btnLimpar").onclick = ()=>{
       ["fDataIni","fDataFim","fHoraIni","fHoraFim","fCliente"].forEach(id=>$(id).value="");
-      $("fStatus").value = "";
+      $("fTipo").value = "";
       $("tbody").innerHTML = "";
       $("ftCount").textContent = "0 pedidos";
       $("ftTotal").textContent = "R$ 0,00";
-      window.__csv = "";
       window.__rows = [];
     };
 
-    /* =================== EXPORTAÇÃO =================== */
-    $("btnCSV").onclick = ()=>{
-      const csv = window.__csv || "";
-      if(!csv){ alert("Faça uma busca primeiro."); return; }
-      const blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
-      const url  = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `relatorio_pedidos_${new Date().toISOString().slice(0,10)}.csv`;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(()=>URL.revokeObjectURL(url), 20000);
-    };
+    /* =================== SALVAR EDIÇÃO POR LINHA =================== */
+    async function salvarLinha(id){
+      try{
+        const tr = document.querySelector(`tr[data-rowid="${id}"]`);
+        if(!tr) return alert("Linha não encontrada.");
 
-    if (navigator.canShare){
-      $("btnShare").style.display = "";
-      $("btnShare").onclick = ()=>{
-        const csv = window.__csv || "";
-        if(!csv){ alert("Faça uma busca primeiro."); return; }
-        const file = new File([csv], `relatorio_pedidos_${Date.now()}.csv`, { type:"text/csv" });
-        if (navigator.canShare({ files:[file] })){
-          navigator.share({ files:[file], title:"Relatório Serra Nobre", text:"Segue o relatório em CSV." });
-        } else {
-          alert("Seu dispositivo não permite compartilhar arquivo CSV.");
+        const totalInput = tr.querySelector('.totalEdit[data-id="'+id+'"]');
+        const tipoSelect = tr.querySelector('.tipoEdit[data-id="'+id+'"]');
+
+        const novoTotal = parseFloat(totalInput?.value ?? "0");
+        const novoTipo  = (tipoSelect?.value || "ENTREGA").toUpperCase();
+
+        if (isNaN(novoTotal)) { alert("Total inválido."); return; }
+
+        await updateDoc(doc(db, "pedidos", id), {
+          totalPedido: Number(novoTotal.toFixed(2)),
+          "entrega.tipo": novoTipo,
+          updatedAt: serverTimestamp()
+        });
+
+        // atualiza cache em memória para exportação
+        if (Array.isArray(window.__rows)) {
+          const idx = window.__rows.findIndex(r => r.id === id);
+          if (idx >= 0) {
+            window.__rows[idx].totalPedido = Number(novoTotal.toFixed(2));
+            window.__rows[idx].entrega = window.__rows[idx].entrega || {};
+            window.__rows[idx].entrega.tipo = novoTipo;
+          }
         }
-      };
+
+        // feedback rápido
+        const oldText = tr.querySelector('.row-actions button[data-action="save"]').textContent;
+        tr.querySelector('.row-actions button[data-action="save"]').textContent = "Salvo!";
+        setTimeout(()=>{ tr.querySelector('.row-actions button[data-action="save"]').textContent = oldText; }, 1200);
+      }catch(e){
+        console.error(e);
+        alert("Falha ao salvar no banco.");
+      }
     }
 
-    // ====== PDF real via jsPDF ======
+    /* =================== EXPORTAÇÃO XLSX =================== */
+    function coletarLinhasDOM(){
+      const out = [];
+      document.querySelectorAll('#tbody tr').forEach(tr=>{
+        const id = tr.getAttribute('data-rowid') || "";
+        const tds = tr.querySelectorAll('td');
+        const data = tds[0]?.textContent || "";
+        const hora = tds[1]?.textContent || "";
+        const cliente = tds[2]?.textContent || "";
+        const itens = tds[3]?.textContent || "";
+
+        const totalVal = tr.querySelector('.totalEdit')?.value ?? "";
+        const tipoVal  = tr.querySelector('.tipoEdit')?.value ?? "";
+
+        const pagamento = tds[6]?.textContent || "";
+
+        out.push({ id, data, hora, cliente, itens, total: totalVal, tipo: tipoVal, pagamento });
+      });
+      return out;
+    }
+
+    $("btnXLSX").onclick = ()=>{
+      const linhas = coletarLinhasDOM();
+      if (!linhas.length){ alert("Faça uma busca primeiro."); return; }
+
+      const aoa = [
+        ["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagamento"]
+      ];
+      for (const r of linhas){
+        aoa.push([r.data, r.hora, r.cliente, r.itens, String(r.total), r.tipo, r.pagamento]);
+      }
+
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
+
+      // largura automática básica
+      const maxCols = Math.max(...aoa.map(r => r.length));
+      ws['!cols'] = Array.from({length: maxCols}, (_, i) => {
+        const largura = Math.max(...aoa.map(r => (r[i] ? String(r[i]).length : 0))) + 2;
+        return { wch: Math.min(Math.max(largura, 8), 40) };
+      });
+
+      XLSX.writeFile(wb, `relatorio_serranobre_${new Date().toISOString().slice(0,10)}.xlsx`);
+    };
+
+    // ====== PDF via jsPDF (mantido) ======
     $("btnPDF").onclick = ()=>{
       const rows = window.__rows || [];
       if (!rows.length){ alert("Faça uma busca primeiro."); return; }
@@ -290,8 +363,8 @@
       })();
       doc.text(periodo, 10, 18);
 
-      const headers = ["Data","Hora","Cliente","Itens","Total (R$)","Status","Pagto.","Entrega"];
-      const colX = [10, 30, 50, 140, 160, 185, 215, 240]; // posições x
+      const headers = ["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagto."];
+      const colX = [10, 30, 50, 140, 160, 185, 215];
       const rowH = 7;
       let y = 26;
 
@@ -305,7 +378,7 @@
       let totalGeral = 0;
 
       const drawRow = (r)=>{
-        if (y > 190){ // quebra de página simples
+        if (y > 190){
           doc.addPage("a4","landscape");
           doc.setFont("helvetica","bold"); doc.setFontSize(10);
           for(let i=0;i<headers.length;i++){ doc.text(headers[i], colX[i], 12); }
@@ -322,9 +395,8 @@
         doc.text(clienteBreak, colX[2], y);
         doc.text(String(itensCount), colX[3], y);
         doc.text(tot.toFixed(2), colX[4], y);
-        doc.text(r.status||"", colX[5], y);
+        doc.text((r.entrega?.tipo||"").toString(), colX[5], y);
         doc.text(r.pagamento||"", colX[6], y);
-        doc.text(r.entrega?.tipo||"", colX[7], y);
 
         y += Math.max(rowH, (clienteBreak.length)*5);
         doc.setDrawColor(230); doc.line(10, y-2, 285, y-2);
@@ -333,7 +405,6 @@
 
       rows.forEach(drawRow);
 
-      // total
       doc.setFont("helvetica","bold");
       doc.text(`Total de pedidos: ${rows.length}`, 10, y+8);
       doc.text(`Soma (R$): ${totalGeral.toFixed(2)}`, 80, y+8);
