@@ -1,21 +1,55 @@
 {
   "name": "Pedidos Serra Nobre",
   "short_name": "Serra Nobre",
+  "description": "Pedido rápido com PDF, histórico por cliente e PWA offline.",
+  "id": "./index.html",
+  "start_url": "./",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fbf7f7",
+  "theme_color": "#ffffff",
   "icons": [
     {
-      "src": "/icons/icon-192.png",
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
     }
   ],
-  "theme_color": "#ffffff",
-  "background_color": "#fbf7f7",
-  "display": "standalone"
+  "shortcuts": [
+    {
+      "name": "Novo Pedido",
+      "short_name": "Pedido",
+      "url": "./index.html",
+      "icons": [
+        { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }
+      ]
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "prefer_related_applications": false
 }
