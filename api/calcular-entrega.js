@@ -1,18 +1,20 @@
 // api/calcular-entrega.js
 /* eslint-disable */
 
-// ======================== TABELAS ========================
-const PRICE_RULES = [
-  { kmMax: 1.5,   minMax: 10,  preco: 15,  nome: "0–1.5km / até 10min" },
-  { kmMax: 3.0,   minMax: 20,  preco: 20,  nome: "1.5–3.0km / até 20min" },
-  { kmMax: 4.5,   minMax: 30,  preco: 30,  nome: "3.0–4.5km / até 30min" },
-  { kmMax: 6.99,  minMax: 45,  preco: 40,  nome: "4.5–6.99km / até 45min" },
-  { kmMax: 9.99,  minMax: 60,  preco: 50,  nome: "7.0–9.99km / até 60min" },
-  { kmMax: 15.0,  minMax: 90,  preco: 60,  nome: "10–15km / até 90min" },
+// ======================== TABELAS (DISTÂNCIA + ISENÇÃO POR FAIXA) ========================
+// Regras solicitadas (somente KM, ignorando tempo):
+// 1) Até 5 km               → R$ 15,00  | Isenção: R$ 250,00
+// 2) De 5,01 até 10 km      → R$ 20,00  | Isenção: R$ 300,00
+// 3) De 10,01 até 20 km     → R$ 30,00  | Isenção: R$ 400,00
+// 4) De 20,01 até 30 km     → R$ 40,00  | Isenção: R$ 500,00
+// 5) De 30,01 até 40 km     → R$ 50,00  | Isenção: R$ 600,00
+const DIST_RULES = [
+  { kmMax: 5.00,  preco: 15, tier: "0–5 km",        isencaoMin: 250 },
+  { kmMax: 10.00, preco: 20, tier: "5.01–10 km",    isencaoMin: 300 },
+  { kmMax: 20.00, preco: 30, tier: "10.01–20 km",   isencaoMin: 400 },
+  { kmMax: 30.00, preco: 40, tier: "20.01–30 km",   isencaoMin: 500 },
+  { kmMax: 40.00, preco: 50, tier: "30.01–40 km",   isencaoMin: 600 },
 ];
-
-// Nível de isenção por env (1=R$250, 2=R$250, 3=R$300, 4=R$400, 5=R$500, 6=R$500, 7=null)
-const ISENCAO_NIVEIS = { 1:250, 2:250, 3:300, 4:400, 5:500, 6:500, 7:null };
 
 // ======================== CORS / JSON ========================
 function setJsonHeaders(res) {
@@ -77,18 +79,20 @@ function haversineKm(a, b) {
   return R * c;
 }
 
-// Estimativa simples de minutos se cairmos no Haversine:
-// 22 km/h média urbana → 1 km ≈ 2.73 min, +5 min de overhead
+// Estimativa simples (apenas informativa, preço NÃO usa tempo)
 function estimaMinutosPorKm(km) {
+  // ~22 km/h média urbana → 1 km ≈ 2.73 min, +5 min de overhead
   return Math.max(1, Math.round(km * 2.73 + 5));
 }
 
-// ======================== PRECIFICAÇÃO ========================
-function aplicaTabela(km, min) {
-  for (const r of PRICE_RULES) {
-    if (km <= r.kmMax && min <= r.minMax) return { valorBase: r.preco, tier: r.nome };
+// ======================== PRECIFICAÇÃO (APENAS POR KM) ========================
+function aplicaFaixaPorKm(km) {
+  for (const r of DIST_RULES) {
+    if (km <= r.kmMax) {
+      return { valorBase: r.preco, tier: r.tier, isencaoMin: r.isencaoMin };
+    }
   }
-  return { valorBase: null, tier: "FORA_DA_AREA" };
+  return { valorBase: null, tier: "FORA_DA_AREA", isencaoMin: null };
 }
 
 // ======================== PROVEDOR: ORS ========================
@@ -196,7 +200,7 @@ export default async function handler(req, res) {
     body = body || {};
 
     const debug = String(req.query?.debug || "").trim() === "1";
-    const { enderecoTexto, totalItens } = body;
+    const { enderecoTexto, totalItens, isencaoForcada, clienteIsento, isencaoMinOverride } = body;
     if (!enderecoTexto) return res.status(400).json({ error: "enderecoTexto obrigatório" });
 
     const origin = resolveOriginLatLng();
@@ -204,7 +208,7 @@ export default async function handler(req, res) {
 
     let dest = null;
     let km = null, min = null;
-    let tier = "—", valorBase = null;
+    let tier = "—", valorBase = null, isencaoMinFaixa = null;
     const steps = [];
 
     // ==== CAMADA 1: ORS (se chave existir e USE_PROVIDER=ors) ====
@@ -262,9 +266,11 @@ export default async function handler(req, res) {
       }
     }
 
-    const prec = aplicaTabela(km, min);
-    valorBase = prec.valorBase;
-    tier = prec.tier;
+    // === Precificação por KM (ignora 'min' para preço) ===
+    const faixa = aplicaFaixaPorKm(km);
+    valorBase = faixa.valorBase;
+    tier = faixa.tier;
+    isencaoMinFaixa = faixa.isencaoMin;
 
     // Fora da área (sem faixa correspondente)
     if (valorBase == null) {
@@ -273,23 +279,37 @@ export default async function handler(req, res) {
         km: +km.toFixed(2),
         min: Math.round(min),
         tier,
-        mensagem: "Endereço fora da área de entrega."
+        mensagem: "Endereço fora da área de entrega (acima de 40 km)."
       };
       if (debug) payloadFA.debug = { origin, dest, enderecoNormalizado, steps };
       return res.status(422).json(payloadFA);
     }
 
-    // Isenção
-    const nivel = Number(process.env.ISENCAO_NIVEL || "1");
-    const isencaoMin = ISENCAO_NIVEIS[nivel] ?? null;
-    const isento = (isencaoMin != null) && (Number(totalItens) >= isencaoMin);
+    // === Isenção ===
+    // 1) isenção manual (campo opcional no body)
+    const isencaoManual = !!(isencaoForcada || clienteIsento);
+    // 2) isenção override (numérico) se enviado no body
+    const isencaoMinEfetivo = Number.isFinite(Number(isencaoMinOverride))
+      ? Number(isencaoMinOverride)
+      : isencaoMinFaixa;
+
+    let isento = false;
+    let labelIsencao = "";
+    if (isencaoManual) {
+      isento = true;
+      labelIsencao = "(ISENTO manual)";
+    } else if (isencaoMinEfetivo != null) {
+      const subtotal = Number(totalItens);
+      isento = Number.isFinite(subtotal) && subtotal >= Number(isencaoMinEfetivo);
+      if (isento) labelIsencao = `(ISENTO de frete – pedido ≥ R$ ${Number(isencaoMinEfetivo).toFixed(2)})`;
+    }
+
     const valorCobravel = isento ? 0 : valorBase;
-    const labelIsencao = isento ? `(ISENTO de frete – pedido ≥ R$ ${Number(isencaoMin).toFixed(2)})` : "";
 
     const out = {
       status: "OK",
       km: +km.toFixed(2),
-      min: Math.round(min),
+      min: Math.round(min),          // informativo
       valorBase,
       valorCobravel,
       isento,
