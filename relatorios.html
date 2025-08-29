@@ -162,15 +162,9 @@
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    // ===== Gate local (senha obrigatória) =====
+    /* =================== LOGIN COM SENHA (CORRIGIDO) =================== */
     const FIX_PASS = "081008";
     const $ = (id)=>document.getElementById(id);
-
-    // força pedir senha a cada sessão — sem top-level await
-    if (!sessionStorage.getItem("sn_logged_ok")) {
-      // se já houver user logado de sessão anterior, desconecta para exigir senha
-      signOut(auth).catch(()=>{});
-    }
 
     const showApp = (show)=>{
       $("app").style.display   = show ? "" : "none";
@@ -178,6 +172,7 @@
       $("btnSair").style.display = show ? "" : "none";
     };
 
+    // pede senha sempre; só libera se senha OK e usuário autenticado anonimamente
     $("btnLogin").onclick = async ()=>{
       $("err").textContent = "";
       const p = $("pass").value.trim();
@@ -194,7 +189,7 @@
 
     $("btnSair").onclick = async ()=>{
       sessionStorage.removeItem("sn_logged_ok");
-      await signOut(auth).catch(()=>{});
+      await signOut(auth);
     };
 
     onAuthStateChanged(auth, (u)=>{
@@ -384,14 +379,16 @@
         let totInp = tr.querySelector(".i_total");
         const auto = (qtd*unit);
         // se o usuário editou manualmente total, respeita; caso contrário, atualiza
-        if (!totInp.dataset || !totInp.dataset.userEdit) totInp.value = auto.toFixed(2);
+        if (!totInp.dataset.userEdit) totInp.value = auto.toFixed(2);
         const totVal = parseFloat(totInp.value || "0");
         subtotal += (isFinite(totVal) ? totVal : 0);
       });
 
+      // frete cobrável do registro
       const frete = Number(rowData?.entrega?.valorCobravel || 0);
       const total = subtotal + frete;
 
+      // atualiza pills visuais dentro do editor
       const host = document.querySelector(`tr[data-editfor="${id}"]`);
       if(host){
         host.querySelectorAll(".totals-line .pill")[1].innerHTML = `<strong>Total atual:</strong> R$ ${money(total)}`;
@@ -406,6 +403,7 @@
       const tbl = document.getElementById(`tbl_${id}`);
       const tipoSel = document.getElementById(`edit_tipo_${id}`);
 
+      // coleta itens
       const novosItens = [];
       tbl.querySelectorAll("tbody tr").forEach(tr=>{
         const ix    = Number(tr.getAttribute("data-ix"));
@@ -422,9 +420,11 @@
         });
       });
 
+      // recalcula totais
       const subtotal = novosItens.reduce((s,i)=> s + Number(i.total||0), 0);
       const frete = Number(rowData?.entrega?.valorCobravel || 0);
       const totalPedido = Number((subtotal + frete).toFixed(2));
+
       const novoTipo = (tipoSel?.value || "ENTREGA").toUpperCase();
 
       try{
@@ -436,12 +436,14 @@
           updatedAt: serverTimestamp()
         });
 
+        // atualiza cache em memória
         rowData.itens = novosItens;
         rowData.subtotal = Number(subtotal.toFixed(2));
         rowData.totalPedido = totalPedido;
         rowData.entrega = rowData.entrega || {};
         rowData.entrega.tipo = novoTipo;
 
+        // redesenha a tabela respeitando o modo atual
         renderRows(window.__rows || []);
       }catch(e){
         console.error(e);
@@ -455,7 +457,7 @@
       const hi = $("fHoraIni").value;
       const hf = $("fHoraFim").value;
       const cliente = $("fCliente").value.trim().toUpperCase();
-      const tipoSel = $("fTipo").value.trim();
+      const tipoSel = $("fTipo").value.trim(); // ENT/RET
 
       let ref = collection(db, "pedidos");
       let qRef;
@@ -474,6 +476,7 @@
       const list = [];
       snap.forEach(d => list.push({ id:d.id, ...d.data() }));
 
+      // Filtros em memória
       const out = list.filter(x=>{
         if (hi && (x.horaEntrega || "") < hi) return false;
         if (hf && (x.horaEntrega || "") > hf) return false;
@@ -482,7 +485,7 @@
         return true;
       });
 
-      window.__rows = out;
+      window.__rows = out; // para exportar/render
       renderRows(out);
     }
 
@@ -589,6 +592,7 @@
       const rowH = 7;
       let y = 26;
 
+      // header
       doc.setFont("helvetica","bold");
       for(let i=0;i<headers.length;i++){ doc.text(headers[i], colX[i], y); }
       doc.setLineWidth(0.2); doc.line(10, y+2, 285, y+2);
@@ -624,6 +628,7 @@
         doc.setDrawColor(0);
 
         if (modo==="detalhado" && itensCount){
+          // pequeno bloco de itens
           const startX = 50;
           const wCols = [90, 25, 25, 25, 25]; // Produto, Tipo, Qtd, Unit, Total
           doc.setFont("helvetica","bold"); doc.setFontSize(9);
