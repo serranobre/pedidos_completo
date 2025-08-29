@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Relatórios — Serra Nobre V3.1.1</title>
+  <title>Relatórios — Serra Nobre V3.0.2</title>
   <style>
     :root{
       --teal:#0f766e; --teal-600:#0ea5a6; --ink:#0f172a; --muted:#64748b; --bg:#f1f5f9; --line:#e2e8f0;
@@ -25,25 +25,35 @@
     .btn.warning{ background:#0b5; border-color:#0b5 }
     .btn.gray{ background:#475569; border-color:#475569 }
     .table-wrap{ margin-top:14px; overflow:auto; border-radius:10px; border:1px solid var(--line) }
-    table{ width:100%; min-width:1000px; border-collapse:collapse; background:#fff }
+    table{ width:100%; min-width:1000px; border-collapse:collapse; background:#fff; table-layout: fixed }
     thead th{ position:sticky; top:0; background:#f8fafc; border-bottom:1px solid var(--line); text-align:left; font-size:12px; color:#334155; padding:10px }
-    tbody td{ border-bottom:1px solid #f1f5f9; padding:10px; font-size:14px; vertical-align:top }
+    thead th:nth-child(1){width:110px}
+    thead th:nth-child(2){width:90px}
+    thead th:nth-child(3){width:260px}
+    thead th:nth-child(4){width:70px}
+    thead th:nth-child(5){width:120px}
+    thead th:nth-child(6){width:140px}
+    thead th:nth-child(7){width:130px}
+    thead th:nth-child(8){width:120px}
+    tbody td{ border-bottom:1px solid #f1f5f9; padding:10px; font-size:14px; vertical-align:top; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+    tbody td.wrap{ white-space:normal }
     tfoot td{ background:#f8fafc; font-weight:600; padding:10px; border-top:1px solid var(--line) }
     .login { max-width:360px; margin:50px auto; background:#fff; padding:18px; border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,.08) }
     .muted{ color:var(--muted); font-size:12px }
-    .cell-inline{ display:flex; gap:6px; align-items:center }
-    .cell-inline input[type="number"]{ width:120px }
-    .cell-inline select{ width:auto }
     .row-actions button{ padding:6px 10px }
-    .client-link{ color:#0ea5a6; text-decoration:underline; background:none; border:none; padding:0; cursor:pointer; font:inherit }
-    .items-panel{ background:#f8fafc; border-top:1px dashed var(--line) }
-    .items-grid{ display:grid; grid-template-columns: 2fr 70px 90px 100px 110px 90px; gap:8px; align-items:center }
-    .items-grid label{ font-weight:600; color:#334155; margin-bottom:0 }
-    .items-grid input, .items-grid select{ width:100%; padding:6px }
-    .panel-actions{ display:flex; gap:8px; margin-top:8px }
-    .tag{ display:inline-block; padding:2px 6px; font-size:11px; border-radius:6px; background:#e2e8f0; color:#334155; }
-    @media (max-width: 880px){ .filters{grid-template-columns:repeat(3,minmax(0,1fr))} }
-    @media (max-width: 520px){ .filters{grid-template-columns:repeat(2,minmax(0,1fr))} }
+    .cell-client{ color:#0f766e; cursor:pointer; text-decoration:underline }
+    .details-row td{ background:#fbfeff }
+    .mini-table{ width:100%; border-collapse:collapse; margin-top:4px }
+    .mini-table th, .mini-table td{ border:1px solid #e2e8f0; padding:6px; font-size:12px }
+    .mini-table th{ background:#f8fafc; text-align:left }
+    .mini-table input[type="number"]{ width:100%; padding:6px; font-size:12px }
+    .mini-table select{ width:100%; padding:6px; font-size:12px }
+    .flex-end{ display:flex; justify-content:flex-end; gap:8px; margin-top:8px }
+    .totals-line{ display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin-top:6px }
+    .totals-line .pill{ background:#eef7f7; padding:6px 10px; border-radius:999px; font-size:12px }
+    .col-tipo select{ width:100% }
+    @media (max-width: 980px){ .filters{grid-template-columns:repeat(3,minmax(0,1fr))} }
+    @media (max-width: 560px){ .filters{grid-template-columns:repeat(2,minmax(0,1fr))} }
   </style>
   <!-- SheetJS p/ XLSX -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.19.3/dist/xlsx.full.min.js"></script>
@@ -53,7 +63,7 @@
 <body>
   <header>
     <a href="index.html">← Voltar</a>
-    <h1>Relatórios — Serra Nobre V3.1.1</h1>
+    <h1>Relatórios — Serra Nobre V3.0.2</h1>
     <div style="margin-left:auto"></div>
     <button id="btnSair" class="btn ghost" style="display:none">Sair</button>
   </header>
@@ -76,7 +86,7 @@
           </select>
         </div>
         <div>
-          <label>Modo do Relatório</label>
+          <label>Formato</label>
           <select id="fModo">
             <option value="reduzido">Reduzido</option>
             <option value="detalhado">Detalhado</option>
@@ -87,7 +97,6 @@
       <div class="actions">
         <button class="btn" id="btnBuscar">Buscar</button>
         <button class="btn ghost" id="btnLimpar">Limpar</button>
-        <span class="tag">Clique no <b>cliente</b> para editar itens.</span>
         <button class="btn warning" id="btnXLSX" title="Exportar resultados para XLSX">Exportar XLSX</button>
         <button class="btn gray" id="btnPDF" title="Gerar PDF">Gerar PDF</button>
       </div>
@@ -98,10 +107,10 @@
             <tr>
               <th>Data</th>
               <th>Hora</th>
-              <th>Cliente (clique p/ editar itens)</th>
+              <th>Cliente (clique para editar)</th>
               <th>Itens</th>
-              <th>Total (R$) — editar</th>
-              <th>Tipo — editar</th>
+              <th>Total (R$)</th>
+              <th>Tipo</th>
               <th>Pagamento</th>
               <th>Ações</th>
             </tr>
@@ -157,6 +166,12 @@
     const FIX_PASS = "081008";
     const $ = (id)=>document.getElementById(id);
 
+    // força pedir senha a cada sessão
+    if (!sessionStorage.getItem("sn_logged_ok")) {
+      // se já houver user logado de sessão anterior, desconecta para exigir senha
+      try { await signOut(auth); } catch(_) {}
+    }
+
     const showApp = (show)=>{
       $("app").style.display   = show ? "" : "none";
       $("login").style.display = show ? "none" : "";
@@ -167,158 +182,278 @@
       $("err").textContent = "";
       const p = $("pass").value.trim();
       if (p !== FIX_PASS) { $("err").textContent = "Senha inválida."; return; }
-      try { await signInAnonymously(auth); }
-      catch(e){ console.error(e); $("err").textContent = "Não foi possível conectar ao Firebase."; return; }
+      try {
+        await signInAnonymously(auth);
+        sessionStorage.setItem("sn_logged_ok","1");
+      } catch(e){
+        console.error(e);
+        $("err").textContent = "Não foi possível conectar ao Firebase.";
+        return;
+      }
     };
 
-    $("btnSair").onclick = async ()=>{ await signOut(auth); };
-    onAuthStateChanged(auth, (u)=> showApp(!!u));
+    $("btnSair").onclick = async ()=>{
+      sessionStorage.removeItem("sn_logged_ok");
+      await signOut(auth);
+    };
 
-    /* =================== RENDER / BUSCA =================== */
-    function fmt(n){ return (Number(n)||0).toFixed(2); }
+    onAuthStateChanged(auth, (u)=>{
+      const allow = !!u && sessionStorage.getItem("sn_logged_ok")==="1";
+      showApp(allow);
+    });
 
-    function recalcRodape(){
-      const rows = window.__rows || [];
-      let total = 0;
-      rows.forEach(r => total += Number(r.totalPedido||0));
-      $("ftCount").textContent = `${rows.length} pedido(s)`;
-      $("ftTotal").textContent = `R$ ${fmt(total)}`;
+    /* =================== HELPERS =================== */
+    function toBR(iso){
+      if(!iso) return "";
+      const [y,m,d] = iso.split("-");
+      return `${d}/${m}/${y}`;
     }
+    function money(n){ return (Number(n||0)).toFixed(2).replace(".",","); }
 
-    function buildItemsPanel(order){
-      const itens = Array.isArray(order.itens) ? order.itens : [];
-      const id = order.id;
-      const linhas = itens.map((it,idx)=>`
-        <div class="items-grid" data-oid="${id}" data-index="${idx}">
-          <input type="text" class="it-prod" value="${(it.produto||"")}" placeholder="Produto"/>
-          <select class="it-tipo">
-            <option value="KG" ${it.tipo==="KG"?"selected":""}>KG</option>
-            <option value="UN" ${it.tipo==="UN"?"selected":""}>UN</option>
-          </select>
-          <input type="number" step="0.01" class="it-qtd" value="${Number(it.quantidade||0)}" />
-          <input type="number" step="0.01" class="it-unit" value="${Number(it.precoUnit||it.preco||0)}" />
-          <input type="number" step="0.01" class="it-total" value="${fmt(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))))}" />
-          <button class="btn ghost" data-action="delItem" data-idx="${idx}">Excluir</button>
-        </div>
-      `).join("");
-
-      return `
-        <div class="items-panel" style="padding:12px">
-          <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px">
-            <strong>Itens do pedido</strong>
-            <span class="muted">Edite quantidade, preço e total. O subtotal é recalculado no salvamento.</span>
-            <button class="btn ghost" data-action="addItem" data-oid="${id}">+ Adicionar item</button>
-          </div>
-          <div class="items-grid" style="font-size:12px; opacity:.8">
-            <label>Produto</label><label>Tipo</label><label>Qtd</label><label>R$ Unit</label><label>Total</label><span></span>
-          </div>
-          <div id="grid-${id}">
-            ${linhas || `<div class="muted" style="padding:8px 0">Sem itens.</div>`}
-          </div>
-          <div class="panel-actions">
-            <button class="btn gray" data-action="saveItems" data-oid="${id}">Salvar Itens</button>
-            <button class="btn ghost" data-action="closePanel" data-oid="${id}">Fechar</button>
-          </div>
-        </div>
-      `;
-    }
-
+    /* =================== BUSCA =================== */
     function renderRows(docs){
       const tbody = $("tbody");
+      const modo = $("fModo").value || "reduzido";
+
       if (!docs.length){
         tbody.innerHTML = `<tr><td colspan="8">Sem resultados.</td></tr>`;
         $("ftCount").textContent = "0 pedidos";
         $("ftTotal").textContent = "R$ 0,00";
         return;
       }
-
+      let total = 0;
       const rows = [];
+
       for (const x of docs){
-        const itensCount = Array.isArray(x.itens) ? x.itens.length : 0;
+        const itens = Array.isArray(x.itens) ? x.itens : [];
+        const itensCount = itens.length;
         const tot = Number(x.totalPedido||0);
+        total += tot;
+
         const tipoAtual = (x?.entrega?.tipo || "").toUpperCase();
-        const tipoSel = `
-          <select class="tipoEdit" data-id="${x.id}">
-            <option value="ENTREGA" ${tipoAtual==="ENTREGA"?"selected":""}>ENTREGA</option>
-            <option value="RETIRADA" ${tipoAtual==="RETIRADA"?"selected":""}>RETIRADA</option>
-          </select>
-        `;
+        const tipoTxt = (tipoAtual==="RETIRADA" ? "RETIRADA" : "ENTREGA");
 
         rows.push(`
           <tr data-rowid="${x.id}">
-            <td>${x.dataEntregaISO||""}</td>
+            <td>${toBR(x.dataEntregaISO)||""}</td>
             <td>${x.horaEntrega||""}</td>
-            <td>
-              <button class="client-link" data-action="toggleItems" data-id="${x.id}">${(x.cliente||"")}</button>
-            </td>
-            <td class="td-itenscount">${itensCount}</td>
-            <td class="cell-inline">
-              <input class="totalEdit" data-id="${x.id}" type="number" step="0.01" value="${tot.toFixed(2)}" />
-            </td>
-            <td class="cell-inline">${tipoSel}</td>
+            <td class="cell-client" data-id="${x.id}" title="Clique para editar">${(x.cliente||"")}</td>
+            <td>${itensCount}</td>
+            <td>R$ ${money(tot).replace(".",",")}</td>
+            <td class="col-tipo">${tipoTxt}</td>
             <td>${x.pagamento||""}</td>
             <td class="row-actions">
-              <button class="btn gray" data-action="save" data-id="${x.id}">Salvar</button>
+              <button class="btn gray" data-action="open" data-id="${x.id}">Editar</button>
             </td>
           </tr>
-          <tr data-panel-for="${x.id}" style="display:none">
-            <td colspan="8">${buildItemsPanel(x)}</td>
-          </tr>
+          ${
+            modo==="detalhado" ? `
+            <tr class="details-row" data-parent="${x.id}">
+              <td colspan="8" class="wrap">
+                ${renderMiniTableReadOnly(itens)}
+                <div class="totals-line">
+                  <span class="pill">Frete: R$ ${money(x?.entrega?.valorCobravel||0)}</span>
+                  <span class="pill"><strong>Total pedido:</strong> R$ ${money(tot)}</span>
+                </div>
+              </td>
+            </tr>` : ""
+          }
         `);
       }
       tbody.innerHTML = rows.join("");
+      $("ftCount").textContent = `${docs.length} pedido(s)`;
+      $("ftTotal").textContent = `R$ ${total.toFixed(2)}`;
 
-      // listeners: salvar total/tipo
-      tbody.querySelectorAll('button[data-action="save"]').forEach(btn=>{
-        btn.addEventListener('click', ()=> salvarLinha(btn.dataset.id));
+      // listeners: abrir editor ao clicar no cliente ou no botão Editar
+      tbody.querySelectorAll('.cell-client').forEach(td=>{
+        td.addEventListener('click', ()=> openEditor(td.dataset.id));
+      });
+      tbody.querySelectorAll('button[data-action="open"]').forEach(btn=>{
+        btn.addEventListener('click', ()=> openEditor(btn.dataset.id));
+      });
+    }
+
+    function renderMiniTableReadOnly(itens){
+      if (!Array.isArray(itens) || !itens.length) return `<div class="muted">Sem itens.</div>`;
+      const lines = itens.map((it,idx)=>`
+        <tr>
+          <td>${idx+1}</td>
+          <td>${it.produto||""}</td>
+          <td>${it.tipo||""}</td>
+          <td>${Number(it.quantidade||0)}</td>
+          <td>R$ ${money(it.precoUnit ?? it.preco)}</td>
+          <td>R$ ${money(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))))}</td>
+        </tr>
+      `).join("");
+      return `
+        <table class="mini-table">
+          <thead><tr>
+            <th>#</th><th>Produto</th><th>Tipo</th><th>Qtd/Peso</th><th>R$ Unit</th><th>R$ Total</th>
+          </tr></thead>
+          <tbody>${lines}</tbody>
+        </table>`;
+    }
+
+    // editor inline (abre logo abaixo da linha)
+    function openEditor(id){
+      const tbody = $("tbody");
+      // fechar editor existente do mesmo pedido
+      tbody.querySelectorAll(`tr[data-editfor="${id}"]`).forEach(tr=>tr.remove());
+
+      const rowData = (window.__rows||[]).find(r=>r.id===id);
+      if (!rowData) return;
+
+      const itens = Array.isArray(rowData.itens) ? rowData.itens : [];
+      const tipoAtual = (rowData?.entrega?.tipo || "ENTREGA").toUpperCase();
+
+      const editorHTML = `
+        <tr class="details-row" data-editfor="${id}">
+          <td colspan="8" class="wrap">
+            <div style="display:grid; grid-template-columns: 220px 1fr; gap:10px; align-items:center">
+              <div>
+                <label>Tipo de entrega</label>
+                <select id="edit_tipo_${id}">
+                  <option value="ENTREGA" ${tipoAtual==="ENTREGA"?"selected":""}>ENTREGA</option>
+                  <option value="RETIRADA" ${tipoAtual==="RETIRADA"?"selected":""}>RETIRADA</option>
+                </select>
+              </div>
+              <div class="totals-line">
+                <span class="pill">Frete atual: R$ ${money(rowData?.entrega?.valorCobravel||0)}</span>
+                <span class="pill"><strong>Total atual:</strong> R$ ${money(rowData.totalPedido||0)}</span>
+              </div>
+            </div>
+
+            <div style="margin-top:8px"></div>
+            <table class="mini-table" id="tbl_${id}">
+              <thead>
+                <tr><th>#</th><th style="width:40%">Produto</th><th>Tipo</th><th>Qtd/Peso</th><th>R$ Unit</th><th>R$ Total</th></tr>
+              </thead>
+              <tbody>
+                ${itens.map((it,ix)=>`
+                  <tr data-ix="${ix}">
+                    <td>${ix+1}</td>
+                    <td class="wrap">${it.produto||""}</td>
+                    <td>
+                      <select class="i_tipo">
+                        <option value="KG" ${it.tipo==="KG"?"selected":""}>KG</option>
+                        <option value="UN" ${it.tipo==="UN"?"selected":""}>UN</option>
+                      </select>
+                    </td>
+                    <td><input type="number" step="0.01" class="i_qtd" value="${Number(it.quantidade||0)}"/></td>
+                    <td><input type="number" step="0.01" class="i_unit" value="${Number(it.precoUnit ?? it.preco || 0)}"/></td>
+                    <td><input type="number" step="0.01" class="i_total" value="${Number(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))))}" /></td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+
+            <div class="flex-end">
+              <button class="btn ghost" id="btnRecalc_${id}">Recalcular total</button>
+              <button class="btn gray" id="btnSave_${id}">Salvar alterações</button>
+            </div>
+          </td>
+        </tr>
+      `;
+
+      // insere editor após a linha do pedido
+      const tr = tbody.querySelector(`tr[data-rowid="${id}"]`);
+      if (tr) tr.insertAdjacentHTML("afterend", editorHTML);
+
+      // listeners do editor
+      const tbl = document.getElementById(`tbl_${id}`);
+      const recalc = ()=> recalcTotalsFromEditor(id);
+      tbl.querySelectorAll("input,select").forEach(el=>{
+        el.addEventListener("input", recalc);
+        el.addEventListener("change", recalc);
+      });
+      document.getElementById(`btnRecalc_${id}`).onclick = recalc;
+      document.getElementById(`btnSave_${id}`).onclick = ()=> saveEditor(id);
+    }
+
+    function recalcTotalsFromEditor(id){
+      const rowData = (window.__rows||[]).find(r=>r.id===id);
+      if(!rowData) return;
+
+      const tbl = document.getElementById(`tbl_${id}`);
+      if(!tbl) return;
+
+      let subtotal = 0;
+      tbl.querySelectorAll("tbody tr").forEach(tr=>{
+        const qtd  = parseFloat(tr.querySelector(".i_qtd")?.value || "0");
+        const unit = parseFloat(tr.querySelector(".i_unit")?.value || "0");
+        let totInp = tr.querySelector(".i_total");
+        const auto = (qtd*unit);
+        // se o usuário editou manualmente total, respeita; caso contrário, atualiza
+        if (!totInp.dataset.userEdit) totInp.value = auto.toFixed(2);
+        const totVal = parseFloat(totInp.value || "0");
+        subtotal += (isFinite(totVal) ? totVal : 0);
       });
 
-      // listeners: abrir/fechar painel de itens
-      tbody.querySelectorAll('button[data-action="toggleItems"]').forEach(btn=>{
-        btn.addEventListener('click', ()=>{
-          const id = btn.dataset.id;
-          const panelTr = document.querySelector(`tr[data-panel-for="${id}"]`);
-          if (!panelTr) return;
-          panelTr.style.display = (panelTr.style.display === "none" || !panelTr.style.display) ? "" : "none";
+      // frete cobrável do registro
+      const frete = Number(rowData?.entrega?.valorCobravel || 0);
+      const total = subtotal + frete;
+
+      // atualiza pills visuais dentro do editor
+      const host = document.querySelector(`tr[data-editfor="${id}"]`);
+      if(host){
+        host.querySelectorAll(".totals-line .pill")[1].innerHTML = `<strong>Total atual:</strong> R$ ${money(total)}`;
+      }
+      return { subtotal, total };
+    }
+
+    async function saveEditor(id){
+      const rowData = (window.__rows||[]).find(r=>r.id===id);
+      if(!rowData) return;
+
+      const tbl = document.getElementById(`tbl_${id}`);
+      const tipoSel = document.getElementById(`edit_tipo_${id}`);
+
+      // coleta itens
+      const novosItens = [];
+      tbl.querySelectorAll("tbody tr").forEach(tr=>{
+        const ix    = Number(tr.getAttribute("data-ix"));
+        const base  = (rowData.itens||[])[ix] || {};
+
+        const tipo  = (tr.querySelector(".i_tipo")?.value || base.tipo || "KG").toUpperCase();
+        const qtd   = parseFloat(tr.querySelector(".i_qtd")?.value || "0") || 0;
+        const unit  = parseFloat(tr.querySelector(".i_unit")?.value || "0") || 0;
+        const total = parseFloat(tr.querySelector(".i_total")?.value || (qtd*unit) || "0") || 0;
+
+        novosItens.push({
+          produto: base.produto || "",
+          tipo, quantidade: Number(qtd), precoUnit: Number(unit), total: Number(total)
         });
       });
 
-      // listeners do painel (delegação)
-      tbody.addEventListener('click', (ev)=>{
-        const t = ev.target;
-        if (!(t instanceof HTMLElement)) return;
-        if (t.dataset.action === "closePanel"){
-          const id = t.dataset.oid;
-          const tr = document.querySelector(`tr[data-panel-for="${id}"]`);
-          if (tr) tr.style.display = "none";
-        }
-        if (t.dataset.action === "addItem"){
-          const id = t.dataset.oid;
-          const grid = document.getElementById(`grid-${id}`);
-          const idx = grid.querySelectorAll('.items-grid[data-oid="'+id+'"]').length;
-          const html = `
-            <div class="items-grid" data-oid="${id}" data-index="${idx}">
-              <input type="text" class="it-prod" value="" placeholder="Produto"/>
-              <select class="it-tipo"><option value="KG">KG</option><option value="UN">UN</option></select>
-              <input type="number" step="0.01" class="it-qtd" value="0" />
-              <input type="number" step="0.01" class="it-unit" value="0" />
-              <input type="number" step="0.01" class="it-total" value="0.00" />
-              <button class="btn ghost" data-action="delItem" data-idx="${idx}">Excluir</button>
-            </div>`;
-          grid.insertAdjacentHTML('beforeend', html);
-        }
-        if (t.dataset.action === "delItem"){
-          const wrap = t.closest('.items-grid');
-          if (wrap) wrap.remove();
-        }
-        if (t.dataset.action === "saveItems"){
-          const id = t.dataset.oid;
-          salvarItens(id);
-        }
-      });
+      // recalcula totais
+      const subtotal = novosItens.reduce((s,i)=> s + Number(i.total||0), 0);
+      const frete = Number(rowData?.entrega?.valorCobravel || 0);
+      const totalPedido = Number((subtotal + frete).toFixed(2));
 
-      // recalcula rodapé
-      recalcRodape();
+      const novoTipo = (tipoSel?.value || "ENTREGA").toUpperCase();
+
+      try{
+        await updateDoc(doc(db, "pedidos", id), {
+          itens: novosItens,
+          subtotal: Number(subtotal.toFixed(2)),
+          totalPedido,
+          "entrega.tipo": novoTipo,
+          updatedAt: serverTimestamp()
+        });
+
+        // atualiza cache em memória
+        rowData.itens = novosItens;
+        rowData.subtotal = Number(subtotal.toFixed(2));
+        rowData.totalPedido = totalPedido;
+        rowData.entrega = rowData.entrega || {};
+        rowData.entrega.tipo = novoTipo;
+
+        // redesenha a tabela respeitando o modo atual
+        renderRows(window.__rows || []);
+      }catch(e){
+        console.error(e);
+        alert("Falha ao salvar no banco.");
+      }
     }
 
     async function buscar(){
@@ -337,7 +472,7 @@
         if (di) conds.push(where("dataEntregaISO", ">=", di));
         if (df) conds.push(where("dataEntregaISO", "<=", df));
         if (conds.length) qRef = query(ref, ...conds, orderBy("dataEntregaISO", "desc"), limit(1000));
-        else             qRef = query(ref, orderBy("dataEntregaISO", "desc"), limit(1000));
+        else              qRef = query(ref, orderBy("dataEntregaISO", "desc"), limit(1000));
       } else {
         qRef = query(ref, orderBy("createdAt", "desc"), limit(1000));
       }
@@ -355,7 +490,7 @@
         return true;
       });
 
-      window.__rows = out; // cache p/ export e PDF
+      window.__rows = out; // para exportar/render
       renderRows(out);
     }
 
@@ -370,304 +505,173 @@
       window.__rows = [];
     };
 
-    /* =================== SALVAR EDIÇÃO POR LINHA (total/tipo) =================== */
-    async function salvarLinha(id){
-      try{
-        const tr = document.querySelector(`tr[data-rowid="${id}"]`);
-        if(!tr) return alert("Linha não encontrada.");
-
-        const totalInput = tr.querySelector('.totalEdit[data-id="'+id+'"]');
-        const tipoSelect = tr.querySelector('.tipoEdit[data-id="'+id+'"]');
-
-        const novoTotal = parseFloat(totalInput?.value ?? "0");
-        const novoTipo  = (tipoSelect?.value || "ENTREGA").toUpperCase();
-
-        if (isNaN(novoTotal)) { alert("Total inválido."); return; }
-
-        await updateDoc(doc(db, "pedidos", id), {
-          totalPedido: Number(novoTotal.toFixed(2)),
-          "entrega.tipo": novoTipo,
-          updatedAt: serverTimestamp()
-        });
-
-        // atualiza cache em memória
-        if (Array.isArray(window.__rows)) {
-          const idx = window.__rows.findIndex(r => r.id === id);
-          if (idx >= 0) {
-            window.__rows[idx].totalPedido = Number(novoTotal.toFixed(2));
-            window.__rows[idx].entrega = window.__rows[idx].entrega || {};
-            window.__rows[idx].entrega.tipo = novoTipo;
-          }
-        }
-
-        // feedback
-        const btn = tr.querySelector('.row-actions button[data-action="save"]');
-        const oldText = btn.textContent;
-        btn.textContent = "Salvo!";
-        setTimeout(()=>{ btn.textContent = oldText; }, 1200);
-
-        recalcRodape();
-      }catch(e){
-        console.error(e);
-        alert("Falha ao salvar no banco.");
-      }
-    }
-
-    /* =================== SALVAR ITENS DO PEDIDO (no painel) =================== */
-    function coletarItensDoPainel(orderId){
-      const cont = document.getElementById(`grid-${orderId}`);
-      if(!cont) return [];
-      const rows = [...cont.querySelectorAll(`.items-grid[data-oid="${orderId}"]`)];
-      const itens = rows.map(r=>{
-        const produto = r.querySelector(".it-prod")?.value || "";
-        const tipo    = r.querySelector(".it-tipo")?.value || "KG";
-        const qtd     = parseFloat(r.querySelector(".it-qtd")?.value || "0") || 0;
-        const unit    = parseFloat(r.querySelector(".it-unit")?.value || "0") || 0;
-        let total     = parseFloat(r.querySelector(".it-total")?.value || "0");
-        if (isNaN(total)) total = qtd * unit;
-        return {
-          produto,
-          tipo,
-          quantidade: Number(qtd),
-          precoUnit: Number(unit),
-          total: Number((total || (qtd*unit)).toFixed(2))
-        };
-      });
-      return itens;
-    }
-
-    async function salvarItens(id){
-      try{
-        const itens = coletarItensDoPainel(id);
-        // subtotal = soma itens.total
-        const subtotal = itens.reduce((s,i)=> s + Number(i.total||0), 0);
-        // pega frete cobravel do cache (se existir)
-        const row = (window.__rows||[]).find(r=>r.id===id);
-        const freteCobr = Number(row?.entrega?.valorCobravel || 0);
-        const totalPedido = Number((subtotal + freteCobr).toFixed(2));
-
-        await updateDoc(doc(db,"pedidos", id), {
-          itens,
-          subtotal: Number(subtotal.toFixed(2)),
-          totalPedido,
-          updatedAt: serverTimestamp()
-        });
-
-        // atualiza cache e DOM
-        if (row){
-          row.itens = itens;
-          row.subtotal = Number(subtotal.toFixed(2));
-          row.totalPedido = totalPedido;
-          const tr = document.querySelector(`tr[data-rowid="${id}"]`);
-          tr?.querySelector('.totalEdit')?.setAttribute('value', totalPedido.toFixed(2));
-          tr?.querySelector('.td-itenscount')?.replaceChildren(document.createTextNode(String(itens.length)));
-        }
-
-        // feedback
-        const pnlBtn = document.querySelector(`tr[data-panel-for="${id}"] button[data-action="saveItems"]`);
-        if (pnlBtn){
-          const old = pnlBtn.textContent;
-          pnlBtn.textContent = "Itens salvos!";
-          setTimeout(()=>pnlBtn.textContent=old, 1200);
-        }
-
-        recalcRodape();
-      }catch(e){
-        console.error(e);
-        alert("Falha ao salvar itens.");
-      }
-    }
-
     /* =================== EXPORTAÇÃO XLSX =================== */
-    function coletarLinhasParaExport(){
-      // usa o cache em memória (mais completo)
-      return Array.isArray(window.__rows) ? JSON.parse(JSON.stringify(window.__rows)) : [];
-    }
-
-    function exportarXLSX(){
-      const modo = $("fModo").value || "reduzido";
-      const rows = coletarLinhasParaExport();
+    async function exportarXLSX(){
+      const rows = Array.isArray(window.__rows) ? JSON.parse(JSON.stringify(window.__rows)) : [];
       if (!rows.length){ alert("Faça uma busca primeiro."); return; }
+
+      const modo = (document.getElementById("fModo")?.value || "reduzido");
+      const XLSXlib = window.XLSX;
+      if (!XLSXlib){ alert("Biblioteca XLSX não carregou."); return; }
 
       let aoa = [];
       if (modo === "reduzido"){
         aoa = [["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagamento"]];
         for (const r of rows){
           const itensCount = Array.isArray(r.itens) ? r.itens.length : 0;
-          aoa.push([r.dataEntregaISO||"", r.horaEntrega||"", r.cliente||"", itensCount, (Number(r.totalPedido||0)).toFixed(2), (r.entrega?.tipo||""), r.pagamento||""]);
+          aoa.push([
+            toBR(r.dataEntregaISO||""), r.horaEntrega||"", r.cliente||"", itensCount,
+            (Number(r.totalPedido||0)).toFixed(2), (r.entrega?.tipo||""), r.pagamento||""
+          ]);
         }
       } else {
-        // detalhado: pedido + linhas de itens
         aoa = [["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagamento","—","Produto","Tipo Item","Qtd","R$ Unit","R$ Total"]];
         for (const r of rows){
           const itens = Array.isArray(r.itens) ? r.itens : [];
-          const itensCount = itens.length;
-          aoa.push([r.dataEntregaISO||"", r.horaEntrega||"", r.cliente||"", itensCount, (Number(r.totalPedido||0)).toFixed(2), (r.entrega?.tipo||""), r.pagamento||"", ""]);
-          if (itensCount){
-            for (const it of itens){
-              aoa.push(["","","","","","","","", it.produto||"", it.tipo||"", Number(it.quantidade||0), Number(it.precoUnit||it.preco||0), Number(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))))]);
-            }
+          aoa.push([
+            toBR(r.dataEntregaISO||""), r.horaEntrega||"", r.cliente||"", itens.length,
+            (Number(r.totalPedido||0)).toFixed(2), (r.entrega?.tipo||""), r.pagamento||"", ""
+          ]);
+          for (const it of itens){
+            const totalItem = Number(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))));
+            aoa.push([
+              "","","","","","","","",
+              it.produto||"", it.tipo||"", Number(it.quantidade||0),
+              Number(it.precoUnit||it.preco||0), Number(totalItem||0)
+            ]);
           }
         }
       }
 
-      const ws = XLSX.utils.aoa_to_sheet(aoa);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, modo === "reduzido" ? 'Relatório' : 'Relatório Detalhado');
+      const ws = XLSXlib.utils.aoa_to_sheet(aoa);
+      const wb = XLSXlib.utils.book_new();
+      XLSXlib.utils.book_append_sheet(wb, ws, modo === "reduzido" ? "Relatório" : "Relatório Detalhado");
 
-      // largura automática básica
       const maxCols = Math.max(...aoa.map(r => r.length));
       ws['!cols'] = Array.from({length: maxCols}, (_, i) => {
-        const largura = Math.max(...aoa.map(r => (r[i] ? String(r[i]).toString().length : 0))) + 2;
+        const largura = Math.max(...aoa.map(r => (r[i] ? String(r[i]).length : 0))) + 2;
         return { wch: Math.min(Math.max(largura, 8), 40) };
       });
 
-      XLSX.writeFile(wb, `relatorio_serranobre_${modo}_${new Date().toISOString().slice(0,10)}.xlsx`);
+      const filename = `relatorio_serranobre_${modo}_${new Date().toISOString().slice(0,10)}.xlsx`;
+      try {
+        XLSXlib.writeFile(wb, filename, { compression: true });
+      } catch (e) {
+        try {
+          const wbout = XLSXlib.write(wb, { bookType: "xlsx", type: "array", compression: true });
+          const blob = new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+          const url  = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url; a.download = filename;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(()=>URL.revokeObjectURL(url), 20000);
+        } catch (err) {
+          console.error("Falha ao gerar XLSX:", err);
+          alert("Não foi possível gerar o arquivo XLSX.");
+        }
+      }
     }
-    $("btnXLSX").onclick = exportarXLSX;
+    document.getElementById("btnXLSX").onclick = exportarXLSX;
 
-    // ====== PDF via jsPDF ======
+    // ====== PDF via jsPDF (reduzido/detalhado) ======
     $("btnPDF").onclick = ()=>{
       const rows = window.__rows || [];
       if (!rows.length){ alert("Faça uma busca primeiro."); return; }
-      const modo = $("fModo").value || "reduzido";
+      const modo = (document.getElementById("fModo")?.value || "reduzido");
 
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
 
       doc.setFont("helvetica","bold"); doc.setFontSize(14);
-      doc.text(`Relatório de Pedidos — Serra Nobre (${modo.toUpperCase()})`, 10, 12);
+      doc.text("Relatório de Pedidos — Serra Nobre", 10, 12);
       doc.setFontSize(10); doc.setFont("helvetica","normal");
       const periodo = (()=> {
         const di = $("fDataIni").value, df=$("fDataFim").value;
-        if (di || df) return `Período: ${di||'...'} a ${df||'...'}`;
+        if (di || df) return `Período: ${toBR(di)||'...'} a ${toBR(df)||'...'}`;
         return "Período: (todos por criação recente)";
       })();
       doc.text(periodo, 10, 18);
 
-      if (modo === "reduzido"){
-        const headers = ["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagto."];
-        const colX = [10, 30, 50, 140, 160, 185, 215];
-        const rowH = 7;
-        let y = 26;
+      const headers = ["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagto."];
+      const colX = [10, 30, 50, 140, 160, 185, 215];
+      const rowH = 7;
+      let y = 26;
 
-        doc.setFont("helvetica","bold");
-        for(let i=0;i<headers.length;i++){ doc.text(headers[i], colX[i], y); }
-        doc.setLineWidth(0.2); doc.line(10, y+2, 285, y+2);
-        doc.setFont("helvetica","normal");
+      // header
+      doc.setFont("helvetica","bold");
+      for(let i=0;i<headers.length;i++){ doc.text(headers[i], colX[i], y); }
+      doc.setLineWidth(0.2); doc.line(10, y+2, 285, y+2);
+      doc.setFont("helvetica","normal");
 
-        y += 6;
-        let totalGeral = 0;
+      y += 6;
+      let totalGeral = 0;
 
-        const drawRow = (r)=>{
-          if (y > 190){
-            doc.addPage("a4","landscape");
-            doc.setFont("helvetica","bold"); doc.setFontSize(10);
-            for(let i=0;i<headers.length;i++){ doc.text(headers[i], colX[i], 12); }
-            doc.line(10, 14, 285, 14);
-            doc.setFont("helvetica","normal"); y = 20;
+      const drawRow = (r)=>{
+        if (y > 190){
+          doc.addPage("a4","landscape");
+          doc.setFont("helvetica","bold"); doc.setFontSize(10);
+          for(let i=0;i<headers.length;i++){ doc.text(headers[i], colX[i], 12); }
+          doc.line(10, 14, 285, 14);
+          doc.setFont("helvetica","normal"); y = 20;
+        }
+        const itens = Array.isArray(r.itens) ? r.itens : [];
+        const itensCount = itens.length;
+        const tot = Number(r.totalPedido||0); totalGeral += tot;
+
+        doc.text(toBR(r.dataEntregaISO||""), colX[0], y);
+        doc.text(r.horaEntrega||"", colX[1], y);
+        const cliente = (r.cliente||"").toString();
+        const clienteBreak = doc.splitTextToSize(cliente, colX[3]-colX[2]-2);
+        doc.text(clienteBreak, colX[2], y);
+        doc.text(String(itensCount), colX[3], y);
+        doc.text(tot.toFixed(2), colX[4], y);
+        doc.text((r.entrega?.tipo||"").toString(), colX[5], y);
+        doc.text(r.pagamento||"", colX[6], y);
+
+        y += Math.max(rowH, (clienteBreak.length)*5);
+        doc.setDrawColor(230); doc.line(10, y-2, 285, y-2);
+        doc.setDrawColor(0);
+
+        if (modo==="detalhado" && itensCount){
+          // pequeno bloco de itens
+          const startX = 50;
+          const wCols = [90, 25, 25, 25, 25]; // Produto, Tipo, Qtd, Unit, Total
+          doc.setFont("helvetica","bold"); doc.setFontSize(9);
+          const hdr = ["Produto","Tipo","Qtd/Peso","R$ Unit","R$ Total"];
+          let yy = y+2; let xx = startX;
+          for (let i=0;i<hdr.length;i++){ doc.text(hdr[i], xx+2, yy); xx += wCols[i]; }
+          yy += 4; doc.setFont("helvetica","normal");
+
+          for (const it of itens){
+            const linha = [
+              (it.produto||""), (it.tipo||""),
+              String(Number(it.quantidade||0)),
+              money(it.precoUnit ?? it.preco),
+              money(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))))
+            ];
+            xx = startX;
+            const wrapProd = doc.splitTextToSize(linha[0], wCols[0]-4);
+            const linesH = Math.max(5, wrapProd.length*5);
+            doc.text(wrapProd, xx+2, yy); xx += wCols[0];
+            doc.text(linha[1], xx+2, yy); xx += wCols[1];
+            doc.text(linha[2], xx+2, yy); xx += wCols[2];
+            doc.text(linha[3], xx+2, yy); xx += wCols[3];
+            doc.text(linha[4], xx+2, yy);
+            yy += linesH;
           }
-          const itensCount = Array.isArray(r.itens) ? r.itens.length : 0;
-          const tot = Number(r.totalPedido||0); totalGeral += tot;
-
-          doc.text(r.dataEntregaISO||"", colX[0], y);
-          doc.text(r.horaEntrega||"", colX[1], y);
-          const clienteBreak = doc.splitTextToSize((r.cliente||"").toString(), colX[3]-colX[2]-2);
-          doc.text(clienteBreak, colX[2], y);
-          doc.text(String(itensCount), colX[3], y);
-          doc.text(tot.toFixed(2), colX[4], y);
-          doc.text((r.entrega?.tipo||"").toString(), colX[5], y);
-          doc.text(r.pagamento||"", colX[6], y);
-
-          y += Math.max(rowH, (clienteBreak.length)*5);
+          y = yy + 2;
           doc.setDrawColor(230); doc.line(10, y-2, 285, y-2);
           doc.setDrawColor(0);
-        };
+        }
+      };
 
-        rows.forEach(drawRow);
+      rows.forEach(drawRow);
 
-        doc.setFont("helvetica","bold");
-        doc.text(`Total de pedidos: ${rows.length}`, 10, y+8);
-        doc.text(`Soma (R$): ${rows.reduce((s,r)=>s+Number(r.totalPedido||0),0).toFixed(2)}`, 80, y+8);
+      doc.setFont("helvetica","bold");
+      doc.text(`Total de pedidos: ${rows.length}`, 10, y+8);
+      doc.text(`Soma (R$): ${totalGeral.toFixed(2)}`, 80, y+8);
 
-      } else {
-        // DETALHADO
-        const headers = ["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagto."];
-        const colX = [10, 30, 50, 140, 160, 185, 215];
-        let y = 26;
-
-        doc.setFont("helvetica","bold");
-        for(let i=0;i<headers.length;i++){ doc.text(headers[i], colX[i], y); }
-        doc.setLineWidth(0.2); doc.line(10, y+2, 285, y+2);
-        doc.setFont("helvetica","normal");
-
-        y += 6;
-        let totalGeral = 0;
-
-        const drawPedido = (r)=>{
-          const lineH = 6;
-          const tot = Number(r.totalPedido||0); totalGeral += tot;
-
-          if (y > 180){
-            doc.addPage("a4","landscape");
-            doc.setFont("helvetica","bold"); doc.setFontSize(10);
-            for(let i=0;i<headers.length;i++){ doc.text(headers[i], colX[i], 12); }
-            doc.line(10, 14, 285, 14);
-            doc.setFont("helvetica","normal"); y = 20;
-          }
-
-          // linha do pedido
-          doc.text(r.dataEntregaISO||"", colX[0], y);
-          doc.text(r.horaEntrega||"", colX[1], y);
-          const clienteBreak = doc.splitTextToSize((r.cliente||"").toString(), colX[3]-colX[2]-2);
-          doc.text(clienteBreak, colX[2], y);
-          const itensCount = Array.isArray(r.itens) ? r.itens.length : 0;
-          doc.text(String(itensCount), colX[3], y);
-          doc.text(tot.toFixed(2), colX[4], y);
-          doc.text((r.entrega?.tipo||"").toString(), colX[5], y);
-          doc.text(r.pagamento||"", colX[6], y);
-          y += Math.max(lineH, (clienteBreak.length)*5);
-
-          // cabeçalho itens
-          if (itensCount){
-            const Icols = [60, 140, 170, 195, 220, 245]; // Produto, Tipo, Qtd, Unit, Total
-            doc.setFont("helvetica","bold"); doc.setFontSize(9);
-            doc.text("Produto", Icols[0], y);
-            doc.text("Tipo",    Icols[1], y);
-            doc.text("Qtd",     Icols[2], y);
-            doc.text("R$ Unit", Icols[3], y);
-            doc.text("R$ Total",Icols[4], y);
-            y += 5;
-            doc.setFont("helvetica","normal"); doc.setFontSize(9);
-
-            for (const it of r.itens){
-              if (y > 190){
-                doc.addPage("a4","landscape");
-                y = 20;
-              }
-              const totalItem = Number(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))));
-              const prodBreak = doc.splitTextToSize((it.produto||"").toString(), Icols[1]-Icols[0]-4);
-              doc.text(prodBreak, Icols[0], y);
-              doc.text((it.tipo||"").toString(), Icols[1], y);
-              doc.text(String(Number(it.quantidade||0)), Icols[2], y);
-              doc.text(String(Number(it.precoUnit||it.preco||0).toFixed(2)), Icols[3], y);
-              doc.text(String(totalItem.toFixed(2)), Icols[4], y);
-              y += Math.max(5, prodBreak.length*5);
-            }
-            // separador
-            doc.setDrawColor(230); doc.line(10, y, 285, y); doc.setDrawColor(0);
-            y += 3;
-          }
-        };
-
-        rows.forEach(drawPedido);
-
-        doc.setFont("helvetica","bold");
-        doc.text(`Total de pedidos: ${rows.length}`, 10, y+8);
-        doc.text(`Soma (R$): ${totalGeral.toFixed(2)}`, 80, y+8);
-      }
-
-      doc.save(`relatorio_serranobre_${($("fModo").value||"reduzido")}_${new Date().toISOString().slice(0,10)}.pdf`);
+      doc.save(`relatorio_serranobre_${new Date().toISOString().slice(0,10)}.pdf`);
     };
   </script>
 </body>
