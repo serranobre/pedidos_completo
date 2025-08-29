@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-title" content="Serra Nobre" />
   <!-- caminho relativo corrigido -->
   <link rel="manifest" href="/manifest.json" />
-  <title>PEDIDOS V3.1.0</title>
+  <title>PEDIDOS V3.1.1</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background: #f4f4f4; }
     h1 { text-align: right; margin-bottom: 10px; font-size: 30px; }
@@ -48,7 +48,7 @@
 </head>
 <body>
   <img src="Serra-Nobre_3.png" alt="Logo" class="logo-header" onerror="this.style.display='none'">
-  <h1>PEDIDOS V3.1.0</h1>
+  <h1>PEDIDOS V3.1.1</h1>
 
   <div class="top-actions">
     <a href="relatorios.html" title="Abrir Relatórios">Relatórios</a>
@@ -501,8 +501,19 @@
     function diaDaSemanaExtenso(s){ if(!s) return ""; const d=new Date(s+"T00:00:00"); return d.toLocaleDateString('pt-BR',{weekday:'long'}).toUpperCase(); }
     function splitToWidth(doc,t,w){ return doc.splitTextToSize(t||"", w); }
     const PADY=3, LINE=5;
-    function drawCenteredMultiline(doc,lines,cx,top,rowH,step=LINE,pad=PADY){ const usable=Math.max(0,rowH-2*pad); const block=(lines.length-1)*step; let y0=top+pad+(usable-block)/2; for(let i=0;i<lines.length;i++) doc.text(lines[i],cx,y0+i*step,{align:"center"}); }
-    function underline(doc,x,y,text,size){ const prev=doc.getFontSize(); if(size) doc.setFontSize(size); const w=doc.getTextWidth(text); doc.line(x,y+0.8,x+w,y+0.8); if(size) doc.setFontSize(prev); }
+    function drawCenteredMultiline(doc,lines,cx,top,rowH,step=LINE,pad=PADY){
+      const usable=Math.max(0,rowH-2*pad);
+      const block=(lines.length-1)*step;
+      let y0=top+pad+(usable-block)/2;
+      for(let i=0;i<lines.length;i++) doc.text(lines[i],cx,y0+i*step,{align:"center"});
+    }
+    function underline(doc,x,y,text,size){
+      const prev=doc.getFontSize();
+      if(size) doc.setFontSize(size);
+      const w=doc.getTextWidth(text);
+      doc.line(x,y+0.8,x+w,y+0.8);
+      if(size) doc.setFontSize(prev);
+    }
 
     async function preencherEnderecoEIsencaoCliente(){
       const n=(document.getElementById("cliente").value||"").trim().toUpperCase();
@@ -672,23 +683,31 @@
       }catch(_){ frete = { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"" }; }
 
       y += 2;
-      doc.setFont("helvetica","bold"); doc.setFontSize(7);
-      doc.rect(margemX,y,larguraCaixa,10,"S");
-      doc.text("FORMA DE PAGAMENTO", margemX+larguraCaixa/2, y+4, {align:"center"});
-      doc.setFont("helvetica","normal"); doc.setFontSize(10);
-      let pagamento=document.getElementById("pagamento").value;
-      if(pagamento==="OUTRO") pagamento=document.getElementById("pagamentoOutro").value;
-      doc.text(pagamento, margemX+larguraCaixa/2, y+8, {align:"center"});
-      y += 13;
 
+      // ====== ALTERAÇÃO SOLICITADA (CAIXA DE FRETE) ======
+      // Caixa 68x10. Conteúdo centralizado vertical/horizontal.
+      const freteBoxH = 10;
+      doc.rect(margemX, y, larguraCaixa, freteBoxH, "S");
       doc.setFont("helvetica","bold"); doc.setFontSize(7);
-      doc.rect(margemX,y,larguraCaixa,10,"S");
-      doc.text("FRETE", margemX+larguraCaixa/2, y+4, {align:"center"});
+      // Não escrevemos cabeçalho fixo "FRETE" para evitar estourar bordas.
+
+      // Define o texto conforme cobrança ou isenção
+      const isIsentoManual = !!document.getElementById('isentarFrete')?.checked;
+      const isIsentoCalc = !!frete?.isento;
+      const isIsento = isIsentoManual || isIsentoCalc;
+
       doc.setFont("helvetica","normal"); doc.setFontSize(10);
-      const isManual = !!document.getElementById('isentarFrete')?.checked;
-      const freteTxt = `R$ ${(Number(frete?.valorBase||0)).toFixed(2)} ${isManual ? "(ISENTO manual)" : (frete?.labelIsencao||"")}`;
-      doc.text(freteTxt, margemX+larguraCaixa/2, y+8, {align:"center"});
-      y += 13;
+      let freteMostrar = "";
+      if (isIsento) {
+        freteMostrar = "ISENTO DE FRETE";
+      } else {
+        freteMostrar = "R$ " + Number(frete?.valorBase || 0).toFixed(2);
+      }
+      // Centraliza vertical/horizontal dentro da caixa
+      const linhasFrete = splitToWidth(doc, freteMostrar, larguraCaixa - 6);
+      drawCenteredMultiline(doc, linhasFrete, margemX + larguraCaixa/2, y, freteBoxH);
+
+      y += freteBoxH + 3;
 
       const totalGeral = subtotal + Number(frete?.valorCobravel||0);
 
