@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Relatórios — Serra Nobre V3.1.1</title>
+  <link rel="manifest" href="/manifest.json" />
   <style>
     :root{
       --teal:#0f766e; --teal-600:#0ea5a6; --ink:#0f172a; --muted:#64748b; --bg:#f1f5f9; --line:#e2e8f0;
@@ -139,7 +140,7 @@
     </div>
   </section>
 
-  <!-- Firebase + App (sem App Check) -->
+  <!-- Firebase + App -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
@@ -162,7 +163,7 @@
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    /* ===== LOGIN (ajuste: abre app imediatamente após senha correta) ===== */
+    /* ===== LOGIN ===== */
     const FIX_PASS = "081008";
     const $ = (id)=>document.getElementById(id);
 
@@ -177,13 +178,11 @@
       const p = $("pass").value.trim();
       if (p !== FIX_PASS) { $("err").textContent = "Senha inválida."; return; }
       try {
-        // se já estiver autenticado, só libera
         if (auth.currentUser) {
           sessionStorage.setItem("sn_logged_ok", "1");
           showApp(true);
           return;
         }
-        // senão, autentica anonimamente e libera
         await signInAnonymously(auth);
         sessionStorage.setItem("sn_logged_ok", "1");
         showApp(true);
@@ -241,7 +240,7 @@
             <td>${x.horaEntrega||""}</td>
             <td class="cell-client" data-id="${x.id}" title="Clique para editar">${(x.cliente||"")}</td>
             <td>${itensCount}</td>
-            <td>R$ ${money(tot).replace(".",",")}</td>
+            <td>R$ ${money(tot)}</td>
             <td class="col-tipo">${tipoTxt}</td>
             <td>${x.pagamento||""}</td>
             <td class="row-actions">
@@ -664,6 +663,63 @@
 
       doc.save(`relatorio_serranobre_${new Date().toISOString().slice(0,10)}.pdf`);
     };
+  </script>
+
+  <!-- Registro do Service Worker (atualização rápida) -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', async () => {
+        try {
+          const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+
+          // Checa atualização ao voltar o foco e a cada 10 min
+          document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') reg.update();
+          });
+          setInterval(() => reg.update(), 10 * 60 * 1000);
+
+          // Barra para avisar versão nova
+          function showUpdateBar(onConfirm) {
+            let bar = document.getElementById('sw-update-bar');
+            if (!bar) {
+              bar = document.createElement('div');
+              bar.id = 'sw-update-bar';
+              bar.style.cssText =
+                'position:fixed;left:0;right:0;bottom:0;padding:10px;background:#0f766e;color:#fff;' +
+                'display:flex;gap:10px;align-items:center;justify-content:center;z-index:99999';
+              bar.innerHTML = `
+                <span>Nova versão disponível.</span>
+                <button id="sw-reload-btn" style="background:#fff;color:#0f766e;border:none;padding:6px 10px;border-radius:6px;cursor:pointer">
+                  Atualizar agora
+                </button>`;
+              document.body.appendChild(bar);
+            }
+            document.getElementById('sw-reload-btn').onclick = onConfirm;
+          }
+
+          reg.addEventListener('updatefound', () => {
+            const newSW = reg.installing;
+            if (!newSW) return;
+            newSW.addEventListener('statechange', () => {
+              if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+                // Mostra aviso e dispara skipWaiting quando usuário pedir
+                showUpdateBar(() => reg.waiting?.postMessage('SKIP_WAITING'));
+              }
+            });
+          });
+
+          // Recarrega quando o novo SW assume controle
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (!window.__reloadedBySW) {
+              window.__reloadedBySW = true;
+              location.reload();
+            }
+          });
+        } catch (e) {
+          // silencioso
+        }
+      });
+    }
   </script>
 </body>
 </html>
