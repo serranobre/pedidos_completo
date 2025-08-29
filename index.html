@@ -9,9 +9,9 @@
   <link rel="shortcut icon" href="favicon.ico" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Serra Nobre" />
-  <!-- caminho relativo corrigido -->
-  <link rel="manifest" href="/manifest.json" />
-  <title>PEDIDOS V3.1.1</title>
+  <!-- caminho relativo corrigido (sem barra inicial para GitHub Pages) -->
+  <link rel="manifest" href="manifest.json" />
+  <title>PEDIDOS V3.1.3</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background: #f4f4f4; }
     h1 { text-align: right; margin-bottom: 10px; font-size: 30px; }
@@ -48,7 +48,7 @@
 </head>
 <body>
   <img src="Serra-Nobre_3.png" alt="Logo" class="logo-header" onerror="this.style.display='none'">
-  <h1>PEDIDOS V3.1.1</h1>
+  <h1>PEDIDOS V3.1.3</h1>
 
   <div class="top-actions">
     <a href="relatorios.html" title="Abrir Relatórios">Relatórios</a>
@@ -443,9 +443,9 @@
           <label>Tipo:</label>
           ${criarTipoSelect(i)}
           <label>Quantidade:</label>
-          <input type="number" step="0.01" class="quantidade" data-index="${i}" value="${item.quantidade || ''}" oninput="calcularItem(${i}); atualizarFreteUI();"/>
+          <input type="number" step="0.01" inputmode="decimal" class="quantidade" data-index="${i}" value="${item.quantidade || ''}" oninput="calcularItem(${i}); atualizarFreteUI();"/>
           <label>Preço Unitário:</label>
-          <input type="number" step="0.01" class="preco" data-index="${i}" value="${item.preco || ''}" oninput="calcularItem(${i}); atualizarFreteUI();"/>
+          <input type="number" step="0.01" inputmode="decimal" class="preco" data-index="${i}" value="${item.preco || ''}" oninput="calcularItem(${i}); atualizarFreteUI();"/>
           <label>Observação do item:</label>
           <textarea class="obsItem" data-index="${i}" oninput="salvarCamposAntesRender()">${item.obs || ''}</textarea>
           <p class="total">Total do Item: R$ <span id="totalItem_${i}">${(item.total || 0).toFixed(2)}</span></p>
@@ -524,8 +524,6 @@
           if(info.endereco){ const el=document.getElementById("endereco"); el.value=String(info.endereco||"").toUpperCase(); }
           const chk = document.getElementById("isentarFrete");
           if (chk) chk.checked = !!info.isentoFrete;
-        }else{
-          // cliente novo: não mexe no checkbox
         }
       }catch(_){}
       atualizarFreteUI();
@@ -684,14 +682,11 @@
 
       y += 2;
 
-      // ====== ALTERAÇÃO SOLICITADA (CAIXA DE FRETE) ======
-      // Caixa 68x10. Conteúdo centralizado vertical/horizontal.
+      // ====== CAIXA DE FRETE ======
       const freteBoxH = 10;
       doc.rect(margemX, y, larguraCaixa, freteBoxH, "S");
       doc.setFont("helvetica","bold"); doc.setFontSize(7);
-      // Não escrevemos cabeçalho fixo "FRETE" para evitar estourar bordas.
 
-      // Define o texto conforme cobrança ou isenção
       const isIsentoManual = !!document.getElementById('isentarFrete')?.checked;
       const isIsentoCalc = !!frete?.isento;
       const isIsento = isIsentoManual || isIsentoCalc;
@@ -703,7 +698,6 @@
       } else {
         freteMostrar = "R$ " + Number(frete?.valorBase || 0).toFixed(2);
       }
-      // Centraliza vertical/horizontal dentro da caixa
       const linhasFrete = splitToWidth(doc, freteMostrar, larguraCaixa - 6);
       drawCenteredMultiline(doc, linhasFrete, margemX + larguraCaixa/2, y, freteBoxH);
 
@@ -757,6 +751,12 @@
         const entregaISO= document.getElementById("entrega").value;
         const hora      = document.getElementById("horaEntrega").value;
         const tipoEnt   = document.querySelector('input[name="tipoEntrega"]:checked').value;
+
+        // >>> Correção do BUG de 'pagamento' não definido <<<
+        const sel = document.getElementById("pagamento")?.value || "PIX";
+        const outroTxt = document.getElementById("pagamentoOutro")?.value?.trim();
+        const pagamento = (sel === "OUTRO") ? (outroTxt || "OUTRO") : sel;
+
         const isentoMan = !!document.getElementById('isentarFrete')?.checked;
 
         const payload = {
