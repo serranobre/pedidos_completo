@@ -9,9 +9,9 @@
   <link rel="shortcut icon" href="favicon.ico" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Serra Nobre" />
-  <!-- caminho relativo corrigido (sem barra inicial para GitHub Pages) -->
+  <!-- manifest relativo (compatível com Vercel e subpastas) -->
   <link rel="manifest" href="manifest.json" />
-  <title>PEDIDOS V3.1.3</title>
+  <title>PEDIDOS V3.1.4</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background: #f4f4f4; }
     h1 { text-align: right; margin-bottom: 10px; font-size: 30px; }
@@ -48,7 +48,7 @@
 </head>
 <body>
   <img src="Serra-Nobre_3.png" alt="Logo" class="logo-header" onerror="this.style.display='none'">
-  <h1>PEDIDOS V3.1.3</h1>
+  <h1>PEDIDOS V3.1.4</h1>
 
   <div class="top-actions">
     <a href="relatorios.html" title="Abrir Relatórios">Relatórios</a>
@@ -315,6 +315,9 @@
 
   <!-- App + PDF -->
   <script>
+    // Versão app (para barra de update do SW)
+    window.__APP_VERSION = '3.1.4 (2025-08-29)';
+
     let itens = [{ produto: "", tipo: "KG", quantidade: 0, preco: 0, total: 0, obs: "" }];
 
     /* Logo -> base64 com cache diário */
@@ -443,9 +446,9 @@
           <label>Tipo:</label>
           ${criarTipoSelect(i)}
           <label>Quantidade:</label>
-          <input type="number" step="0.01" inputmode="decimal" class="quantidade" data-index="${i}" value="${item.quantidade || ''}" oninput="calcularItem(${i}); atualizarFreteUI();"/>
+          <input type="number" step="0.01" class="quantidade" data-index="${i}" value="${item.quantidade || ''}" oninput="calcularItem(${i}); atualizarFreteUI();"/>
           <label>Preço Unitário:</label>
-          <input type="number" step="0.01" inputmode="decimal" class="preco" data-index="${i}" value="${item.preco || ''}" oninput="calcularItem(${i}); atualizarFreteUI();"/>
+          <input type="number" step="0.01" class="preco" data-index="${i}" value="${item.preco || ''}" oninput="calcularItem(${i}); atualizarFreteUI();"/>
           <label>Observação do item:</label>
           <textarea class="obsItem" data-index="${i}" oninput="salvarCamposAntesRender()">${item.obs || ''}</textarea>
           <p class="total">Total do Item: R$ <span id="totalItem_${i}">${(item.total || 0).toFixed(2)}</span></p>
@@ -524,6 +527,8 @@
           if(info.endereco){ const el=document.getElementById("endereco"); el.value=String(info.endereco||"").toUpperCase(); }
           const chk = document.getElementById("isentarFrete");
           if (chk) chk.checked = !!info.isentoFrete;
+        }else{
+          // cliente novo: não mexe no checkbox
         }
       }catch(_){}
       atualizarFreteUI();
@@ -682,25 +687,16 @@
 
       y += 2;
 
-      // ====== CAIXA DE FRETE ======
+      // ====== Caixa de FRETE (centralizada) ======
       const freteBoxH = 10;
       doc.rect(margemX, y, larguraCaixa, freteBoxH, "S");
-      doc.setFont("helvetica","bold"); doc.setFontSize(7);
-
+      doc.setFont("helvetica","normal"); doc.setFontSize(10);
       const isIsentoManual = !!document.getElementById('isentarFrete')?.checked;
       const isIsentoCalc = !!frete?.isento;
       const isIsento = isIsentoManual || isIsentoCalc;
-
-      doc.setFont("helvetica","normal"); doc.setFontSize(10);
-      let freteMostrar = "";
-      if (isIsento) {
-        freteMostrar = "ISENTO DE FRETE";
-      } else {
-        freteMostrar = "R$ " + Number(frete?.valorBase || 0).toFixed(2);
-      }
+      let freteMostrar = isIsento ? "ISENTO DE FRETE" : ("R$ " + Number(frete?.valorBase || 0).toFixed(2));
       const linhasFrete = splitToWidth(doc, freteMostrar, larguraCaixa - 6);
       drawCenteredMultiline(doc, linhasFrete, margemX + larguraCaixa/2, y, freteBoxH);
-
       y += freteBoxH + 3;
 
       const totalGeral = subtotal + Number(frete?.valorCobravel||0);
@@ -747,16 +743,11 @@
 
       try{
         const cliente   = document.getElementById("cliente").value.trim().toUpperCase();
+        const pagamento = document.getElementById("pagamento").value;
         const endereco  = document.getElementById("endereco").value.trim().toUpperCase();
         const entregaISO= document.getElementById("entrega").value;
         const hora      = document.getElementById("horaEntrega").value;
         const tipoEnt   = document.querySelector('input[name="tipoEntrega"]:checked').value;
-
-        // >>> Correção do BUG de 'pagamento' não definido <<<
-        const sel = document.getElementById("pagamento")?.value || "PIX";
-        const outroTxt = document.getElementById("pagamentoOutro")?.value?.trim();
-        const pagamento = (sel === "OUTRO") ? (outroTxt || "OUTRO") : sel;
-
         const isentoMan = !!document.getElementById('isentarFrete')?.checked;
 
         const payload = {
@@ -839,9 +830,58 @@
     }
     window.compartilharPDF = compartilharPDF;
 
+    // ===== Registro do Service Worker (forçando update rápido) =====
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', ()=> {
-        navigator.serviceWorker.register('sw.js').catch(()=>{});
+      window.addEventListener('load', async () => {
+        try {
+          const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+
+          // Checa atualização ao voltar foco e a cada 10 minutos
+          document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') reg.update();
+          });
+          setInterval(() => reg.update(), 10 * 60 * 1000);
+
+          // Barra para avisar versão nova
+          function showUpdateBar(onConfirm) {
+            let bar = document.getElementById('sw-update-bar');
+            if (!bar) {
+              bar = document.createElement('div');
+              bar.id = 'sw-update-bar';
+              bar.style.cssText =
+                'position:fixed;left:0;right:0;bottom:0;padding:10px;background:#0f766e;color:#fff;' +
+                'display:flex;gap:10px;align-items:center;justify-content:center;z-index:99999';
+              bar.innerHTML = `
+                <span>Nova versão disponível (${window.__APP_VERSION}).</span>
+                <button id="sw-reload-btn" style="background:#fff;color:#0f766e;border:none;padding:6px 10px;border-radius:6px;cursor:pointer">
+                  Atualizar agora
+                </button>`;
+              document.body.appendChild(bar);
+            }
+            document.getElementById('sw-reload-btn').onclick = onConfirm;
+          }
+
+          reg.addEventListener('updatefound', () => {
+            const newSW = reg.installing;
+            if (!newSW) return;
+            newSW.addEventListener('statechange', () => {
+              if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+                // Mostra aviso e dispara skipWaiting quando o usuário pedir
+                showUpdateBar(() => reg.waiting?.postMessage('SKIP_WAITING'));
+              }
+            });
+          });
+
+          // Recarrega quando o novo SW assume controle
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (!window.__reloadedBySW) {
+              window.__reloadedBySW = true;
+              location.reload();
+            }
+          });
+        } catch (e) {
+          // silencioso
+        }
       });
     }
   </script>
