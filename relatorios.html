@@ -4,7 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Relatórios — Serra Nobre V3.1.3</title>
-  <link rel="manifest" href="/manifest.json" />
+  <!-- Manifest relativo para funcionar em raiz e subpasta -->
+  <link rel="manifest" href="manifest.json" />
   <style>
     :root{
       --teal:#0f766e; --teal-600:#0ea5a6; --ink:#0f172a; --muted:#64748b; --bg:#f1f5f9; --line:#e2e8f0;
@@ -39,7 +40,6 @@
     tbody td{ border-bottom:1px solid #f1f5f9; padding:10px; font-size:14px; vertical-align:top; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
     tbody td.wrap{ white-space:normal }
     tfoot td{ background:#f8fafc; font-weight:600; padding:10px; border-top:1px solid var(--line) }
-    .login { max-width:360px; margin:50px auto; background:#fff; padding:18px; border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,.08) }
     .muted{ color:var(--muted); font-size:12px }
     .row-actions button{ padding:6px 10px }
     .cell-client{ color:#0f766e; cursor:pointer; text-decoration:underline }
@@ -66,11 +66,10 @@
     <a href="index.html">← Voltar</a>
     <h1>Relatórios — Serra Nobre V3.1.3</h1>
     <div style="margin-left:auto"></div>
-    <button id="btnSair" class="btn ghost" style="display:none">Sair</button>
   </header>
 
-  <!-- APP -->
-  <main id="app" style="display:none">
+  <!-- APP (direto, sem login) -->
+  <main id="app">
     <section class="card">
       <div class="filters">
         <div><label>Data entrega — de</label><input type="date" id="fDataIni"></div>
@@ -130,20 +129,10 @@
     </section>
   </main>
 
-  <!-- LOGIN -->
-  <section id="login" class="login">
-    <h3>Entrar</h3>
-    <div style="display:grid; gap:8px; margin-top:8px">
-      <input id="pass" type="password" placeholder="Senha" inputmode="numeric" />
-      <button class="btn" id="btnLogin">Entrar</button>
-      <div id="err" class="muted"></div>
-    </div>
-  </section>
-
   <!-- Firebase + App -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
     import {
       getFirestore, collection, query, where, getDocs, orderBy, limit,
       updateDoc, doc, serverTimestamp
@@ -163,47 +152,24 @@
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    /* ===== LOGIN ===== */
-    const FIX_PASS = "081008";
-    const $ = (id)=>document.getElementById(id);
-
-    const showApp = (show)=>{
-      $("app").style.display   = show ? "" : "none";
-      $("login").style.display = show ? "none" : "";
-      $("btnSair").style.display = show ? "" : "none";
-    };
-
-    $("btnLogin").onclick = async ()=>{
-      $("err").textContent = "";
-      const p = $("pass").value.trim();
-      if (p !== FIX_PASS) { $("err").textContent = "Senha inválida."; return; }
-      try {
-        if (auth.currentUser) {
-          sessionStorage.setItem("sn_logged_ok", "1");
-          showApp(true);
-          return;
-        }
-        await signInAnonymously(auth);
-        sessionStorage.setItem("sn_logged_ok", "1");
-        showApp(true);
-      } catch(e){
-        console.error(e);
-        $("err").textContent = "Não foi possível conectar ao Firebase.";
-      }
-    };
-
-    $("btnSair").onclick = async ()=>{
-      sessionStorage.removeItem("sn_logged_ok");
-      await signOut(auth);
-      showApp(false);
-    };
-
-    onAuthStateChanged(auth, (u)=>{
-      const allow = !!u && sessionStorage.getItem("sn_logged_ok")==="1";
-      showApp(allow);
-    });
+    // --- Acesso direto: autentica anonimamente e carrega a UI ---
+    async function ensureAnonAuth(){
+      return new Promise((resolve)=>{
+        onAuthStateChanged(auth, async (u)=>{
+          try{
+            if (!u) await signInAnonymously(auth);
+          }catch(_){}
+          resolve();
+        }, async (err)=>{
+          // fallback: tenta anônimo mesmo se onAuth falhar
+          try{ await signInAnonymously(auth); }catch(_){}
+          resolve();
+        });
+      });
+    }
 
     /* =================== HELPERS =================== */
+    const $ = (id)=>document.getElementById(id);
     function toBR(iso){
       if(!iso) return "";
       const [y,m,d] = iso.split("-");
@@ -486,9 +452,9 @@
       renderRows(out);
     }
 
-    $("btnBuscar").onclick = buscar;
-
-    $("btnLimpar").onclick = ()=>{
+    // Botões principais
+    document.getElementById("btnBuscar").onclick = buscar;
+    document.getElementById("btnLimpar").onclick = ()=>{
       ["fDataIni","fDataFim","fHoraIni","fHoraFim","fCliente"].forEach(id=>$(id).value="");
       $("fTipo").value = "";
       $("tbody").innerHTML = "";
@@ -566,7 +532,7 @@
     document.getElementById("btnXLSX").onclick = exportarXLSX;
 
     // ====== PDF via jsPDF (reduzido/detalhado) ======
-    $("btnPDF").onclick = ()=>{
+    document.getElementById("btnPDF").onclick = ()=>{
       const rows = window.__rows || [];
       if (!rows.length){ alert("Faça uma busca primeiro."); return; }
       const modo = (document.getElementById("fModo")?.value || "reduzido");
@@ -663,6 +629,11 @@
 
       doc.save(`relatorio_serranobre_${new Date().toISOString().slice(0,10)}.pdf`);
     };
+
+    // ---- Inicialização: autentica e deixa pronto para buscar ----
+    await ensureAnonAuth();
+    // Opcional: já buscar ao abrir
+    // buscar();
   </script>
 
   <!-- Registro do Service Worker (atualização rápida) -->
