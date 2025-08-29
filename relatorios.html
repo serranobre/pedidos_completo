@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Relatórios — Serra Nobre V3.1.0</title>
+  <title>Relatórios — Serra Nobre V3.1.1</title>
   <style>
     :root{
       --teal:#0f766e; --teal-600:#0ea5a6; --ink:#0f172a; --muted:#64748b; --bg:#f1f5f9; --line:#e2e8f0;
@@ -15,7 +15,7 @@
     header h1{ margin:0; font-size:18px }
     main{ max-width:1200px; margin:16px auto; padding:0 12px 40px }
     .card{ background:#fff; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,.06); padding:14px }
-    .filters{ display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px }
+    .filters{ display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:10px }
     label{ font-size:12px; color:#334155; display:block; margin-bottom:4px }
     input, select, button{ font:inherit }
     input, select{ width:100%; padding:8px; border:1px solid var(--line); border-radius:8px; outline:0; background:#fff }
@@ -35,6 +35,13 @@
     .cell-inline input[type="number"]{ width:120px }
     .cell-inline select{ width:auto }
     .row-actions button{ padding:6px 10px }
+    .client-link{ color:#0ea5a6; text-decoration:underline; background:none; border:none; padding:0; cursor:pointer; font:inherit }
+    .items-panel{ background:#f8fafc; border-top:1px dashed var(--line) }
+    .items-grid{ display:grid; grid-template-columns: 2fr 70px 90px 100px 110px 90px; gap:8px; align-items:center }
+    .items-grid label{ font-weight:600; color:#334155; margin-bottom:0 }
+    .items-grid input, .items-grid select{ width:100%; padding:6px }
+    .panel-actions{ display:flex; gap:8px; margin-top:8px }
+    .tag{ display:inline-block; padding:2px 6px; font-size:11px; border-radius:6px; background:#e2e8f0; color:#334155; }
     @media (max-width: 880px){ .filters{grid-template-columns:repeat(3,minmax(0,1fr))} }
     @media (max-width: 520px){ .filters{grid-template-columns:repeat(2,minmax(0,1fr))} }
   </style>
@@ -46,7 +53,7 @@
 <body>
   <header>
     <a href="index.html">← Voltar</a>
-    <h1>Relatórios — Serra Nobre V3.1.0</h1>
+    <h1>Relatórios — Serra Nobre V3.1.1</h1>
     <div style="margin-left:auto"></div>
     <button id="btnSair" class="btn ghost" style="display:none">Sair</button>
   </header>
@@ -68,11 +75,19 @@
             <option value="RETIRADA">RETIRADA</option>
           </select>
         </div>
+        <div>
+          <label>Modo do Relatório</label>
+          <select id="fModo">
+            <option value="reduzido">Reduzido</option>
+            <option value="detalhado">Detalhado</option>
+          </select>
+        </div>
       </div>
 
       <div class="actions">
         <button class="btn" id="btnBuscar">Buscar</button>
         <button class="btn ghost" id="btnLimpar">Limpar</button>
+        <span class="tag">Clique no <b>cliente</b> para editar itens.</span>
         <button class="btn warning" id="btnXLSX" title="Exportar resultados para XLSX">Exportar XLSX</button>
         <button class="btn gray" id="btnPDF" title="Gerar PDF">Gerar PDF</button>
       </div>
@@ -83,7 +98,7 @@
             <tr>
               <th>Data</th>
               <th>Hora</th>
-              <th>Cliente</th>
+              <th>Cliente (clique p/ editar itens)</th>
               <th>Itens</th>
               <th>Total (R$) — editar</th>
               <th>Tipo — editar</th>
@@ -159,7 +174,55 @@
     $("btnSair").onclick = async ()=>{ await signOut(auth); };
     onAuthStateChanged(auth, (u)=> showApp(!!u));
 
-    /* =================== BUSCA =================== */
+    /* =================== RENDER / BUSCA =================== */
+    function fmt(n){ return (Number(n)||0).toFixed(2); }
+
+    function recalcRodape(){
+      const rows = window.__rows || [];
+      let total = 0;
+      rows.forEach(r => total += Number(r.totalPedido||0));
+      $("ftCount").textContent = `${rows.length} pedido(s)`;
+      $("ftTotal").textContent = `R$ ${fmt(total)}`;
+    }
+
+    function buildItemsPanel(order){
+      const itens = Array.isArray(order.itens) ? order.itens : [];
+      const id = order.id;
+      const linhas = itens.map((it,idx)=>`
+        <div class="items-grid" data-oid="${id}" data-index="${idx}">
+          <input type="text" class="it-prod" value="${(it.produto||"")}" placeholder="Produto"/>
+          <select class="it-tipo">
+            <option value="KG" ${it.tipo==="KG"?"selected":""}>KG</option>
+            <option value="UN" ${it.tipo==="UN"?"selected":""}>UN</option>
+          </select>
+          <input type="number" step="0.01" class="it-qtd" value="${Number(it.quantidade||0)}" />
+          <input type="number" step="0.01" class="it-unit" value="${Number(it.precoUnit||it.preco||0)}" />
+          <input type="number" step="0.01" class="it-total" value="${fmt(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))))}" />
+          <button class="btn ghost" data-action="delItem" data-idx="${idx}">Excluir</button>
+        </div>
+      `).join("");
+
+      return `
+        <div class="items-panel" style="padding:12px">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px">
+            <strong>Itens do pedido</strong>
+            <span class="muted">Edite quantidade, preço e total. O subtotal é recalculado no salvamento.</span>
+            <button class="btn ghost" data-action="addItem" data-oid="${id}">+ Adicionar item</button>
+          </div>
+          <div class="items-grid" style="font-size:12px; opacity:.8">
+            <label>Produto</label><label>Tipo</label><label>Qtd</label><label>R$ Unit</label><label>Total</label><span></span>
+          </div>
+          <div id="grid-${id}">
+            ${linhas || `<div class="muted" style="padding:8px 0">Sem itens.</div>`}
+          </div>
+          <div class="panel-actions">
+            <button class="btn gray" data-action="saveItems" data-oid="${id}">Salvar Itens</button>
+            <button class="btn ghost" data-action="closePanel" data-oid="${id}">Fechar</button>
+          </div>
+        </div>
+      `;
+    }
+
     function renderRows(docs){
       const tbody = $("tbody");
       if (!docs.length){
@@ -168,14 +231,11 @@
         $("ftTotal").textContent = "R$ 0,00";
         return;
       }
-      let total = 0;
-      const rows = [];
 
+      const rows = [];
       for (const x of docs){
         const itensCount = Array.isArray(x.itens) ? x.itens.length : 0;
         const tot = Number(x.totalPedido||0);
-        total += tot;
-
         const tipoAtual = (x?.entrega?.tipo || "").toUpperCase();
         const tipoSel = `
           <select class="tipoEdit" data-id="${x.id}">
@@ -188,8 +248,10 @@
           <tr data-rowid="${x.id}">
             <td>${x.dataEntregaISO||""}</td>
             <td>${x.horaEntrega||""}</td>
-            <td>${(x.cliente||"")}</td>
-            <td>${itensCount}</td>
+            <td>
+              <button class="client-link" data-action="toggleItems" data-id="${x.id}">${(x.cliente||"")}</button>
+            </td>
+            <td class="td-itenscount">${itensCount}</td>
             <td class="cell-inline">
               <input class="totalEdit" data-id="${x.id}" type="number" step="0.01" value="${tot.toFixed(2)}" />
             </td>
@@ -198,16 +260,65 @@
             <td class="row-actions">
               <button class="btn gray" data-action="save" data-id="${x.id}">Salvar</button>
             </td>
-          </tr>`);
+          </tr>
+          <tr data-panel-for="${x.id}" style="display:none">
+            <td colspan="8">${buildItemsPanel(x)}</td>
+          </tr>
+        `);
       }
       tbody.innerHTML = rows.join("");
-      $("ftCount").textContent = `${docs.length} pedido(s)`;
-      $("ftTotal").textContent = `R$ ${total.toFixed(2)}`;
 
-      // liga listeners dos botões "Salvar"
+      // listeners: salvar total/tipo
       tbody.querySelectorAll('button[data-action="save"]').forEach(btn=>{
         btn.addEventListener('click', ()=> salvarLinha(btn.dataset.id));
       });
+
+      // listeners: abrir/fechar painel de itens
+      tbody.querySelectorAll('button[data-action="toggleItems"]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const id = btn.dataset.id;
+          const panelTr = document.querySelector(`tr[data-panel-for="${id}"]`);
+          if (!panelTr) return;
+          panelTr.style.display = (panelTr.style.display === "none" || !panelTr.style.display) ? "" : "none";
+        });
+      });
+
+      // listeners do painel (delegação)
+      tbody.addEventListener('click', (ev)=>{
+        const t = ev.target;
+        if (!(t instanceof HTMLElement)) return;
+        if (t.dataset.action === "closePanel"){
+          const id = t.dataset.oid;
+          const tr = document.querySelector(`tr[data-panel-for="${id}"]`);
+          if (tr) tr.style.display = "none";
+        }
+        if (t.dataset.action === "addItem"){
+          const id = t.dataset.oid;
+          const grid = document.getElementById(`grid-${id}`);
+          const idx = grid.querySelectorAll('.items-grid[data-oid="'+id+'"]').length;
+          const html = `
+            <div class="items-grid" data-oid="${id}" data-index="${idx}">
+              <input type="text" class="it-prod" value="" placeholder="Produto"/>
+              <select class="it-tipo"><option value="KG">KG</option><option value="UN">UN</option></select>
+              <input type="number" step="0.01" class="it-qtd" value="0" />
+              <input type="number" step="0.01" class="it-unit" value="0" />
+              <input type="number" step="0.01" class="it-total" value="0.00" />
+              <button class="btn ghost" data-action="delItem" data-idx="${idx}">Excluir</button>
+            </div>`;
+          grid.insertAdjacentHTML('beforeend', html);
+        }
+        if (t.dataset.action === "delItem"){
+          const wrap = t.closest('.items-grid');
+          if (wrap) wrap.remove();
+        }
+        if (t.dataset.action === "saveItems"){
+          const id = t.dataset.oid;
+          salvarItens(id);
+        }
+      });
+
+      // recalcula rodapé
+      recalcRodape();
     }
 
     async function buscar(){
@@ -244,7 +355,7 @@
         return true;
       });
 
-      window.__rows = out; // para exportar
+      window.__rows = out; // cache p/ export e PDF
       renderRows(out);
     }
 
@@ -259,7 +370,7 @@
       window.__rows = [];
     };
 
-    /* =================== SALVAR EDIÇÃO POR LINHA =================== */
+    /* =================== SALVAR EDIÇÃO POR LINHA (total/tipo) =================== */
     async function salvarLinha(id){
       try{
         const tr = document.querySelector(`tr[data-rowid="${id}"]`);
@@ -279,7 +390,7 @@
           updatedAt: serverTimestamp()
         });
 
-        // atualiza cache em memória para exportação
+        // atualiza cache em memória
         if (Array.isArray(window.__rows)) {
           const idx = window.__rows.findIndex(r => r.id === id);
           if (idx >= 0) {
@@ -289,72 +400,143 @@
           }
         }
 
-        // feedback rápido
-        const oldText = tr.querySelector('.row-actions button[data-action="save"]').textContent;
-        tr.querySelector('.row-actions button[data-action="save"]').textContent = "Salvo!";
-        setTimeout(()=>{ tr.querySelector('.row-actions button[data-action="save"]').textContent = oldText; }, 1200);
+        // feedback
+        const btn = tr.querySelector('.row-actions button[data-action="save"]');
+        const oldText = btn.textContent;
+        btn.textContent = "Salvo!";
+        setTimeout(()=>{ btn.textContent = oldText; }, 1200);
+
+        recalcRodape();
       }catch(e){
         console.error(e);
         alert("Falha ao salvar no banco.");
       }
     }
 
-    /* =================== EXPORTAÇÃO XLSX =================== */
-    function coletarLinhasDOM(){
-      const out = [];
-      document.querySelectorAll('#tbody tr').forEach(tr=>{
-        const id = tr.getAttribute('data-rowid') || "";
-        const tds = tr.querySelectorAll('td');
-        const data = tds[0]?.textContent || "";
-        const hora = tds[1]?.textContent || "";
-        const cliente = tds[2]?.textContent || "";
-        const itens = tds[3]?.textContent || "";
-
-        const totalVal = tr.querySelector('.totalEdit')?.value ?? "";
-        const tipoVal  = tr.querySelector('.tipoEdit')?.value ?? "";
-
-        const pagamento = tds[6]?.textContent || "";
-
-        out.push({ id, data, hora, cliente, itens, total: totalVal, tipo: tipoVal, pagamento });
+    /* =================== SALVAR ITENS DO PEDIDO (no painel) =================== */
+    function coletarItensDoPainel(orderId){
+      const cont = document.getElementById(`grid-${orderId}`);
+      if(!cont) return [];
+      const rows = [...cont.querySelectorAll(`.items-grid[data-oid="${orderId}"]`)];
+      const itens = rows.map(r=>{
+        const produto = r.querySelector(".it-prod")?.value || "";
+        const tipo    = r.querySelector(".it-tipo")?.value || "KG";
+        const qtd     = parseFloat(r.querySelector(".it-qtd")?.value || "0") || 0;
+        const unit    = parseFloat(r.querySelector(".it-unit")?.value || "0") || 0;
+        let total     = parseFloat(r.querySelector(".it-total")?.value || "0");
+        if (isNaN(total)) total = qtd * unit;
+        return {
+          produto,
+          tipo,
+          quantidade: Number(qtd),
+          precoUnit: Number(unit),
+          total: Number((total || (qtd*unit)).toFixed(2))
+        };
       });
-      return out;
+      return itens;
     }
 
-    $("btnXLSX").onclick = ()=>{
-      const linhas = coletarLinhasDOM();
-      if (!linhas.length){ alert("Faça uma busca primeiro."); return; }
+    async function salvarItens(id){
+      try{
+        const itens = coletarItensDoPainel(id);
+        // subtotal = soma itens.total
+        const subtotal = itens.reduce((s,i)=> s + Number(i.total||0), 0);
+        // pega frete cobravel do cache (se existir)
+        const row = (window.__rows||[]).find(r=>r.id===id);
+        const freteCobr = Number(row?.entrega?.valorCobravel || 0);
+        const totalPedido = Number((subtotal + freteCobr).toFixed(2));
 
-      const aoa = [
-        ["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagamento"]
-      ];
-      for (const r of linhas){
-        aoa.push([r.data, r.hora, r.cliente, r.itens, String(r.total), r.tipo, r.pagamento]);
+        await updateDoc(doc(db,"pedidos", id), {
+          itens,
+          subtotal: Number(subtotal.toFixed(2)),
+          totalPedido,
+          updatedAt: serverTimestamp()
+        });
+
+        // atualiza cache e DOM
+        if (row){
+          row.itens = itens;
+          row.subtotal = Number(subtotal.toFixed(2));
+          row.totalPedido = totalPedido;
+          const tr = document.querySelector(`tr[data-rowid="${id}"]`);
+          tr?.querySelector('.totalEdit')?.setAttribute('value', totalPedido.toFixed(2));
+          tr?.querySelector('.td-itenscount')?.replaceChildren(document.createTextNode(String(itens.length)));
+        }
+
+        // feedback
+        const pnlBtn = document.querySelector(`tr[data-panel-for="${id}"] button[data-action="saveItems"]`);
+        if (pnlBtn){
+          const old = pnlBtn.textContent;
+          pnlBtn.textContent = "Itens salvos!";
+          setTimeout(()=>pnlBtn.textContent=old, 1200);
+        }
+
+        recalcRodape();
+      }catch(e){
+        console.error(e);
+        alert("Falha ao salvar itens.");
+      }
+    }
+
+    /* =================== EXPORTAÇÃO XLSX =================== */
+    function coletarLinhasParaExport(){
+      // usa o cache em memória (mais completo)
+      return Array.isArray(window.__rows) ? JSON.parse(JSON.stringify(window.__rows)) : [];
+    }
+
+    function exportarXLSX(){
+      const modo = $("fModo").value || "reduzido";
+      const rows = coletarLinhasParaExport();
+      if (!rows.length){ alert("Faça uma busca primeiro."); return; }
+
+      let aoa = [];
+      if (modo === "reduzido"){
+        aoa = [["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagamento"]];
+        for (const r of rows){
+          const itensCount = Array.isArray(r.itens) ? r.itens.length : 0;
+          aoa.push([r.dataEntregaISO||"", r.horaEntrega||"", r.cliente||"", itensCount, (Number(r.totalPedido||0)).toFixed(2), (r.entrega?.tipo||""), r.pagamento||""]);
+        }
+      } else {
+        // detalhado: pedido + linhas de itens
+        aoa = [["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagamento","—","Produto","Tipo Item","Qtd","R$ Unit","R$ Total"]];
+        for (const r of rows){
+          const itens = Array.isArray(r.itens) ? r.itens : [];
+          const itensCount = itens.length;
+          aoa.push([r.dataEntregaISO||"", r.horaEntrega||"", r.cliente||"", itensCount, (Number(r.totalPedido||0)).toFixed(2), (r.entrega?.tipo||""), r.pagamento||"", ""]);
+          if (itensCount){
+            for (const it of itens){
+              aoa.push(["","","","","","","","", it.produto||"", it.tipo||"", Number(it.quantidade||0), Number(it.precoUnit||it.preco||0), Number(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))))]);
+            }
+          }
+        }
       }
 
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
+      XLSX.utils.book_append_sheet(wb, ws, modo === "reduzido" ? 'Relatório' : 'Relatório Detalhado');
 
       // largura automática básica
       const maxCols = Math.max(...aoa.map(r => r.length));
       ws['!cols'] = Array.from({length: maxCols}, (_, i) => {
-        const largura = Math.max(...aoa.map(r => (r[i] ? String(r[i]).length : 0))) + 2;
+        const largura = Math.max(...aoa.map(r => (r[i] ? String(r[i]).toString().length : 0))) + 2;
         return { wch: Math.min(Math.max(largura, 8), 40) };
       });
 
-      XLSX.writeFile(wb, `relatorio_serranobre_${new Date().toISOString().slice(0,10)}.xlsx`);
-    };
+      XLSX.writeFile(wb, `relatorio_serranobre_${modo}_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+    $("btnXLSX").onclick = exportarXLSX;
 
-    // ====== PDF via jsPDF (mantido) ======
+    // ====== PDF via jsPDF ======
     $("btnPDF").onclick = ()=>{
       const rows = window.__rows || [];
       if (!rows.length){ alert("Faça uma busca primeiro."); return; }
+      const modo = $("fModo").value || "reduzido";
 
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
 
       doc.setFont("helvetica","bold"); doc.setFontSize(14);
-      doc.text("Relatório de Pedidos — Serra Nobre", 10, 12);
+      doc.text(`Relatório de Pedidos — Serra Nobre (${modo.toUpperCase()})`, 10, 12);
       doc.setFontSize(10); doc.setFont("helvetica","normal");
       const periodo = (()=> {
         const di = $("fDataIni").value, df=$("fDataFim").value;
@@ -363,53 +545,129 @@
       })();
       doc.text(periodo, 10, 18);
 
-      const headers = ["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagto."];
-      const colX = [10, 30, 50, 140, 160, 185, 215];
-      const rowH = 7;
-      let y = 26;
+      if (modo === "reduzido"){
+        const headers = ["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagto."];
+        const colX = [10, 30, 50, 140, 160, 185, 215];
+        const rowH = 7;
+        let y = 26;
 
-      // header
-      doc.setFont("helvetica","bold");
-      for(let i=0;i<headers.length;i++){ doc.text(headers[i], colX[i], y); }
-      doc.setLineWidth(0.2); doc.line(10, y+2, 285, y+2);
-      doc.setFont("helvetica","normal");
+        doc.setFont("helvetica","bold");
+        for(let i=0;i<headers.length;i++){ doc.text(headers[i], colX[i], y); }
+        doc.setLineWidth(0.2); doc.line(10, y+2, 285, y+2);
+        doc.setFont("helvetica","normal");
 
-      y += 6;
-      let totalGeral = 0;
+        y += 6;
+        let totalGeral = 0;
 
-      const drawRow = (r)=>{
-        if (y > 190){
-          doc.addPage("a4","landscape");
-          doc.setFont("helvetica","bold"); doc.setFontSize(10);
-          for(let i=0;i<headers.length;i++){ doc.text(headers[i], colX[i], 12); }
-          doc.line(10, 14, 285, 14);
-          doc.setFont("helvetica","normal"); y = 20;
-        }
-        const itensCount = Array.isArray(r.itens) ? r.itens.length : 0;
-        const tot = Number(r.totalPedido||0); totalGeral += tot;
+        const drawRow = (r)=>{
+          if (y > 190){
+            doc.addPage("a4","landscape");
+            doc.setFont("helvetica","bold"); doc.setFontSize(10);
+            for(let i=0;i<headers.length;i++){ doc.text(headers[i], colX[i], 12); }
+            doc.line(10, 14, 285, 14);
+            doc.setFont("helvetica","normal"); y = 20;
+          }
+          const itensCount = Array.isArray(r.itens) ? r.itens.length : 0;
+          const tot = Number(r.totalPedido||0); totalGeral += tot;
 
-        doc.text(r.dataEntregaISO||"", colX[0], y);
-        doc.text(r.horaEntrega||"", colX[1], y);
-        const cliente = (r.cliente||"").toString();
-        const clienteBreak = doc.splitTextToSize(cliente, colX[3]-colX[2]-2);
-        doc.text(clienteBreak, colX[2], y);
-        doc.text(String(itensCount), colX[3], y);
-        doc.text(tot.toFixed(2), colX[4], y);
-        doc.text((r.entrega?.tipo||"").toString(), colX[5], y);
-        doc.text(r.pagamento||"", colX[6], y);
+          doc.text(r.dataEntregaISO||"", colX[0], y);
+          doc.text(r.horaEntrega||"", colX[1], y);
+          const clienteBreak = doc.splitTextToSize((r.cliente||"").toString(), colX[3]-colX[2]-2);
+          doc.text(clienteBreak, colX[2], y);
+          doc.text(String(itensCount), colX[3], y);
+          doc.text(tot.toFixed(2), colX[4], y);
+          doc.text((r.entrega?.tipo||"").toString(), colX[5], y);
+          doc.text(r.pagamento||"", colX[6], y);
 
-        y += Math.max(rowH, (clienteBreak.length)*5);
-        doc.setDrawColor(230); doc.line(10, y-2, 285, y-2);
-        doc.setDrawColor(0);
-      };
+          y += Math.max(rowH, (clienteBreak.length)*5);
+          doc.setDrawColor(230); doc.line(10, y-2, 285, y-2);
+          doc.setDrawColor(0);
+        };
 
-      rows.forEach(drawRow);
+        rows.forEach(drawRow);
 
-      doc.setFont("helvetica","bold");
-      doc.text(`Total de pedidos: ${rows.length}`, 10, y+8);
-      doc.text(`Soma (R$): ${totalGeral.toFixed(2)}`, 80, y+8);
+        doc.setFont("helvetica","bold");
+        doc.text(`Total de pedidos: ${rows.length}`, 10, y+8);
+        doc.text(`Soma (R$): ${rows.reduce((s,r)=>s+Number(r.totalPedido||0),0).toFixed(2)}`, 80, y+8);
 
-      doc.save(`relatorio_serranobre_${new Date().toISOString().slice(0,10)}.pdf`);
+      } else {
+        // DETALHADO
+        const headers = ["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagto."];
+        const colX = [10, 30, 50, 140, 160, 185, 215];
+        let y = 26;
+
+        doc.setFont("helvetica","bold");
+        for(let i=0;i<headers.length;i++){ doc.text(headers[i], colX[i], y); }
+        doc.setLineWidth(0.2); doc.line(10, y+2, 285, y+2);
+        doc.setFont("helvetica","normal");
+
+        y += 6;
+        let totalGeral = 0;
+
+        const drawPedido = (r)=>{
+          const lineH = 6;
+          const tot = Number(r.totalPedido||0); totalGeral += tot;
+
+          if (y > 180){
+            doc.addPage("a4","landscape");
+            doc.setFont("helvetica","bold"); doc.setFontSize(10);
+            for(let i=0;i<headers.length;i++){ doc.text(headers[i], colX[i], 12); }
+            doc.line(10, 14, 285, 14);
+            doc.setFont("helvetica","normal"); y = 20;
+          }
+
+          // linha do pedido
+          doc.text(r.dataEntregaISO||"", colX[0], y);
+          doc.text(r.horaEntrega||"", colX[1], y);
+          const clienteBreak = doc.splitTextToSize((r.cliente||"").toString(), colX[3]-colX[2]-2);
+          doc.text(clienteBreak, colX[2], y);
+          const itensCount = Array.isArray(r.itens) ? r.itens.length : 0;
+          doc.text(String(itensCount), colX[3], y);
+          doc.text(tot.toFixed(2), colX[4], y);
+          doc.text((r.entrega?.tipo||"").toString(), colX[5], y);
+          doc.text(r.pagamento||"", colX[6], y);
+          y += Math.max(lineH, (clienteBreak.length)*5);
+
+          // cabeçalho itens
+          if (itensCount){
+            const Icols = [60, 140, 170, 195, 220, 245]; // Produto, Tipo, Qtd, Unit, Total
+            doc.setFont("helvetica","bold"); doc.setFontSize(9);
+            doc.text("Produto", Icols[0], y);
+            doc.text("Tipo",    Icols[1], y);
+            doc.text("Qtd",     Icols[2], y);
+            doc.text("R$ Unit", Icols[3], y);
+            doc.text("R$ Total",Icols[4], y);
+            y += 5;
+            doc.setFont("helvetica","normal"); doc.setFontSize(9);
+
+            for (const it of r.itens){
+              if (y > 190){
+                doc.addPage("a4","landscape");
+                y = 20;
+              }
+              const totalItem = Number(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))));
+              const prodBreak = doc.splitTextToSize((it.produto||"").toString(), Icols[1]-Icols[0]-4);
+              doc.text(prodBreak, Icols[0], y);
+              doc.text((it.tipo||"").toString(), Icols[1], y);
+              doc.text(String(Number(it.quantidade||0)), Icols[2], y);
+              doc.text(String(Number(it.precoUnit||it.preco||0).toFixed(2)), Icols[3], y);
+              doc.text(String(totalItem.toFixed(2)), Icols[4], y);
+              y += Math.max(5, prodBreak.length*5);
+            }
+            // separador
+            doc.setDrawColor(230); doc.line(10, y, 285, y); doc.setDrawColor(0);
+            y += 3;
+          }
+        };
+
+        rows.forEach(drawPedido);
+
+        doc.setFont("helvetica","bold");
+        doc.text(`Total de pedidos: ${rows.length}`, 10, y+8);
+        doc.text(`Soma (R$): ${totalGeral.toFixed(2)}`, 80, y+8);
+      }
+
+      doc.save(`relatorio_serranobre_${($("fModo").value||"reduzido")}_${new Date().toISOString().slice(0,10)}.pdf`);
     };
   </script>
 </body>
