@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Relatórios — Serra Nobre V3.1.4</title>
+  <title>Relatórios — Serra Nobre V3.1.5</title>
   <!-- Manifest relativo para funcionar em raiz e subpasta -->
   <link rel="manifest" href="manifest.json" />
   <style>
@@ -64,7 +64,7 @@
 <body>
   <header>
     <a href="index.html">← Voltar</a>
-    <h1>Relatórios — Serra Nobre V3.1.4</h1>
+    <h1>Relatórios — Serra Nobre V3.1.5</h1>
     <div style="margin-left:auto"></div>
   </header>
 
@@ -175,68 +175,6 @@
     function money(n){ return (Number(n||0)).toFixed(2).replace(".",","); }
 
     /* =================== BUSCA =================== */
-    function renderRows(docs){
-      const tbody = $("tbody");
-      const modo = $("fModo").value || "reduzido";
-
-      if (!docs.length){
-        tbody.innerHTML = `<tr><td colspan="8">Sem resultados.</td></tr>`;
-        $("ftCount").textContent = "0 pedidos";
-        $("ftTotal").textContent = "R$ 0,00";
-        return;
-      }
-      let total = 0;
-      const rows = [];
-
-      for (const x of docs){
-        const itens = Array.isArray(x.itens) ? x.itens : [];
-        const itensCount = itens.length;
-        const tot = Number(x.totalPedido||0);
-        total += tot;
-
-        const tipoAtual = (x?.entrega?.tipo || "").toUpperCase();
-        const tipoTxt = (tipoAtual==="RETIRADA" ? "RETIRADA" : "ENTREGA");
-
-        rows.push(`
-          <tr data-rowid="${x.id}">
-            <td>${toBR(x.dataEntregaISO)||""}</td>
-            <td>${x.horaEntrega||""}</td>
-            <td class="cell-client" data-id="${x.id}" title="Clique para editar">${(x.cliente||"")}</td>
-            <td>${itensCount}</td>
-            <td>R$ ${money(tot)}</td>
-            <td class="col-tipo">${tipoTxt}</td>
-            <td>${x.pagamento||""}</td>
-            <td class="row-actions">
-              <button class="btn gray" data-action="open" data-id="${x.id}">Editar</button>
-            </td>
-          </tr>
-          ${
-            modo==="detalhado" ? `
-            <tr class="details-row" data-parent="${x.id}">
-              <td colspan="8" class="wrap">
-                ${renderMiniTableReadOnly(itens)}
-                <div class="totals-line">
-                  <span class="pill">Frete: R$ ${money(x?.entrega?.valorCobravel||0)}</span>
-                  <span class="pill"><strong>Total pedido:</strong> R$ ${money(tot)}</span>
-                </div>
-              </td>
-            </tr>` : ""
-          }
-        `);
-      }
-      tbody.innerHTML = rows.join("");
-      $("ftCount").textContent = `${docs.length} pedido(s)`;
-      $("ftTotal").textContent = `R$ ${total.toFixed(2)}`;
-
-      // listeners: abrir editor ao clicar no cliente ou no botão Editar
-      tbody.querySelectorAll('.cell-client').forEach(td=>{
-        td.addEventListener('click', ()=> openEditor(td.dataset.id));
-      });
-      tbody.querySelectorAll('button[data-action="open"]').forEach(btn=>{
-        btn.addEventListener('click', ()=> openEditor(btn.dataset.id));
-      });
-    }
-
     function renderMiniTableReadOnly(itens){
       if (!Array.isArray(itens) || !itens.length) return `<div class="muted">Sem itens.</div>`;
       const lines = itens.map((it,idx)=>`
@@ -258,10 +196,76 @@
         </table>`;
     }
 
+    function renderRows(docs){
+      const tbody = document.getElementById("tbody");
+      const modo  = (document.getElementById("fModo")?.value || "reduzido");
+
+      if (!Array.isArray(docs) || !docs.length){
+        tbody.innerHTML = `<tr><td colspan="8">Sem resultados.</td></tr>`;
+        document.getElementById("ftCount").textContent = "0 pedidos";
+        document.getElementById("ftTotal").textContent = "R$ 0,00";
+        return;
+      }
+
+      let total = 0;
+      const html = [];
+
+      for (const x of docs){
+        const itens      = Array.isArray(x.itens) ? x.itens : [];
+        const itensCount = itens.length;
+        const tot        = Number(x.totalPedido || 0);
+        total += tot;
+
+        const tipoAtual = (x?.entrega?.tipo || "").toUpperCase();
+        const tipoTxt   = (tipoAtual === "RETIRADA" ? "RETIRADA" : "ENTREGA");
+
+        const rowMain =
+          `<tr data-rowid="${x.id}">
+             <td>${toBR(x.dataEntregaISO)||""}</td>
+             <td>${x.horaEntrega||""}</td>
+             <td class="cell-client" data-id="${x.id}" title="Clique para editar">${x.cliente||""}</td>
+             <td>${itensCount}</td>
+             <td>R$ ${money(tot)}</td>
+             <td class="col-tipo">${tipoTxt}</td>
+             <td>${x.pagamento||""}</td>
+             <td class="row-actions">
+               <button class="btn gray" data-action="open" data-id="${x.id}">Editar</button>
+             </td>
+           </tr>`;
+
+        let rowDetail = "";
+        if (modo === "detalhado"){
+          const itensTable = renderMiniTableReadOnly(itens);
+          rowDetail =
+            `<tr class="details-row" data-parent="${x.id}">
+               <td colspan="8" class="wrap">
+                 ${itensTable}
+                 <div class="totals-line">
+                   <span class="pill">Frete: R$ ${money(x?.entrega?.valorCobravel||0)}</span>
+                   <span class="pill"><strong>Total pedido:</strong> R$ ${money(tot)}</span>
+                 </div>
+               </td>
+             </tr>`;
+        }
+
+        html.push(rowMain, rowDetail);
+      }
+
+      tbody.innerHTML = html.join("");
+      document.getElementById("ftCount").textContent = `${docs.length} pedido(s)`;
+      document.getElementById("ftTotal").textContent = `R$ ${total.toFixed(2)}`;
+
+      tbody.querySelectorAll('.cell-client').forEach(td=>{
+        td.addEventListener('click', ()=> openEditor(td.dataset.id));
+      });
+      tbody.querySelectorAll('button[data-action="open"]').forEach(btn=>{
+        btn.addEventListener('click', ()=> openEditor(btn.dataset.id));
+      });
+    }
+
     // editor inline (abre logo abaixo da linha)
     function openEditor(id){
       const tbody = $("tbody");
-      // fechar editor existente do mesmo pedido
       tbody.querySelectorAll(`tr[data-editfor="${id}"]`).forEach(tr=>tr.remove());
 
       const rowData = (window.__rows||[]).find(r=>r.id===id);
@@ -270,8 +274,8 @@
       const itens = Array.isArray(rowData.itens) ? rowData.itens : [];
       const tipoAtual = (rowData?.entrega?.tipo || "ENTREGA").toUpperCase();
 
-      const editorHTML = `
-        <tr class="details-row" data-editfor="${id}">
+      const editorHTML =
+        `<tr class="details-row" data-editfor="${id}">
           <td colspan="8" class="wrap">
             <div style="display:grid; grid-template-columns: 220px 1fr; gap:10px; align-items:center">
               <div>
@@ -316,14 +320,11 @@
               <button class="btn gray" id="btnSave_${id}">Salvar alterações</button>
             </div>
           </td>
-        </tr>
-      `;
+        </tr>`;
 
-      // insere editor após a linha do pedido
       const tr = tbody.querySelector(`tr[data-rowid="${id}"]`);
       if (tr) tr.insertAdjacentHTML("afterend", editorHTML);
 
-      // listeners do editor
       const tbl = document.getElementById(`tbl_${id}`);
       const recalc = ()=> recalcTotalsFromEditor(id);
       tbl.querySelectorAll("input,select").forEach(el=>{
@@ -429,13 +430,14 @@
         if (conds.length){
           qRef = query(qRef, ...conds, orderBy("dataEntregaISO", "desc"), limit(1000));
         } else {
-          // fallback consistente (não depende de createdAt existir em todos)
+          // mais consistente que createdAt (nem todos docs têm)
           qRef = query(qRef, orderBy("dataEntregaISO", "desc"), limit(1000));
         }
 
         const snap = await getDocs(qRef);
         const list = [];
         snap.forEach(d => list.push({ id:d.id, ...d.data() }));
+        console.log('Encontrados:', list.length, list.slice(0,3));
 
         const out = list.filter(x=>{
           if (hi && (x.horaEntrega || "") < hi) return false;
@@ -449,7 +451,7 @@
         renderRows(out);
       }catch(e){
         console.error('Erro ao buscar pedidos:', e);
-        alert('Não foi possível buscar pedidos. Veja o console do navegador para detalhes.');
+        alert('Não foi possível buscar pedidos. Veja o console para detalhes.');
       }
     }
 
@@ -633,8 +635,7 @@
 
     // ---- Inicialização: autentica e deixa pronto para buscar ----
     await ensureAnonAuth();
-    // Opcional: já buscar ao abrir
-    // await buscar();
+    // buscar(); // se quiser abrir já buscando
   </script>
 
   <!-- Registro do Service Worker (atualização rápida) -->
@@ -644,13 +645,11 @@
         try {
           const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
 
-          // Checa atualização ao voltar o foco e a cada 10 min
           document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') reg.update();
           });
           setInterval(() => reg.update(), 10 * 60 * 1000);
 
-          // Barra para avisar versão nova
           function showUpdateBar(onConfirm) {
             let bar = document.getElementById('sw-update-bar');
             if (!bar) {
@@ -674,13 +673,11 @@
             if (!newSW) return;
             newSW.addEventListener('statechange', () => {
               if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
-                // Mostra aviso e dispara skipWaiting quando usuário pedir
                 showUpdateBar(() => reg.waiting?.postMessage('SKIP_WAITING'));
               }
             });
           });
 
-          // Recarrega quando o novo SW assume controle
           navigator.serviceWorker.addEventListener('controllerchange', () => {
             if (!window.__reloadedBySW) {
               window.__reloadedBySW = true;
