@@ -6,8 +6,10 @@
   <title>Relatórios — Serra Nobre V3.1.6</title>
   <link rel="manifest" href="manifest.json" />
   <style>
-    :root{ --teal:#0f766e; --teal-600:#0ea5a6; --ink:#0f172a; --muted:#64748b; --bg:#f1f5f9; --line:#e2e8f0; }
-    *{ box-sizing:border-box }
+    :root{
+      --teal:#0f766e; --teal-600:#0ea5a6; --ink:#0f172a; --muted:#64748b; --bg:#f1f5f9; --line:#e2e8f0;
+    }
+    *{box-sizing:border-box}
     body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu; background:var(--bg); color:var(--ink) }
     header{ display:flex; align-items:center; gap:12px; padding:12px 16px; background:var(--teal); color:#fff }
     header a{ color:#fff; text-decoration:none }
@@ -24,11 +26,16 @@
     .btn.warning{ background:#0b5; border-color:#0b5 }
     .btn.gray{ background:#475569; border-color:#475569 }
     .table-wrap{ margin-top:14px; overflow:auto; border-radius:10px; border:1px solid var(--line) }
-    table{ width:100%; min-width:1000px; border-collapse:collapse; background:#fff; table-layout:fixed }
+    table{ width:100%; min-width:1000px; border-collapse:collapse; background:#fff; table-layout: fixed }
     thead th{ position:sticky; top:0; background:#f8fafc; border-bottom:1px solid var(--line); text-align:left; font-size:12px; color:#334155; padding:10px }
-    thead th:nth-child(1){width:110px} thead th:nth-child(2){width:90px} thead th:nth-child(3){width:260px}
-    thead th:nth-child(4){width:70px}  thead th:nth-child(5){width:120px} thead th:nth-child(6){width:140px}
-    thead th:nth-child(7){width:130px} thead th:nth-child(8){width:120px}
+    thead th:nth-child(1){width:110px}
+    thead th:nth-child(2){width:90px}
+    thead th:nth-child(3){width:260px}
+    thead th:nth-child(4){width:70px}
+    thead th:nth-child(5){width:120px}
+    thead th:nth-child(6){width:140px}
+    thead th:nth-child(7){width:130px}
+    thead th:nth-child(8){width:120px}
     tbody td{ border-bottom:1px solid #f1f5f9; padding:10px; font-size:14px; vertical-align:top; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
     tbody td.wrap{ white-space:normal }
     tfoot td{ background:#f8fafc; font-weight:600; padding:10px; border-top:1px solid var(--line) }
@@ -45,10 +52,12 @@
     .totals-line{ display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin-top:6px }
     .totals-line .pill{ background:#eef7f7; padding:6px 10px; border-radius:999px; font-size:12px }
     .col-tipo select{ width:100% }
-    @media (max-width:980px){ .filters{grid-template-columns:repeat(3,minmax(0,1fr))} }
-    @media (max-width:560px){ .filters{grid-template-columns:repeat(2,minmax(0,1fr))} }
+    @media (max-width: 980px){ .filters{grid-template-columns:repeat(3,minmax(0,1fr))} }
+    @media (max-width: 560px){ .filters{grid-template-columns:repeat(2,minmax(0,1fr))} }
   </style>
+  <!-- SheetJS p/ XLSX -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.19.3/dist/xlsx.full.min.js"></script>
+  <!-- jsPDF para PDF do relatório -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
@@ -84,10 +93,10 @@
       </div>
 
       <div class="actions">
-        <button class="btn" id="btnBuscar" disabled>Buscar</button>
-        <button class="btn ghost" id="btnLimpar" disabled>Limpar</button>
-        <button class="btn warning" id="btnXLSX" title="Exportar resultados para XLSX" disabled>Exportar XLSX</button>
-        <button class="btn gray" id="btnPDF" title="Gerar PDF" disabled>Gerar PDF</button>
+        <button class="btn" id="btnBuscar">Buscar</button>
+        <button class="btn ghost" id="btnLimpar">Limpar</button>
+        <button class="btn warning" id="btnXLSX" title="Exportar resultados para XLSX">Exportar XLSX</button>
+        <button class="btn gray" id="btnPDF" title="Gerar PDF">Gerar PDF</button>
       </div>
 
       <div class="table-wrap">
@@ -139,49 +148,27 @@
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    // == helpers ==
-    const $ = (id)=>document.getElementById(id);
-    function toBR(iso){ if(!iso) return ""; const [y,m,d] = String(iso).split("-"); return `${d}/${m}/${y}`; }
-    function money(n){ return (Number(n||0)).toFixed(2).replace(".",","); }
-
-    // == auth gate ==
     async function ensureAnonAuth(){
       return new Promise((resolve)=>{
-        const off = onAuthStateChanged(auth, async (u)=>{
-          if (u){ off(); resolve(); return; }
-          try{ await signInAnonymously(auth); }catch(_){}
-        }, async ()=>{
+        onAuthStateChanged(auth, async (u)=>{
+          try{
+            if (!u) await signInAnonymously(auth);
+          }catch(_){}
+          resolve();
+        }, async (_err)=>{
           try{ await signInAnonymously(auth); }catch(_){}
           resolve();
         });
       });
     }
 
-    // == render ==
-    function renderMiniTableReadOnly(itens){
-      if (!Array.isArray(itens) || !itens.length) return '<div class="muted">Sem itens.</div>';
-      const lines = itens.map((it,idx)=>(
-        `<tr>
-          <td>${idx+1}</td>
-          <td>${it.produto||""}</td>
-          <td>${it.tipo||""}</td>
-          <td>${Number(it.quantidade||0)}</td>
-          <td>R$ ${money(it.precoUnit ?? it.preco)}</td>
-          <td>R$ ${money(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))))}</td>
-        </tr>`
-      )).join("");
-      return `
-        <table class="mini-table">
-          <thead><tr>
-            <th>#</th><th>Produto</th><th>Tipo</th><th>Qtd/Peso</th><th>R$ Unit</th><th>R$ Total</th>
-          </tr></thead>
-          <tbody>${lines}</tbody>
-        </table>`;
-    }
+    const $ = (id)=>document.getElementById(id);
+    function toBR(iso){ if(!iso) return ""; const [y,m,d]=iso.split("-"); return `${d}/${m}/${y}`; }
+    function money(n){ return (Number(n||0)).toFixed(2).replace(".",","); }
 
     function renderRows(docs){
       const tbody = $("tbody");
-      const modo = $("fModo").value || "reduzido";
+      const modo = ($("fModo")?.value) || "reduzido";
 
       if (!docs.length){
         tbody.innerHTML = '<tr><td colspan="8">Sem resultados.</td></tr>';
@@ -189,63 +176,81 @@
         $("ftTotal").textContent = "R$ 0,00";
         return;
       }
-
       let total = 0;
-      const html = [];
+      const rows = [];
 
       for (const x of docs){
         const itens = Array.isArray(x.itens) ? x.itens : [];
         const itensCount = itens.length;
-        const tot = Number(x.totalPedido||0); total += tot;
-        const tipoTxt = ((x?.entrega?.tipo || "").toUpperCase()==="RETIRADA") ? "RETIRADA" : "ENTREGA";
+        const tot = Number(x.totalPedido||0);
+        total += tot;
 
-        html.push(
+        const tipoAtual = ((x?.entrega?.tipo)||"").toUpperCase();
+        const tipoTxt = (tipoAtual==="RETIRADA" ? "RETIRADA" : "ENTREGA");
+
+        rows.push(
 `<tr data-rowid="${x.id}">
   <td>${toBR(x.dataEntregaISO)||""}</td>
   <td>${x.horaEntrega||""}</td>
   <td class="cell-client" data-id="${x.id}" title="Clique para editar">${x.cliente||""}</td>
   <td>${itensCount}</td>
   <td>R$ ${money(tot)}</td>
-  <td>${tipoTxt}</td>
+  <td class="col-tipo">${tipoTxt}</td>
   <td>${x.pagamento||""}</td>
-  <td class="row-actions">
-    <button class="btn gray" data-action="open" data-id="${x.id}">Editar</button>
-  </td>
-</tr>`
+  <td class="row-actions"><button class="btn gray" data-action="open" data-id="${x.id}">Editar</button></td>
+</tr>${
+  modo==="detalhado"
+    ? `<tr class="details-row" data-parent="${x.id}">
+         <td colspan="8" class="wrap">
+           ${renderMiniTableReadOnly(itens)}
+           <div class="totals-line">
+             <span class="pill">Frete: R$ ${money(x?.entrega?.valorCobravel||0)}</span>
+             <span class="pill"><strong>Total pedido:</strong> R$ ${money(tot)}</span>
+           </div>
+         </td>
+       </tr>`
+    : ""}`
         );
-
-        if (modo === "detalhado"){
-          html.push(
-`<tr class="details-row" data-parent="${x.id}">
-  <td colspan="8" class="wrap">
-    ${renderMiniTableReadOnly(itens)}
-    <div class="totals-line">
-      <span class="pill">Frete: R$ ${money(x?.entrega?.valorCobravel||0)}</span>
-      <span class="pill"><strong>Total pedido:</strong> R$ ${money(tot)}</span>
-    </div>
-  </td>
-</tr>`
-          );
-        }
       }
 
-      tbody.innerHTML = html.join("");
+      tbody.innerHTML = rows.join("");
       $("ftCount").textContent = `${docs.length} pedido(s)`;
       $("ftTotal").textContent = `R$ ${total.toFixed(2)}`;
 
-      // listeners p/ abrir editor
-      tbody.querySelectorAll(".cell-client").forEach(td=>{
-        td.addEventListener("click", ()=> openEditor(td.dataset.id));
+      tbody.querySelectorAll('.cell-client').forEach(td=>{
+        td.addEventListener('click', ()=> openEditor(td.dataset.id));
       });
       tbody.querySelectorAll('button[data-action="open"]').forEach(btn=>{
-        btn.addEventListener("click", ()=> openEditor(btn.dataset.id));
+        btn.addEventListener('click', ()=> openEditor(btn.dataset.id));
       });
     }
 
-    // == editor ==
+    function renderMiniTableReadOnly(itens){
+      if (!Array.isArray(itens) || !itens.length) return '<div class="muted">Sem itens.</div>';
+      const lines = itens.map((it,idx)=>(
+`<tr>
+  <td>${idx+1}</td>
+  <td>${it.produto||""}</td>
+  <td>${it.tipo||""}</td>
+  <td>${Number(it.quantidade||0)}</td>
+  <td>R$ ${money(it.precoUnit ?? it.preco)}</td>
+  <td>R$ ${money(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))))}</td>
+</tr>`
+      )).join("");
+      return (
+`<table class="mini-table">
+  <thead><tr>
+    <th>#</th><th>Produto</th><th>Tipo</th><th>Qtd/Peso</th><th>R$ Unit</th><th>R$ Total</th>
+  </tr></thead>
+  <tbody>${lines}</tbody>
+</table>`
+      );
+    }
+
     function openEditor(id){
       const tbody = $("tbody");
       tbody.querySelectorAll(`tr[data-editfor="${id}"]`).forEach(tr=>tr.remove());
+
       const rowData = (window.__rows||[]).find(r=>r.id===id);
       if (!rowData) return;
 
@@ -275,8 +280,7 @@
         <tr><th>#</th><th style="width:40%">Produto</th><th>Tipo</th><th>Qtd/Peso</th><th>R$ Unit</th><th>R$ Total</th></tr>
       </thead>
       <tbody>
-        ${
-          itens.map((it,ix)=>(
+        ${itens.map((it,ix)=>(
 `<tr data-ix="${ix}">
   <td>${ix+1}</td>
   <td class="wrap">${it.produto||""}</td>
@@ -286,18 +290,17 @@
       <option value="UN" ${it.tipo==="UN"?"selected":""}>UN</option>
     </select>
   </td>
-  <td><input type="number" step="0.01" class="i_qtd"  value="${Number(it.quantidade||0)}"/></td>
+  <td><input type="number" step="0.01" class="i_qtd" value="${Number(it.quantidade||0)}"/></td>
   <td><input type="number" step="0.01" class="i_unit" value="${Number(it.precoUnit ?? it.preco || 0)}"/></td>
-  <td><input type="number" step="0.01" class="i_total" value="${Number(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))))}"/></td>
+  <td><input type="number" step="0.01" class="i_total" value="${Number(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))))}" /></td>
 </tr>`
-          )).join("")
-        }
+        )).join("")}
       </tbody>
     </table>
 
     <div class="flex-end">
       <button class="btn ghost" id="btnRecalc_${id}">Recalcular total</button>
-      <button class="btn gray"  id="btnSave_${id}">Salvar alterações</button>
+      <button class="btn gray" id="btnSave_${id}">Salvar alterações</button>
     </div>
   </td>
 </tr>`;
@@ -312,22 +315,24 @@
         el.addEventListener("change", recalc);
       });
       document.getElementById(`btnRecalc_${id}`).onclick = recalc;
-      document.getElementById(`btnSave_${id}`).onclick   = ()=> saveEditor(id);
+      document.getElementById(`btnSave_${id}`).onclick = ()=> saveEditor(id);
     }
 
     function recalcTotalsFromEditor(id){
       const rowData = (window.__rows||[]).find(r=>r.id===id);
       if(!rowData) return;
-      const tbl = document.getElementById(`tbl_${id}`); if(!tbl) return;
+
+      const tbl = document.getElementById(`tbl_${id}`);
+      if(!tbl) return;
 
       let subtotal = 0;
       tbl.querySelectorAll("tbody tr").forEach(tr=>{
         const qtd  = parseFloat(tr.querySelector(".i_qtd")?.value || "0");
         const unit = parseFloat(tr.querySelector(".i_unit")?.value || "0");
-        const totEl = tr.querySelector(".i_total");
-        const auto  = (qtd*unit);
-        if (!totEl.dataset.userEdit) totEl.value = auto.toFixed(2);
-        const totVal = parseFloat(totEl.value || "0");
+        const totInp = tr.querySelector(".i_total");
+        const auto = (qtd*unit);
+        if (totInp && !totInp.dataset.userEdit) totInp.value = auto.toFixed(2);
+        const totVal = parseFloat(totInp?.value || "0");
         subtotal += (isFinite(totVal) ? totVal : 0);
       });
 
@@ -351,20 +356,24 @@
 
       const novosItens = [];
       tbl.querySelectorAll("tbody tr").forEach(tr=>{
-        const ix   = Number(tr.getAttribute("data-ix"));
-        const base = (rowData.itens||[])[ix] || {};
-        const tipo = (tr.querySelector(".i_tipo")?.value || base.tipo || "KG").toUpperCase();
-        const qtd  = parseFloat(tr.querySelector(".i_qtd")?.value  || "0") || 0;
-        const unit = parseFloat(tr.querySelector(".i_unit")?.value || "0") || 0;
-        const tot  = parseFloat(tr.querySelector(".i_total")?.value || (qtd*unit) || "0") || 0;
+        const ix    = Number(tr.getAttribute("data-ix"));
+        const base  = (rowData.itens||[])[ix] || {};
 
-        novosItens.push({ produto: base.produto || "", tipo, quantidade:Number(qtd), precoUnit:Number(unit), total:Number(tot) });
+        const tipo  = (tr.querySelector(".i_tipo")?.value || base.tipo || "KG").toUpperCase();
+        const qtd   = parseFloat(tr.querySelector(".i_qtd")?.value || "0") || 0;
+        const unit  = parseFloat(tr.querySelector(".i_unit")?.value || "0") || 0;
+        const total = parseFloat(tr.querySelector(".i_total")?.value || (qtd*unit) || "0") || 0;
+
+        novosItens.push({
+          produto: base.produto || "",
+          tipo, quantidade: Number(qtd), precoUnit: Number(unit), total: Number(total)
+        });
       });
 
       const subtotal = novosItens.reduce((s,i)=> s + Number(i.total||0), 0);
-      const frete    = Number(rowData?.entrega?.valorCobravel || 0);
+      const frete = Number(rowData?.entrega?.valorCobravel || 0);
       const totalPedido = Number((subtotal + frete).toFixed(2));
-      const novoTipo    = (tipoSel?.value || "ENTREGA").toUpperCase();
+      const novoTipo = (tipoSel?.value || "ENTREGA").toUpperCase();
 
       try{
         await updateDoc(doc(db, "pedidos", id), {
@@ -375,7 +384,6 @@
           updatedAt: serverTimestamp()
         });
 
-        // atualiza cache
         rowData.itens = novosItens;
         rowData.subtotal = Number(subtotal.toFixed(2));
         rowData.totalPedido = totalPedido;
@@ -383,59 +391,64 @@
         rowData.entrega.tipo = novoTipo;
 
         renderRows(window.__rows || []);
-        alert("Pedido atualizado com sucesso.");
       }catch(e){
         console.error(e);
         alert("Falha ao salvar no banco.");
       }
     }
 
-    // == busca ==
     async function buscar(){
-      try{
-        const di = $("fDataIni").value;
-        const df = $("fDataFim").value;
-        const hi = $("fHoraIni").value;
-        const hf = $("fHoraFim").value;
-        const cliente = $("fCliente").value.trim().toUpperCase();
-        const tipoSel = $("fTipo").value.trim();
+      const di = $("fDataIni").value;
+      const df = $("fDataFim").value;
+      const hi = $("fHoraIni").value;
+      const hf = $("fHoraFim").value;
+      const cliente = $("fCliente").value.trim().toUpperCase();
+      const tipoSel = $("fTipo").value.trim();
 
-        let qRef = collection(db, "pedidos");
+      let ref = collection(db, "pedidos");
+      let qRef;
+
+      if (di || df){
         const conds = [];
         if (di) conds.push(where("dataEntregaISO", ">=", di));
         if (df) conds.push(where("dataEntregaISO", "<=", df));
-
-        if (conds.length) qRef = query(qRef, ...conds, orderBy("dataEntregaISO","desc"), limit(1000));
-        else              qRef = query(qRef, orderBy("dataEntregaISO","desc"), limit(1000));
-
-        const snap = await getDocs(qRef);
-        const list = [];
-        snap.forEach(d => list.push({ id:d.id, ...d.data() }));
-
-        const out = list.filter(x=>{
-          if (hi && (x.horaEntrega || "") < hi) return false;
-          if (hf && (x.horaEntrega || "") > hf) return false;
-          if (cliente && !(x.cliente||"").toUpperCase().includes(cliente)) return false;
-          if (tipoSel && ((x.entrega?.tipo||"").toUpperCase() !== tipoSel)) return false;
-          return true;
-        });
-
-        window.__rows = out;
-        renderRows(out);
-
-        // habilita exportações
-        ["btnXLSX","btnPDF"].forEach(id=>$(id).disabled = (out.length===0));
-      }catch(e){
-        console.error("Erro ao buscar:", e);
-        alert("Não foi possível buscar pedidos.");
+        if (conds.length) qRef = query(ref, ...conds, orderBy("dataEntregaISO", "desc"), limit(1000));
+        else              qRef = query(ref, orderBy("dataEntregaISO", "desc"), limit(1000));
+      } else {
+        qRef = query(ref, orderBy("createdAt", "desc"), limit(1000));
       }
+
+      const snap = await getDocs(qRef);
+      const list = [];
+      snap.forEach(d => list.push({ id:d.id, ...d.data() }));
+
+      const out = list.filter(x=>{
+        if (hi && (x.horaEntrega || "") < hi) return false;
+        if (hf && (x.horaEntrega || "") > hf) return false;
+        if (cliente && !(x.cliente||"").toUpperCase().includes(cliente)) return false;
+        if (tipoSel && ((x.entrega?.tipo||"").toUpperCase() !== tipoSel)) return false;
+        return true;
+      });
+
+      window.__rows = out;
+      renderRows(out);
     }
 
-    // == exportações ==
+    $("btnBuscar").onclick = buscar;
+    $("btnLimpar").onclick = ()=>{
+      ["fDataIni","fDataFim","fHoraIni","fHoraFim","fCliente"].forEach(id=>$(id).value="");
+      $("fTipo").value = "";
+      $("tbody").innerHTML = "";
+      $("ftCount").textContent = "0 pedidos";
+      $("ftTotal").textContent = "R$ 0,00";
+      window.__rows = [];
+    };
+
     async function exportarXLSX(){
       const rows = Array.isArray(window.__rows) ? JSON.parse(JSON.stringify(window.__rows)) : [];
       if (!rows.length){ alert("Faça uma busca primeiro."); return; }
-      const modo = ($("fModo")?.value || "reduzido");
+
+      const modo = (document.getElementById("fModo")?.value || "reduzido");
       const XLSXlib = window.XLSX;
       if (!XLSXlib){ alert("Biblioteca XLSX não carregou."); return; }
 
@@ -444,149 +457,162 @@
         aoa = [["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagamento"]];
         for (const r of rows){
           const itensCount = Array.isArray(r.itens) ? r.itens.length : 0;
-          aoa.push([ toBR(r.dataEntregaISO||""), r.horaEntrega||"", r.cliente||"", itensCount,
-            (Number(r.totalPedido||0)).toFixed(2), (r.entrega?.tipo||""), r.pagamento||"" ]);
+          aoa.push([
+            toBR(r.dataEntregaISO||""), r.horaEntrega||"", r.cliente||"", itensCount,
+            (Number(r.totalPedido||0)).toFixed(2), (r.entrega?.tipo||""), r.pagamento||""
+          ]);
         }
       } else {
         aoa = [["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagamento","—","Produto","Tipo Item","Qtd","R$ Unit","R$ Total"]];
         for (const r of rows){
           const itens = Array.isArray(r.itens) ? r.itens : [];
-          aoa.push([ toBR(r.dataEntregaISO||""), r.horaEntrega||"", r.cliente||"", itens.length,
-            (Number(r.totalPedido||0)).toFixed(2), (r.entrega?.tipo||""), r.pagamento||"", "" ]);
+          aoa.push([
+            toBR(r.dataEntregaISO||""), r.horaEntrega||"", r.cliente||"", itens.length,
+            (Number(r.totalPedido||0)).toFixed(2), (r.entrega?.tipo||""), r.pagamento||"", ""
+          ]);
           for (const it of itens){
             const totalItem = Number(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))));
-            aoa.push(["","","","","","","","", it.produto||"", it.tipo||"", Number(it.quantidade||0),
-              Number(it.precoUnit||it.preco||0), Number(totalItem||0) ]);
+            aoa.push([
+              "","","","","","","","",
+              it.produto||"", it.tipo||"", Number(it.quantidade||0),
+              Number(it.precoUnit||it.preco||0), Number(totalItem||0)
+            ]);
           }
         }
       }
 
       const ws = XLSXlib.utils.aoa_to_sheet(aoa);
       const wb = XLSXlib.utils.book_new();
-      XLSXlib.utils.book_append_sheet(wb, ws, modo==="reduzido" ? "Relatório" : "Relatório Detalhado");
+      XLSXlib.utils.book_append_sheet(wb, ws, modo === "reduzido" ? "Relatório" : "Relatório Detalhado");
 
       const maxCols = Math.max(...aoa.map(r => r.length));
-      ws['!cols'] = Array.from({length:maxCols}, (_,i)=>{
+      ws['!cols'] = Array.from({length: maxCols}, (_, i) => {
         const largura = Math.max(...aoa.map(r => (r[i] ? String(r[i]).length : 0))) + 2;
         return { wch: Math.min(Math.max(largura, 8), 40) };
       });
 
       const filename = `relatorio_serranobre_${modo}_${new Date().toISOString().slice(0,10)}.xlsx`;
-      XLSXlib.writeFile(wb, filename, { compression:true });
+      try {
+        XLSXlib.writeFile(wb, filename, { compression: true });
+      } catch (e) {
+        try {
+          const wbout = XLSXlib.write(wb, { bookType: "xlsx", type: "array", compression: true });
+          const blob = new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+          const url  = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url; a.download = filename;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(()=>URL.revokeObjectURL(url), 20000);
+        } catch (err) {
+          console.error("Falha ao gerar XLSX:", err);
+          alert("Não foi possível gerar o arquivo XLSX.");
+        }
+      }
     }
+    $("btnXLSX").onclick = exportarXLSX;
 
-    function exportarPDF(){
+    $("btnPDF").onclick = ()=>{
       const rows = window.__rows || [];
       if (!rows.length){ alert("Faça uma busca primeiro."); return; }
-      const modo = ($("fModo")?.value || "reduzido");
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
+      const modo = (document.getElementById("fModo")?.value || "reduzido");
 
-      doc.setFont("helvetica","bold"); doc.setFontSize(14);
-      doc.text("Relatório de Pedidos — Serra Nobre", 10, 12);
-      doc.setFontSize(10); doc.setFont("helvetica","normal");
-      const periodo = (()=> {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
+
+      pdf.setFont("helvetica","bold"); pdf.setFontSize(14);
+      pdf.text("Relatório de Pedidos — Serra Nobre", 10, 12);
+      pdf.setFontSize(10); pdf.setFont("helvetica","normal");
+      const periodo = (()=>{
         const di = $("fDataIni").value, df=$("fDataFim").value;
-        if (di || df) return `Período: ${toBR(di)||"..."} a ${toBR(df)||"..."}`;
-        return "Período: (todos por data de entrega, mais recentes primeiro)";
+        if (di || df) return `Período: ${toBR(di)||'...'} a ${toBR(df)||'...'}`;
+        return "Período: (todos por criação recente)";
       })();
-      doc.text(periodo, 10, 18);
+      pdf.text(periodo, 10, 18);
 
       const headers = ["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagto."];
       const colX = [10, 30, 50, 140, 160, 185, 215];
       const rowH = 7;
       let y = 26;
 
-      doc.setFont("helvetica","bold");
-      for(let i=0;i<headers.length;i++) doc.text(headers[i], colX[i], y);
-      doc.setLineWidth(0.2); doc.line(10, y+2, 285, y+2);
-      doc.setFont("helvetica","normal");
+      pdf.setFont("helvetica","bold");
+      for(let i=0;i<headers.length;i++){ pdf.text(headers[i], colX[i], y); }
+      pdf.setLineWidth(0.2); pdf.line(10, y+2, 285, y+2);
+      pdf.setFont("helvetica","normal");
 
       y += 6;
       let totalGeral = 0;
 
-      const addHeader = ()=>{
-        doc.setFont("helvetica","bold"); doc.setFontSize(10);
-        for(let i=0;i<headers.length;i++) doc.text(headers[i], colX[i], 12);
-        doc.line(10, 14, 285, 14);
-        doc.setFont("helvetica","normal"); y = 20;
-      };
-
-      for (const r of rows){
-        if (y > 190){ doc.addPage("a4","landscape"); addHeader(); }
+      const drawRow = (r)=>{
+        if (y > 190){
+          pdf.addPage("a4","landscape");
+          pdf.setFont("helvetica","bold"); pdf.setFontSize(10);
+          for(let i=0;i<headers.length;i++){ pdf.text(headers[i], colX[i], 12); }
+          pdf.line(10, 14, 285, 14);
+          pdf.setFont("helvetica","normal"); y = 20;
+        }
         const itens = Array.isArray(r.itens) ? r.itens : [];
         const itensCount = itens.length;
         const tot = Number(r.totalPedido||0); totalGeral += tot;
 
-        doc.text(toBR(r.dataEntregaISO||""), colX[0], y);
-        doc.text(r.horaEntrega||"", colX[1], y);
+        pdf.text(toBR(r.dataEntregaISO||""), colX[0], y);
+        pdf.text(r.horaEntrega||"", colX[1], y);
         const cliente = (r.cliente||"").toString();
-        const clienteBreak = doc.splitTextToSize(cliente, colX[3]-colX[2]-2);
-        doc.text(clienteBreak, colX[2], y);
-        doc.text(String(itensCount), colX[3], y);
-        doc.text(tot.toFixed(2), colX[4], y);
-        doc.text((r.entrega?.tipo||"").toString(), colX[5], y);
-        doc.text(r.pagamento||"", colX[6], y);
+        const clienteBreak = pdf.splitTextToSize(cliente, colX[3]-colX[2]-2);
+        pdf.text(clienteBreak, colX[2], y);
+        pdf.text(String(itensCount), colX[3], y);
+        pdf.text(tot.toFixed(2), colX[4], y);
+        pdf.text((r.entrega?.tipo||"").toString(), colX[5], y);
+        pdf.text(r.pagamento||"", colX[6], y);
 
         y += Math.max(rowH, (clienteBreak.length)*5);
-        doc.setDrawColor(230); doc.line(10, y-2, 285, y-2); doc.setDrawColor(0);
+        pdf.setDrawColor(230); pdf.line(10, y-2, 285, y-2);
+        pdf.setDrawColor(0);
 
         if (modo==="detalhado" && itensCount){
           const startX = 50;
           const wCols = [90, 25, 25, 25, 25];
-          doc.setFont("helvetica","bold"); doc.setFontSize(9);
+          pdf.setFont("helvetica","bold"); pdf.setFontSize(9);
           const hdr = ["Produto","Tipo","Qtd/Peso","R$ Unit","R$ Total"];
           let yy = y+2; let xx = startX;
-          for (let i=0;i<hdr.length;i++){ doc.text(hdr[i], xx+2, yy); xx += wCols[i]; }
-          yy += 4; doc.setFont("helvetica","normal");
+          for (let i=0;i<hdr.length;i++){ pdf.text(hdr[i], xx+2, yy); xx += wCols[i]; }
+          yy += 4; pdf.setFont("helvetica","normal");
 
           for (const it of itens){
             const linha = [
-              (it.produto||""), (it.tipo||""), String(Number(it.quantidade||0)),
+              (it.produto||""), (it.tipo||""),
+              String(Number(it.quantidade||0)),
               money(it.precoUnit ?? it.preco),
               money(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))))
             ];
             xx = startX;
-            const wrapProd = doc.splitTextToSize(linha[0], wCols[0]-4);
+            const wrapProd = pdf.splitTextToSize(linha[0], wCols[0]-4);
             const linesH = Math.max(5, wrapProd.length*5);
-            doc.text(wrapProd, xx+2, yy); xx += wCols[0];
-            doc.text(linha[1], xx+2, yy); xx += wCols[1];
-            doc.text(linha[2], xx+2, yy); xx += wCols[2];
-            doc.text(linha[3], xx+2, yy); xx += wCols[3];
-            doc.text(linha[4], xx+2, yy);
+            pdf.text(wrapProd, xx+2, yy); xx += wCols[0];
+            pdf.text(linha[1], xx+2, yy); xx += wCols[1];
+            pdf.text(linha[2], xx+2, yy); xx += wCols[2];
+            pdf.text(linha[3], xx+2, yy); xx += wCols[3];
+            pdf.text(linha[4], xx+2, yy);
             yy += linesH;
           }
           y = yy + 2;
-          doc.setDrawColor(230); doc.line(10, y-2, 285, y-2); doc.setDrawColor(0);
+          pdf.setDrawColor(230); pdf.line(10, y-2, 285, y-2);
+          pdf.setDrawColor(0);
         }
-      }
+      };
 
-      doc.setFont("helvetica","bold");
-      doc.text(`Total de pedidos: ${rows.length}`, 10, y+8);
-      doc.text(`Soma (R$): ${totalGeral.toFixed(2)}`, 80, y+8);
-      doc.save(`relatorio_serranobre_${new Date().toISOString().slice(0,10)}.pdf`);
-    }
+      rows.forEach(drawRow);
 
-    // == eventos ==
-    document.getElementById("btnBuscar").onclick = buscar;
-    document.getElementById("btnLimpar").onclick = ()=>{
-      ["fDataIni","fDataFim","fHoraIni","fHoraFim","fCliente"].forEach(id=>$(id).value="");
-      $("fTipo").value = "";
-      $("tbody").innerHTML = "";
-      $("ftCount").textContent = "0 pedidos";
-      $("ftTotal").textContent = "R$ 0,00";
-      window.__rows = [];
+      pdf.setFont("helvetica","bold");
+      pdf.text(`Total de pedidos: ${rows.length}`, 10, y+8);
+      pdf.text(`Soma (R$): ${totalGeral.toFixed(2)}`, 80, y+8);
+
+      pdf.save(`relatorio_serranobre_${new Date().toISOString().slice(0,10)}.pdf`);
     };
-    document.getElementById("btnXLSX").onclick = exportarXLSX;
-    document.getElementById("btnPDF").onclick  = exportarPDF;
 
-    // == start ==
     await ensureAnonAuth();
-    // habilita botões após auth
-    ["btnBuscar","btnLimpar","btnXLSX","btnPDF"].forEach(id=>$(id).disabled=false);
   </script>
 
-  <!-- SW: atualização rápida -->
+  <!-- Service Worker -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', async () => {
@@ -596,15 +622,35 @@
             if (document.visibilityState === 'visible') reg.update();
           });
           setInterval(() => reg.update(), 10 * 60 * 1000);
+
+          function showUpdateBar(onConfirm) {
+            let bar = document.getElementById('sw-update-bar');
+            if (!bar) {
+              bar = document.createElement('div');
+              bar.id = 'sw-update-bar';
+              bar.style.cssText =
+                'position:fixed;left:0;right:0;bottom:0;padding:10px;background:#0f766e;color:#fff;' +
+                'display:flex;gap:10px;align-items:center;justify-content:center;z-index:99999';
+              bar.innerHTML = `
+                <span>Nova versão disponível.</span>
+                <button id="sw-reload-btn" style="background:#fff;color:#0f766e;border:none;padding:6px 10px;border-radius:6px;cursor:pointer">
+                  Atualizar agora
+                </button>`;
+              document.body.appendChild(bar);
+            }
+            document.getElementById('sw-reload-btn').onclick = onConfirm;
+          }
+
           reg.addEventListener('updatefound', () => {
-            const nw = reg.installing;
-            if (!nw) return;
-            nw.addEventListener('statechange', () => {
-              if (nw.state === 'installed' && navigator.serviceWorker.controller) {
-                reg.waiting && reg.waiting.postMessage('SKIP_WAITING');
+            const newSW = reg.installing;
+            if (!newSW) return;
+            newSW.addEventListener('statechange', () => {
+              if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+                showUpdateBar(() => reg.waiting?.postMessage('SKIP_WAITING'));
               }
             });
           });
+
           navigator.serviceWorker.addEventListener('controllerchange', () => {
             if (!window.__reloadedBySW) {
               window.__reloadedBySW = true;
