@@ -3,15 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <!-- favicons (caminhos relativos p/ GitHub Pages) -->
+  <!-- favicons -->
   <link rel="icon" type="image/png" href="favicon-96x96.png" sizes="96x96" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="shortcut icon" href="favicon.ico" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Serra Nobre" />
-  <!-- manifest relativo (compatível com Vercel e subpastas) -->
   <link rel="manifest" href="manifest.json" />
-  <title>PEDIDOS V3.1.5</title>
+  <title>PEDIDOS V3.1.6</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background: #f4f4f4; }
     h1 { text-align: right; margin-bottom: 10px; font-size: 30px; }
@@ -48,7 +47,7 @@
 </head>
 <body>
   <img src="Serra-Nobre_3.png" alt="Logo" class="logo-header" onerror="this.style.display='none'">
-  <h1>PEDIDOS V3.1.5</h1>
+  <h1>PEDIDOS V3.1.6</h1>
 
   <div class="top-actions">
     <a href="relatorios.html" title="Abrir Relatórios">Relatórios</a>
@@ -117,24 +116,22 @@
   <textarea id="obsGeral"></textarea>
   <hr/>
 
-  <button class="pdf-btn" onclick="gerarPDF(false)">Gerar PDF</button>
-  <button class="pdf-btn salvar" onclick="gerarPDF(true)">Salvar PDF</button>
+  <button class="pdf-btn"            onclick="gerarPDF(false)">Gerar PDF</button>
+  <button class="pdf-btn salvar"     onclick="gerarPDF(true)">Salvar PDF</button>
   <button class="pdf-btn compartilhar" onclick="compartilharPDF()">Compartilhar PDF</button>
 
   <div id="resumo"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-  <!-- Firebase (module): App + Firestore + Auth (SEM App Check) -->
+  <!-- Firebase (module): App + Firestore + Auth -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
   import {
     getFirestore, collection, addDoc, getDocs, query, where, orderBy, limit,
     updateDoc, increment, doc, setDoc, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
-  import {
-    getAuth, signInAnonymously, onAuthStateChanged
-  } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyB3zBW_WhVfNpX5uoJCq-6WysE5XKYKZt4",
@@ -151,16 +148,14 @@
   const authReady = new Promise((resolve) => {
     onAuthStateChanged(auth, (user) => {
       if (user) resolve(user);
-      else signInAnonymously(auth).catch((e) => {
-        console.error("Falha ao entrar anonimamente:", e);
-      });
+      else signInAnonymously(auth).catch((e) => console.error("Anon auth:", e));
     });
   });
 
   const db = getFirestore(app);
   window.firebaseReady = authReady;
 
-  // --------- Helpers Firestore ----------
+  // ---- Clientes helpers (iguais aos seus, preservados) ----
   async function getClienteDocByNome(nomeUpper) {
     await authReady;
     const qCli = query(collection(db, "clientes"), where("nome", "==", nomeUpper), limit(1));
@@ -169,7 +164,6 @@
     return { id: snap.docs[0].id, ref: snap.docs[0].ref, data: snap.docs[0].data() };
   }
 
-  // Upsert de cliente (agora com isentoFrete e forçando CAIXA ALTA)
   async function salvarCliente(nome, endereco, isentoFrete=false) {
     await authReady;
     const nomeNorm = String(nome || "").trim().toUpperCase();
@@ -194,16 +188,6 @@
     }
   }
 
-  // Buscar endereço do cliente (mantido p/ compatibilidade)
-  async function buscarEnderecoCliente(nomeCliente) {
-    await authReady;
-    const nome = String(nomeCliente || "").trim().toUpperCase();
-    if (!nome) return "";
-    const found = await getClienteDocByNome(nome);
-    return found ? (found.data.endereco || "") : "";
-  }
-
-  // Buscar info completa do cliente (endereço + isentoFrete)
   async function buscarClienteInfo(nomeCliente) {
     await authReady;
     const nome = String(nomeCliente || "").trim().toUpperCase();
@@ -214,7 +198,6 @@
     return { endereco: d.endereco || "", isentoFrete: !!d.isentoFrete };
   }
 
-  // Top clientes
   async function clientesMaisUsados(limitQtd = 50) {
     await authReady;
     const lista = [];
@@ -227,7 +210,6 @@
     return lista.slice(0, limitQtd).map(x => x.nome);
   }
 
-  // Último preço do produto p/ cliente
   async function buscarUltimoPreco(clienteNome, produtoNome) {
     await authReady;
     const nomeCli  = String(clienteNome || "").trim().toUpperCase();
@@ -247,7 +229,6 @@
     return typeof dados.preco === "number" ? dados.preco : parseFloat(dados.preco);
   }
 
-  // Produtos já comprados pelo cliente
   async function produtosDoCliente(nomeCliente) {
     await authReady;
     const nome = String(nomeCliente || "").trim().toUpperCase();
@@ -264,7 +245,6 @@
     return [...set].sort((a,b)=>a.localeCompare(b));
   }
 
-  // Registrar preço + incrementar compras
   async function registrarPrecoCliente(clienteNome, produtoNome, preco) {
     await authReady;
     const nomeCli  = String(clienteNome || "").trim().toUpperCase();
@@ -277,25 +257,44 @@
     });
 
     const found = await getClienteDocByNome(nomeCli);
-    if (found) {
-      await updateDoc(found.ref, { compras: increment(1), atualizadoEm: new Date() });
-    }
+    if (found) await updateDoc(found.ref, { compras: increment(1), atualizadoEm: new Date() });
   }
 
-  // Salvar pedido em /pedidos
-  async function savePedido(payload){
+  // ======= SAVE com Idempotência =======
+  async function savePedidoIdempotente(payload){
     await authReady;
+    // chave estável do pedido:
+    const key = [
+      payload.dataEntregaISO||"",
+      payload.horaEntrega||"",
+      (payload.cliente||"").toUpperCase(),
+      String(payload.subtotal?.toFixed ? payload.subtotal.toFixed(2) : Number(payload.subtotal||0).toFixed(2)),
+      String(Array.isArray(payload.itens) ? payload.itens.length : 0)
+    ].join("|");
+
+    // checa se já existe
+    const qKey = query(collection(db,"pedidos"), where("idempotencyKey","==", key), limit(1));
+    const snap = await getDocs(qKey);
+    if (!snap.empty){
+      // já salvo — retorna o id existente
+      return snap.docs[0].id;
+    }
+
+    // cria novo
     const id = `${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
-    await setDoc(doc(collection(db, "pedidos"), id), { ...payload, createdAt: serverTimestamp() });
+    await setDoc(doc(collection(db, "pedidos"), id), {
+      ...payload,
+      idempotencyKey: key,
+      createdAt: serverTimestamp()
+    });
     return id;
   }
 
   // Globais p/ script não-module
   window.salvarCliente = salvarCliente;
-  window.buscarEnderecoCliente = buscarEnderecoCliente;
+  window.buscarClienteInfo = buscarClienteInfo;
   window.buscarUltimoPreco = buscarUltimoPreco;
   window.registrarPrecoCliente = registrarPrecoCliente;
-  window.buscarClienteInfo = buscarClienteInfo;
   window.carregarSugestoesProdutosDoCliente = async function(){
     await authReady;
     const nome = document.getElementById("cliente").value.trim().toUpperCase();
@@ -310,17 +309,17 @@
     document.getElementById("listaClientes").innerHTML =
       lista.map(n => `<option value="${n}"></option>`).join("");
   };
-  window.savePedido = savePedido;
+  window.savePedidoIdempotente = savePedidoIdempotente;
 </script>
 
   <!-- App + PDF -->
   <script>
     // Versão app (para barra de update do SW)
-    window.__APP_VERSION = '3.1.4 (2025-08-29)';
+    window.__APP_VERSION = '3.1.6';
 
     let itens = [{ produto: "", tipo: "KG", quantidade: 0, preco: 0, total: 0, obs: "" }];
 
-    /* Logo -> base64 com cache diário */
+    /* Logo cache */
     const LOGO_PATH = 'Serra-Nobre_3.png';
     const LOGO_KEY  = 'logoBase64';
     function blobToDataURL(blob){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(blob);});}
@@ -330,13 +329,9 @@
     async function getLogoBase64(){return localStorage.getItem(LOGO_KEY) || await ensureRepoLogoCached();}
     function guessImageFormatFromDataURL(u){return u.startsWith('data:image/jpeg')||u.startsWith('data:image/jpg')?'JPEG':'PNG';}
 
-    // -------- CAIXA ALTA (cliente/endereço) --------
-    function forcarUppercase(el){
-      if(!el || !el.value) return;
-      el.value = el.value.toUpperCase();
-    }
+    function forcarUppercase(el){ if(!el || !el.value) return; el.value = el.value.toUpperCase(); }
 
-    /* -------- FRETE -------- */
+    // ===== Frete =====
     function appendPOA(str){
       const t = String(str||"").trim();
       if (!t) return t;
@@ -356,29 +351,14 @@
           headers:{ "Content-Type":"application/json" },
           body: JSON.stringify(payload)
         });
-        if(!r.ok){
-          const txt = await r.text();
-          console.error("Frete HTTP", r.status, txt);
-          throw new Error("HTTP "+r.status);
-        }
+        if(!r.ok) throw new Error("HTTP "+r.status);
         return await r.json();
       }catch(e1){
-        try{
-          const r2 = await fetch(`${ABS_FRETE_BASE}/api/calcular-entrega`, {
-            method:"POST",
-            headers:{ "Content-Type":"application/json" },
-            body: JSON.stringify(payload)
-          });
-          if(!r2.ok){
-            const txt2 = await r2.text();
-            console.error("Frete ABS HTTP", r2.status, txt2);
-            throw new Error("HTTP "+r2.status);
-          }
-          return await r2.json();
-        }catch(e2){
-          console.warn("Falha no cálculo de frete:", e1, e2);
-          throw e2;
-        }
+        const r2 = await fetch(`${ABS_FRETE_BASE}/api/calcular-entrega`, {
+          method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload)
+        });
+        if(!r2.ok) throw new Error("HTTP "+r2.status);
+        return await r2.json();
       }
     }
 
@@ -403,7 +383,6 @@
     window.atualizarFreteUI = atualizarFreteUI;
 
     async function onToggleIsencaoManual(){
-      // Atualiza frete UI e salva preferência no cadastro (se já houver cliente preenchido)
       await atualizarFreteUI();
       const nome = document.getElementById("cliente").value.trim().toUpperCase();
       if (!nome) return;
@@ -499,23 +478,31 @@
           && document.getElementById("horaEntrega").value;
     }
 
-    // Helpers PDF
+    // ===== Helpers PDF e caixas com altura dinâmica =====
     function formatarData(s){ if(!s) return ""; const [a,m,d]=s.split("-"); return `${d}/${m}/${a.slice(-2)}`; }
     function diaDaSemanaExtenso(s){ if(!s) return ""; const d=new Date(s+"T00:00:00"); return d.toLocaleDateString('pt-BR',{weekday:'long'}).toUpperCase(); }
     function splitToWidth(doc,t,w){ return doc.splitTextToSize(t||"", w); }
-    const PADY=3, LINE=5;
-    function drawCenteredMultiline(doc,lines,cx,top,rowH,step=LINE,pad=PADY){
-      const usable=Math.max(0,rowH-2*pad);
-      const block=(lines.length-1)*step;
-      let y0=top+pad+(usable-block)/2;
-      for(let i=0;i<lines.length;i++) doc.text(lines[i],cx,y0+i*step,{align:"center"});
-    }
-    function underline(doc,x,y,text,size){
-      const prev=doc.getFontSize();
-      if(size) doc.setFontSize(size);
-      const w=doc.getTextWidth(text);
-      doc.line(x,y+0.8,x+w,y+0.8);
-      if(size) doc.setFontSize(prev);
+
+    function drawLabeledBox(doc, x, y, w, title, value, opts={}){
+      const { titleSize=8, valueSize=8, pad=3, maxLines=4 } = opts;
+      doc.setFont("helvetica","bold"); doc.setFontSize(titleSize);
+      // mede o texto (valor) para definir altura
+      doc.setFont("helvetica","normal"); doc.setFontSize(valueSize);
+      const lines = splitToWidth(doc, String(value||""), w-2);
+      const use = lines.slice(0, maxLines);
+      const rowH = Math.max(10, pad*2 + use.length*5);
+      doc.setDrawColor(0); doc.setLineWidth(0.2);
+      doc.rect(x, y, w, rowH, "S");
+      // título centralizado no topo (sem sobrepor conteúdo)
+      doc.setFont("helvetica","bold"); doc.setFontSize(titleSize);
+      doc.text(title, x+w/2, y+4.2, {align:"center"});
+      // valor centralizado verticalmente
+      doc.setFont("helvetica","normal"); doc.setFontSize(valueSize);
+      const usable = rowH - 8; // desconta título
+      const block = (use.length-1)*5;
+      const y0 = y + 7 + (usable - block)/2;
+      use.forEach((ln,i)=>doc.text(ln, x+w/2, y0 + i*5, {align:"center"}));
+      return rowH;
     }
 
     async function preencherEnderecoEIsencaoCliente(){
@@ -527,8 +514,6 @@
           if(info.endereco){ const el=document.getElementById("endereco"); el.value=String(info.endereco||"").toUpperCase(); }
           const chk = document.getElementById("isentarFrete");
           if (chk) chk.checked = !!info.isentoFrete;
-        }else{
-          // cliente novo: não mexe no checkbox
         }
       }catch(_){}
       atualizarFreteUI();
@@ -550,7 +535,7 @@
     }
     window.preencherUltimoPreco = preencherUltimoPreco;
 
-    async function montarPDF(){
+    async function montarPDF(querSalvarNoBanco){
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:[72,297] });
 
@@ -564,21 +549,15 @@
         else { y+=2; }
       }catch(_){ y+=2; }
 
-      doc.setDrawColor(0); doc.setLineWidth(0.2);
+      // CLIENTE (altura dinâmica)
+      y += drawLabeledBox(doc, margemX, y, larguraCaixa,
+        "CLIENTE", (document.getElementById("cliente").value||"").toUpperCase(),
+        { titleSize:8, valueSize:8, maxLines:3 }) + 1;
 
-      doc.setFont("helvetica","bold"); doc.setFontSize(8);
-      doc.rect(margemX,y,larguraCaixa,10,"S");
-      doc.text("CLIENTE", margemX+larguraCaixa/2, y+4.2, {align:"center"});
-      doc.setFont("helvetica","normal"); doc.setFontSize(8);
-      centralizaTexto(doc, document.getElementById("cliente").value.toUpperCase(), margemX, y-3, larguraCaixa, 2);
-      y+=11;
-
-      doc.setFont("helvetica","bold"); doc.setFontSize(8);
-      doc.rect(margemX,y,larguraCaixa,10,"S");
-      doc.text("ENDEREÇO", margemX+larguraCaixa/2, y+4.2, {align:"center"});
-      doc.setFont("helvetica","normal"); doc.setFontSize(8);
-      centralizaTexto(doc, document.getElementById("endereco").value.toUpperCase(), margemX, y-3, larguraCaixa, 2);
-      y+=11;
+      // ENDEREÇO (altura dinâmica — evita sobrepor título)
+      y += drawLabeledBox(doc, margemX, y, larguraCaixa,
+        "ENDEREÇO", (document.getElementById("endereco").value||"").toUpperCase(),
+        { titleSize:8, valueSize:8, maxLines:4 }) + 1;
 
       const diaSemana = diaDaSemanaExtenso(document.getElementById("entrega").value);
       doc.rect(margemX,y,larguraCaixa,10,"S");
@@ -605,6 +584,7 @@
       doc.text(tipoEntrega, margemX+larguraCaixa/2, y+6.5, {align:"center"});
       y+=12;
 
+      // Título da tabela
       doc.setFont("helvetica","bold"); doc.setFontSize(7);
       doc.rect(margemX,y,W_PROD,10,"S");
       doc.rect(margemX+W_PROD,y,W_QDE,10,"S");
@@ -630,38 +610,36 @@
         const totalNum = (parseFloat(it.quantidade)||0) * precoNum;
 
         const prodLines = splitToWidth(doc, prod, W_PROD-2).slice(0,3);
-        const rowH = Math.max(14, prodLines.length*5 + 2*3);
+        const rowH = Math.max(14, 6 + prodLines.length*5);
 
         doc.rect(margemX,y,W_PROD,rowH,"S");
         doc.rect(margemX+W_PROD,y,W_QDE,rowH,"S");
         doc.rect(margemX+W_PROD+W_QDE,y,W_UNIT,rowH,"S");
         doc.rect(margemX+W_PROD+W_QDE+W_UNIT,y,W_TOTAL,rowH,"S");
 
-        drawCenteredMultiline(doc, prodLines, margemX+W_PROD/2, y, rowH);
-
-        const qtdLines = qtdStr ? [qtdStr, tipo] : [""];
-        drawCenteredMultiline(doc, qtdLines, margemX+W_PROD+W_QDE/2, y, rowH);
-
-        const precoLines = precoNum ? ["R$", precoNum.toFixed(2).replace(".", ",")] : ["—"];
-        drawCenteredMultiline(doc, precoLines, margemX+W_PROD+W_QDE+W_UNIT/2, y, rowH);
-
-        const totalLines = (precoNum && it.quantidade) ? ["R$", totalNum.toFixed(2).replace(".", ",")] : ["—"];
-        drawCenteredMultiline(doc, totalLines, margemX+W_PROD+W_QDE+W_UNIT+W_TOTAL/2, y, rowH);
+        // centraliza nas 4 colunas
+        const center = (cx, lines)=> {
+          const block=(lines.length-1)*5; const base=y+(rowH - block)/2;
+          lines.forEach((ln,k)=>doc.text(ln, cx, base + k*5, {align:"center"}));
+        }
+        center(margemX+W_PROD/2, prodLines);
+        center(margemX+W_PROD+W_QDE/2, qtdStr ? [qtdStr, tipo] : [""]);
+        center(margemX+W_PROD+W_QDE+W_UNIT/2, precoNum ? ["R$", precoNum.toFixed(2).replace(".", ",")] : ["—"]);
+        center(margemX+W_PROD+W_QDE+W_UNIT+W_TOTAL/2, (precoNum && it.quantidade) ? ["R$", totalNum.toFixed(2).replace(".", ",")] : ["—"]);
 
         y += rowH;
 
         const obs = (it.obs || "").trim();
         if (obs){
-          const titulo="OBSERVAÇÕES:";
-          const corpo = obs.toUpperCase();
-          const corpoLines = splitToWidth(doc, corpo, larguraCaixa-6);
+          const corpoLines = splitToWidth(doc, obs.toUpperCase(), larguraCaixa-6);
           const obsH = 9 + corpoLines.length*5;
           doc.rect(margemX,y,larguraCaixa,obsH,"S");
           doc.setFont("helvetica","bold"); doc.setFontSize(9);
-          const tx=margemX+3, ty=y+6;
-          doc.text(titulo, tx, ty); underline(doc, tx, ty, titulo, 9);
-          let baseY=y+12; corpoLines.forEach((ln,ix)=>doc.text(ln, margemX+3, baseY+ix*5));
+          const titulo="OBSERVAÇÕES:"; const tx=margemX+3, ty=y+6;
+          doc.text(titulo, tx, ty);
+          doc.line(tx, ty+0.8, tx+doc.getTextWidth(titulo), ty+0.8);
           doc.setFont("helvetica","normal");
+          let baseY=y+12; corpoLines.forEach((ln,ix)=>doc.text(ln, margemX+3, baseY+ix*5));
           y += obsH;
         }
 
@@ -686,17 +664,15 @@
       }catch(_){ frete = { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"" }; }
 
       y += 2;
-
-      // ====== Caixa de FRETE (centralizada) ======
       const freteBoxH = 10;
       doc.rect(margemX, y, larguraCaixa, freteBoxH, "S");
       doc.setFont("helvetica","normal"); doc.setFontSize(10);
       const isIsentoManual = !!document.getElementById('isentarFrete')?.checked;
-      const isIsentoCalc = !!frete?.isento;
-      const isIsento = isIsentoManual || isIsentoCalc;
-      let freteMostrar = isIsento ? "ISENTO DE FRETE" : ("R$ " + Number(frete?.valorBase || 0).toFixed(2));
-      const linhasFrete = splitToWidth(doc, freteMostrar, larguraCaixa - 6);
-      drawCenteredMultiline(doc, linhasFrete, margemX + larguraCaixa/2, y, freteBoxH);
+      const isIsento = isIsentoManual || !!frete?.isento;
+      const freteMostrar = isIsento ? "ISENTO DE FRETE" : ("R$ " + Number(frete?.valorBase || 0).toFixed(2));
+      const fLines = splitToWidth(doc, freteMostrar, larguraCaixa - 6);
+      const block=(fLines.length-1)*5; const baseY = y + (freteBoxH - block)/2 + 3;
+      fLines.forEach((ln,i)=>doc.text(ln, margemX+larguraCaixa/2, baseY+i*5, {align:"center"}));
       y += freteBoxH + 3;
 
       const totalGeral = subtotal + Number(frete?.valorCobravel||0);
@@ -710,28 +686,26 @@
 
       const obsG=(document.getElementById("obsGeral").value||"").trim();
       if (obsG){
-        const titulo="OBSERVAÇÃO DO PEDIDO:";
-        const corpo=obsG.toUpperCase();
-        const corpoLines=splitToWidth(doc, corpo, larguraCaixa-6);
+        const corpoLines=splitToWidth(doc, obsG.toUpperCase(), larguraCaixa-6);
         const h=9+corpoLines.length*5;
         doc.rect(margemX,y,larguraCaixa,h,"S");
         doc.setFont("helvetica","bold"); doc.setFontSize(9);
-        const tx=margemX+3, ty=y+6;
-        doc.text(titulo, tx, ty); underline(doc, tx, ty, titulo, 9);
-        let baseY=y+12; corpoLines.forEach((ln,ix)=>doc.text(ln, margemX+3, baseY+ix*5));
+        const titulo="OBSERVAÇÃO DO PEDIDO:"; const tx=margemX+3, ty=y+6;
+        doc.text(titulo, tx, ty); doc.line(tx, ty+0.8, tx+doc.getTextWidth(titulo), ty+0.8);
         doc.setFont("helvetica","normal");
+        let baseY=y+12; corpoLines.forEach((ln,ix)=>doc.text(ln, margemX+3, baseY+ix*5));
         y += h + 3;
       }
 
-      // Persistências + salvar /pedidos
-      if (typeof window.salvarCliente === "function") {
-        await window.salvarCliente(
-          document.getElementById("cliente").value.trim().toUpperCase(),
-          document.getElementById("endereco").value.trim().toUpperCase(),
-          !!document.getElementById('isentarFrete')?.checked
-        );
-      }
+      // Persistências de cliente/histórico
       try{
+        if (typeof window.salvarCliente === "function") {
+          await window.salvarCliente(
+            document.getElementById("cliente").value.trim().toUpperCase(),
+            document.getElementById("endereco").value.trim().toUpperCase(),
+            !!document.getElementById('isentarFrete')?.checked
+          );
+        }
         const nomeCli=document.getElementById("cliente").value.trim().toUpperCase();
         if (typeof window.registrarPrecoCliente === "function") {
           await Promise.all(
@@ -741,147 +715,113 @@
         }
       }catch(e){ console.error(e); }
 
-      try{
-        const cliente   = document.getElementById("cliente").value.trim().toUpperCase();
-        const pagamento = document.getElementById("pagamento").value;
-        const endereco  = document.getElementById("endereco").value.trim().toUpperCase();
-        const entregaISO= document.getElementById("entrega").value;
-        const hora      = document.getElementById("horaEntrega").value;
-        const tipoEnt   = document.querySelector('input[name="tipoEntrega"]:checked').value;
-        const isentoMan = !!document.getElementById('isentarFrete')?.checked;
+      // Monta payload p/ /pedidos (salva só quando solicitado)
+      const cliente   = document.getElementById("cliente").value.trim().toUpperCase();
+      const pagamento = document.getElementById("pagamento").value;
+      const endereco  = document.getElementById("endereco").value.trim().toUpperCase();
+      const entregaISO= document.getElementById("entrega").value;
+      const hora      = document.getElementById("horaEntrega").value;
+      const tipoEnt   = document.querySelector('input[name="tipoEntrega"]:checked').value;
+      const isentoMan = !!document.getElementById('isentarFrete')?.checked;
 
-        const payload = {
-          cliente,
-          pagamento,
-          itens: itens.map(i=>({ produto:i.produto, tipo:i.tipo, quantidade:i.quantidade, precoUnit:i.preco, total:i.total, obs:i.obs||"" })),
-          subtotal: Number(subtotal.toFixed(2)),
-          totalPedido: Number((subtotal + Number(window.__frete?.valorCobravel||0)).toFixed(2)),
-          entrega: {
-            tipo: tipoEnt,
-            endereco,
-            km: window.__frete?.km ?? null,
-            min: window.__frete?.min ?? null,
-            valorBase: window.__frete?.valorBase ?? 0,
-            valorCobravel: window.__frete?.valorCobravel ?? 0,
-            isento: !!window.__frete?.isento || isentoMan,
-            isentoManual: isentoMan,
-            status: "PENDENTE",
-            tier: window.__frete?.tier || null,
-            labelIsencao: isentoMan ? "(ISENTO manual)" : (window.__frete?.labelIsencao || "")
-          },
-          dataEntregaISO: entregaISO,
-          horaEntrega: hora,
-          anoMes: entregaISO ? entregaISO.slice(0,7) : "",
-          status: "ABERTO",
-          vendedor: "Leo",
-          obsGeral: (document.getElementById("obsGeral").value||"").trim().toUpperCase()
-        };
-        if (typeof window.savePedido === "function") { await window.savePedido(payload); }
-      }catch(e){ console.warn("Não salvou em /pedidos:", e); }
+      const payload = {
+        cliente,
+        pagamento,
+        itens: itens.map(i=>({ produto:i.produto, tipo:i.tipo, quantidade:i.quantidade, precoUnit:i.preco, total:i.total, obs:i.obs||"" })),
+        subtotal: Number(subtotal.toFixed(2)),
+        totalPedido: Number((subtotal + Number(window.__frete?.valorCobravel||0)).toFixed(2)),
+        entrega: {
+          tipo: tipoEnt,
+          endereco,
+          km: window.__frete?.km ?? null,
+          min: window.__frete?.min ?? null,
+          valorBase: window.__frete?.valorBase ?? 0,
+          valorCobravel: window.__frete?.valorCobravel ?? 0,
+          isento: !!window.__frete?.isento || isentoMan,
+          isentoManual: isentoMan,
+          status: "PENDENTE",
+          tier: window.__frete?.tier || null,
+          labelIsencao: isentoMan ? "(ISENTO manual)" : (window.__frete?.labelIsencao || "")
+        },
+        dataEntregaISO: entregaISO,
+        horaEntrega: hora,
+        anoMes: entregaISO ? entregaISO.slice(0,7) : "",
+        status: "ABERTO",
+        vendedor: "Leo",
+        obsGeral: (document.getElementById("obsGeral").value||"").trim().toUpperCase()
+      };
 
-      const nomeCliente=document.getElementById("cliente").value.trim().toUpperCase();
-      const dataEntregaBr=document.getElementById("entrega").value;
-      const [ano,mes,dia]=(dataEntregaBr||"").split("-");
+      if (querSalvarNoBanco && typeof window.savePedidoIdempotente === "function"){
+        try{ await window.savePedidoIdempotente(payload); }catch(e){ console.warn("savePedido falhou:", e); }
+      }
+
+      const nomeCliente=cliente;
+      const [ano,mes,dia]=(entregaISO||"").split("-");
       const nomeArquivo=`Pedido_${nomeCliente.replace(/\s+/g,'_').replace(/[^A-Z0-9_]/g,'')}_${dia||'DD'}-${mes||'MM'}-${ano||'AAAA'}.pdf`;
 
       return { doc, nomeArquivo };
     }
 
-    function centralizaTexto(doc, text, x, y, width, linhas){
-      let texto=doc.splitTextToSize((text||"").toString(), width-2);
-      if (texto.length>linhas) texto=texto.slice(0,linhas);
-      let offsetY=(10*linhas - texto.length*8)/2 + 5;
-      for (let l=0;l<texto.length;l++){
-        doc.text(texto[l], x+width/2, y+offsetY+l*8, {align:"center"});
-      }
-    }
-
+    // ===== Ações com trava anti-duplo clique =====
     async function gerarPDF(apenasSalvar=false){
-      if (!camposObrigatoriosPreenchidos()) { alert("Preencha Cliente, Endereço, Data e Horário."); return; }
-      // Garante caixa alta antes de gerar
-      forcarUppercase(document.getElementById("cliente"));
-      forcarUppercase(document.getElementById("endereco"));
+      if (window.__busy) return;
+      window.__busy = true;
+      try{
+        if (!camposObrigatoriosPreenchidos()) { alert("Preencha Cliente, Endereço, Data e Horário."); return; }
+        forcarUppercase(document.getElementById("cliente"));
+        forcarUppercase(document.getElementById("endereco"));
+        salvarCamposAntesRender();
 
-      salvarCamposAntesRender();
-      const { doc, nomeArquivo } = await montarPDF();
-      if (apenasSalvar) doc.save(nomeArquivo); else window.open(doc.output('bloburl'), '_blank');
+        const { doc, nomeArquivo } = await montarPDF(/*querSalvarNoBanco*/apenasSalvar);
+        if (apenasSalvar) doc.save(nomeArquivo);
+        else window.open(doc.output('bloburl'), '_blank');
+      } finally {
+        window.__busy = false;
+      }
     }
     window.gerarPDF = gerarPDF;
 
     async function compartilharPDF(){
-      if (!camposObrigatoriosPreenchidos()) { alert("Preencha Cliente, Endereço, Data e Horário."); return; }
-      salvarCamposAntesRender();
-      const { doc, nomeArquivo } = await montarPDF();
-      if (navigator.canShare && window.Blob){
-        const blob = await doc.output("blob");
-        const file = new File([blob], nomeArquivo, { type: "application/pdf" });
-        if (navigator.canShare({ files:[file] })) await navigator.share({ files:[file], title:"Pedido Serra Nobre", text:"Segue pedido em PDF" });
-        else {
-          const url = URL.createObjectURL(blob);
-          window.open(url, "_blank");
-          setTimeout(()=>URL.revokeObjectURL(url), 20000);
+      if (window.__busy) return;
+      window.__busy = true;
+      try{
+        if (!camposObrigatoriosPreenchidos()) { alert("Preencha Cliente, Endereço, Data e Horário."); return; }
+        salvarCamposAntesRender();
+        const { doc, nomeArquivo } = await montarPDF(/*querSalvarNoBanco*/true);
+        if (navigator.canShare && window.Blob){
+          const blob = await doc.output("blob");
+          const file = new File([blob], nomeArquivo, { type: "application/pdf" });
+          if (navigator.canShare({ files:[file] })) await navigator.share({ files:[file], title:"Pedido Serra Nobre", text:"Segue pedido em PDF" });
+          else {
+            const url = URL.createObjectURL(blob); window.open(url, "_blank"); setTimeout(()=>URL.revokeObjectURL(url), 20000);
+          }
+        } else {
+          const blob = await doc.output("blob"); const url = URL.createObjectURL(blob);
+          window.open(url, "_blank"); setTimeout(()=>URL.revokeObjectURL(url), 20000);
         }
-      } else {
-        const blob = await doc.output("blob");
-        const url = URL.createObjectURL(blob);
-        window.open(url, "_blank");
-        setTimeout(()=>URL.revokeObjectURL(url), 20000);
+      } finally {
+        window.__busy = false;
       }
     }
     window.compartilharPDF = compartilharPDF;
 
-    // ===== Registro do Service Worker (forçando update rápido) =====
+    // ===== Service Worker (update rápido) =====
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', async () => {
         try {
           const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-
-          // Checa atualização ao voltar foco e a cada 10 minutos
-          document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') reg.update();
-          });
+          document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update(); });
           setInterval(() => reg.update(), 10 * 60 * 1000);
-
-          // Barra para avisar versão nova
-          function showUpdateBar(onConfirm) {
-            let bar = document.getElementById('sw-update-bar');
-            if (!bar) {
-              bar = document.createElement('div');
-              bar.id = 'sw-update-bar';
-              bar.style.cssText =
-                'position:fixed;left:0;right:0;bottom:0;padding:10px;background:#0f766e;color:#fff;' +
-                'display:flex;gap:10px;align-items:center;justify-content:center;z-index:99999';
-              bar.innerHTML = `
-                <span>Nova versão disponível (${window.__APP_VERSION}).</span>
-                <button id="sw-reload-btn" style="background:#fff;color:#0f766e;border:none;padding:6px 10px;border-radius:6px;cursor:pointer">
-                  Atualizar agora
-                </button>`;
-              document.body.appendChild(bar);
-            }
-            document.getElementById('sw-reload-btn').onclick = onConfirm;
-          }
-
           reg.addEventListener('updatefound', () => {
-            const newSW = reg.installing;
-            if (!newSW) return;
-            newSW.addEventListener('statechange', () => {
-              if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
-                // Mostra aviso e dispara skipWaiting quando o usuário pedir
-                showUpdateBar(() => reg.waiting?.postMessage('SKIP_WAITING'));
-              }
+            const nw = reg.installing; if (!nw) return;
+            nw.addEventListener('statechange', () => {
+              if (nw.state === 'installed' && navigator.serviceWorker.controller) reg.waiting && reg.waiting.postMessage('SKIP_WAITING');
             });
           });
-
-          // Recarrega quando o novo SW assume controle
           navigator.serviceWorker.addEventListener('controllerchange', () => {
-            if (!window.__reloadedBySW) {
-              window.__reloadedBySW = true;
-              location.reload();
-            }
+            if (!window.__reloadedBySW) { window.__reloadedBySW = true; location.reload(); }
           });
-        } catch (e) {
-          // silencioso
-        }
+        } catch (e) {}
       });
     }
   </script>
