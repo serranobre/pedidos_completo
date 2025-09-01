@@ -138,7 +138,6 @@
       updateDoc, doc, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
-    // ==== MESMA CONFIG DO INDEX ====
     const firebaseConfig = {
       apiKey: "AIzaSyB3zBW_WhVfNpX5uoJCq-6WysE5XKYKZt4",
       authDomain: "serranobrepedidos.firebaseapp.com",
@@ -152,310 +151,97 @@
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    // --- Acesso direto: autentica anonimamente e SÓ resolve quando tiver user ---
-    function ensureAnonAuth(){
-      return new Promise((resolve) => {
-        const unsub = onAuthStateChanged(auth, async (u) => {
-          if (u) { unsub(); resolve(u); return; }
-          try { await signInAnonymously(auth); }
-          catch (e) { console.error('Anon auth error:', e); }
-        }, (err) => {
-          console.error('onAuthStateChanged error:', err);
+    async function ensureAnonAuth(){
+      return new Promise((resolve)=>{
+        onAuthStateChanged(auth, async (u)=>{
+          try{
+            if (!u) await signInAnonymously(auth);
+          }catch(_){}
+          resolve();
+        }, async ()=>{
+          try{ await signInAnonymously(auth); }catch(_){}
+          resolve();
         });
       });
     }
 
-    /* =================== HELPERS =================== */
     const $ = (id)=>document.getElementById(id);
-    function toBR(iso){
-      if(!iso) return "";
-      const [y,m,d] = iso.split("-");
-      return `${d}/${m}/${y}`;
-    }
+    function toBR(iso){ if(!iso) return ""; const [y,m,d] = iso.split("-"); return `${d}/${m}/${y}`; }
     function money(n){ return (Number(n||0)).toFixed(2).replace(".",","); }
 
-    /* =================== BUSCA =================== */
-    function renderMiniTableReadOnly(itens){
-      if (!Array.isArray(itens) || !itens.length) return `<div class="muted">Sem itens.</div>`;
-      const lines = itens.map((it,idx)=>`
-        <tr>
-          <td>${idx+1}</td>
-          <td>${it.produto||""}</td>
-          <td>${it.tipo||""}</td>
-          <td>${Number(it.quantidade||0)}</td>
-          <td>R$ ${money(it.precoUnit ?? it.preco)}</td>
-          <td>R$ ${money(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))))}</td>
-        </tr>
-      `).join("");
-      return `
-        <table class="mini-table">
-          <thead><tr>
-            <th>#</th><th>Produto</th><th>Tipo</th><th>Qtd/Peso</th><th>R$ Unit</th><th>R$ Total</th>
-          </tr></thead>
-          <tbody>${lines}</tbody>
-        </table>`;
-    }
-
     function renderRows(docs){
-      const tbody = document.getElementById("tbody");
-      const modo  = (document.getElementById("fModo")?.value || "reduzido");
+      const tbody = $("tbody");
+      const modo = $("fModo").value || "reduzido";
 
-      if (!Array.isArray(docs) || !docs.length){
+      if (!docs.length){
         tbody.innerHTML = `<tr><td colspan="8">Sem resultados.</td></tr>`;
-        document.getElementById("ftCount").textContent = "0 pedidos";
-        document.getElementById("ftTotal").textContent = "R$ 0,00";
+        $("ftCount").textContent = "0 pedidos";
+        $("ftTotal").textContent = "R$ 0,00";
         return;
       }
 
       let total = 0;
-      const html = [];
+      const rows = [];
 
       for (const x of docs){
-        const itens      = Array.isArray(x.itens) ? x.itens : [];
+        const itens = Array.isArray(x.itens) ? x.itens : [];
         const itensCount = itens.length;
-        const tot        = Number(x.totalPedido || 0);
+        const tot = Number(x.totalPedido||0);
         total += tot;
-
         const tipoAtual = (x?.entrega?.tipo || "").toUpperCase();
-        const tipoTxt   = (tipoAtual === "RETIRADA" ? "RETIRADA" : "ENTREGA");
+        const tipoTxt = (tipoAtual==="RETIRADA" ? "RETIRADA" : "ENTREGA");
 
-        const rowMain =
-          `<tr data-rowid="${x.id}">
-             <td>${toBR(x.dataEntregaISO)||""}</td>
-             <td>${x.horaEntrega||""}</td>
-             <td class="cell-client" data-id="${x.id}" title="Clique para editar">${x.cliente||""}</td>
-             <td>${itensCount}</td>
-             <td>R$ ${money(tot)}</td>
-             <td class="col-tipo">${tipoTxt}</td>
-             <td>${x.pagamento||""}</td>
-             <td class="row-actions">
-               <button class="btn gray" data-action="open" data-id="${x.id}">Editar</button>
-             </td>
-           </tr>`;
-
-        let rowDetail = "";
-        if (modo === "detalhado"){
-          const itensTable = renderMiniTableReadOnly(itens);
-          rowDetail =
-            `<tr class="details-row" data-parent="${x.id}">
-               <td colspan="8" class="wrap">
-                 ${itensTable}
-                 <div class="totals-line">
-                   <span class="pill">Frete: R$ ${money(x?.entrega?.valorCobravel||0)}</span>
-                   <span class="pill"><strong>Total pedido:</strong> R$ ${money(tot)}</span>
-                 </div>
-               </td>
-             </tr>`;
-        }
-
-        html.push(rowMain, rowDetail);
+        rows.push(`
+          <tr data-rowid="${x.id}">
+            <td>${toBR(x.dataEntregaISO)||""}</td>
+            <td>${x.horaEntrega||""}</td>
+            <td class="cell-client" data-id="${x.id}" title="Clique para editar">${(x.cliente||"")}</td>
+            <td>${itensCount}</td>
+            <td>R$ ${money(tot)}</td>
+            <td>${tipoTxt}</td>
+            <td>${x.pagamento||""}</td>
+            <td class="row-actions"><button class="btn gray" data-action="open" data-id="${x.id}">Editar</button></td>
+          </tr>
+        `);
       }
 
-      tbody.innerHTML = html.join("");
-      document.getElementById("ftCount").textContent = `${docs.length} pedido(s)`;
-      document.getElementById("ftTotal").textContent = `R$ ${total.toFixed(2)}`;
-
-      tbody.querySelectorAll('.cell-client').forEach(td=>{
-        td.addEventListener('click', ()=> openEditor(td.dataset.id));
-      });
-      tbody.querySelectorAll('button[data-action="open"]').forEach(btn=>{
-        btn.addEventListener('click', ()=> openEditor(btn.dataset.id));
-      });
-    }
-
-    // editor inline (abre logo abaixo da linha)
-    function openEditor(id){
-      const tbody = $("tbody");
-      tbody.querySelectorAll(`tr[data-editfor="${id}"]`).forEach(tr=>tr.remove());
-
-      const rowData = (window.__rows||[]).find(r=>r.id===id);
-      if (!rowData) return;
-
-      const itens = Array.isArray(rowData.itens) ? rowData.itens : [];
-      const tipoAtual = (rowData?.entrega?.tipo || "ENTREGA").toUpperCase();
-
-      const editorHTML =
-        `<tr class="details-row" data-editfor="${id}">
-          <td colspan="8" class="wrap">
-            <div style="display:grid; grid-template-columns: 220px 1fr; gap:10px; align-items:center">
-              <div>
-                <label>Tipo de entrega</label>
-                <select id="edit_tipo_${id}">
-                  <option value="ENTREGA" ${tipoAtual==="ENTREGA"?"selected":""}>ENTREGA</option>
-                  <option value="RETIRADA" ${tipoAtual==="RETIRADA"?"selected":""}>RETIRADA</option>
-                </select>
-              </div>
-              <div class="totals-line">
-                <span class="pill">Frete atual: R$ ${money(rowData?.entrega?.valorCobravel||0)}</span>
-                <span class="pill"><strong>Total atual:</strong> R$ ${money(rowData.totalPedido||0)}</span>
-              </div>
-            </div>
-
-            <div style="margin-top:8px"></div>
-            <table class="mini-table" id="tbl_${id}">
-              <thead>
-                <tr><th>#</th><th style="width:40%">Produto</th><th>Tipo</th><th>Qtd/Peso</th><th>R$ Unit</th><th>R$ Total</th></tr>
-              </thead>
-              <tbody>
-                ${itens.map((it,ix)=>`
-                  <tr data-ix="${ix}">
-                    <td>${ix+1}</td>
-                    <td class="wrap">${it.produto||""}</td>
-                    <td>
-                      <select class="i_tipo">
-                        <option value="KG" ${it.tipo==="KG"?"selected":""}>KG</option>
-                        <option value="UN" ${it.tipo==="UN"?"selected":""}>UN</option>
-                      </select>
-                    </td>
-                    <td><input type="number" step="0.01" class="i_qtd" value="${Number(it.quantidade||0)}"/></td>
-                    <td><input type="number" step="0.01" class="i_unit" value="${Number(it.precoUnit ?? it.preco || 0)}"/></td>
-                    <td><input type="number" step="0.01" class="i_total" value="${Number(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))))}" /></td>
-                  </tr>
-                `).join("")}
-              </tbody>
-            </table>
-
-            <div class="flex-end">
-              <button class="btn ghost" id="btnRecalc_${id}">Recalcular total</button>
-              <button class="btn gray" id="btnSave_${id}">Salvar alterações</button>
-            </div>
-          </td>
-        </tr>`;
-
-      const tr = tbody.querySelector(`tr[data-rowid="${id}"]`);
-      if (tr) tr.insertAdjacentHTML("afterend", editorHTML);
-
-      const tbl = document.getElementById(`tbl_${id}`);
-      const recalc = ()=> recalcTotalsFromEditor(id);
-      tbl.querySelectorAll("input,select").forEach(el=>{
-        el.addEventListener("input", recalc);
-        el.addEventListener("change", recalc);
-      });
-      document.getElementById(`btnRecalc_${id}`).onclick = recalc;
-      document.getElementById(`btnSave_${id}`).onclick = ()=> saveEditor(id);
-    }
-
-    function recalcTotalsFromEditor(id){
-      const rowData = (window.__rows||[]).find(r=>r.id===id);
-      if(!rowData) return;
-
-      const tbl = document.getElementById(`tbl_${id}`);
-      if(!tbl) return;
-
-      let subtotal = 0;
-      tbl.querySelectorAll("tbody tr").forEach(tr=>{
-        const qtd  = parseFloat(tr.querySelector(".i_qtd")?.value || "0");
-        const unit = parseFloat(tr.querySelector(".i_unit")?.value || "0");
-        let totInp = tr.querySelector(".i_total");
-        const auto = (qtd*unit);
-        if (!totInp.dataset.userEdit) totInp.value = auto.toFixed(2);
-        const totVal = parseFloat(totInp.value || "0");
-        subtotal += (isFinite(totVal) ? totVal : 0);
-      });
-
-      const frete = Number(rowData?.entrega?.valorCobravel || 0);
-      const total = subtotal + frete;
-
-      const host = document.querySelector(`tr[data-editfor="${id}"]`);
-      if(host){
-        host.querySelectorAll(".totals-line .pill")[1].innerHTML = `<strong>Total atual:</strong> R$ ${money(total)}`;
-      }
-      return { subtotal, total };
-    }
-
-    async function saveEditor(id){
-      const rowData = (window.__rows||[]).find(r=>r.id===id);
-      if(!rowData) return;
-
-      const tbl = document.getElementById(`tbl_${id}`);
-      const tipoSel = document.getElementById(`edit_tipo_${id}`);
-
-      const novosItens = [];
-      tbl.querySelectorAll("tbody tr").forEach(tr=>{
-        const ix    = Number(tr.getAttribute("data-ix"));
-        const base  = (rowData.itens||[])[ix] || {};
-
-        const tipo  = (tr.querySelector(".i_tipo")?.value || base.tipo || "KG").toUpperCase();
-        const qtd   = parseFloat(tr.querySelector(".i_qtd")?.value || "0") || 0;
-        const unit  = parseFloat(tr.querySelector(".i_unit")?.value || "0") || 0;
-        const total = parseFloat(tr.querySelector(".i_total")?.value || (qtd*unit) || "0") || 0;
-
-        novosItens.push({
-          produto: base.produto || "",
-          tipo, quantidade: Number(qtd), precoUnit: Number(unit), total: Number(total)
-        });
-      });
-
-      const subtotal = novosItens.reduce((s,i)=> s + Number(i.total||0), 0);
-      const frete = Number(rowData?.entrega?.valorCobravel || 0);
-      const totalPedido = Number((subtotal + frete).toFixed(2));
-      const novoTipo = (tipoSel?.value || "ENTREGA").toUpperCase();
-
-      try{
-        await updateDoc(doc(db, "pedidos", id), {
-          itens: novosItens,
-          subtotal: Number(subtotal.toFixed(2)),
-          totalPedido,
-          "entrega.tipo": novoTipo,
-          updatedAt: serverTimestamp()
-        });
-
-        rowData.itens = novosItens;
-        rowData.subtotal = Number(subtotal.toFixed(2));
-        rowData.totalPedido = totalPedido;
-        rowData.entrega = rowData.entrega || {};
-        rowData.entrega.tipo = novoTipo;
-
-        renderRows(window.__rows || []);
-      }catch(e){
-        console.error(e);
-        alert("Falha ao salvar no banco.");
-      }
+      tbody.innerHTML = rows.join("");
+      $("ftCount").textContent = `${docs.length} pedido(s)`;
+      $("ftTotal").textContent = `R$ ${total.toFixed(2)}`;
     }
 
     async function buscar(){
-      try{
-        const di = $("fDataIni").value;
-        const df = $("fDataFim").value;
-        const hi = $("fHoraIni").value;
-        const hf = $("fHoraFim").value;
-        const cliente = $("fCliente").value.trim().toUpperCase();
-        const tipoSel = $("fTipo").value.trim();
+      const di = $("fDataIni").value;
+      const df = $("fDataFim").value;
+      const cliente = $("fCliente").value.trim().toUpperCase();
+      const tipoSel = $("fTipo").value.trim();
 
-        let qRef = collection(db, "pedidos");
+      let ref = collection(db, "pedidos");
+      let qRef;
+
+      if (di || df){
         const conds = [];
         if (di) conds.push(where("dataEntregaISO", ">=", di));
         if (df) conds.push(where("dataEntregaISO", "<=", df));
-
-        if (conds.length){
-          qRef = query(qRef, ...conds, orderBy("dataEntregaISO", "desc"), limit(1000));
-        } else {
-          // mais consistente que createdAt (nem todos docs têm)
-          qRef = query(qRef, orderBy("dataEntregaISO", "desc"), limit(1000));
-        }
-
-        const snap = await getDocs(qRef);
-        const list = [];
-        snap.forEach(d => list.push({ id:d.id, ...d.data() }));
-        console.log('Encontrados:', list.length, list.slice(0,3));
-
-        const out = list.filter(x=>{
-          if (hi && (x.horaEntrega || "") < hi) return false;
-          if (hf && (x.horaEntrega || "") > hf) return false;
-          if (cliente && !(x.cliente||"").toUpperCase().includes(cliente)) return false;
-          if (tipoSel && ((x.entrega?.tipo||"").toUpperCase() !== tipoSel)) return false;
-          return true;
-        });
-
-        window.__rows = out;
-        renderRows(out);
-      }catch(e){
-        console.error('Erro ao buscar pedidos:', e);
-        alert('Não foi possível buscar pedidos. Veja o console para detalhes.');
+        qRef = query(ref, ...conds, orderBy("dataEntregaISO","desc"), limit(1000));
+      } else {
+        qRef = query(ref, orderBy("createdAt","desc"), limit(1000));
       }
+
+      const snap = await getDocs(qRef);
+      const list = [];
+      snap.forEach(d => list.push({ id:d.id, ...d.data() }));
+
+      const out = list.filter(x=>{
+        if (cliente && !(x.cliente||"").toUpperCase().includes(cliente)) return false;
+        if (tipoSel && ((x.entrega?.tipo||"").toUpperCase() !== tipoSel)) return false;
+        return true;
+      });
+
+      window.__rows = out;
+      renderRows(out);
     }
 
-    // Botões principais
     document.getElementById("btnBuscar").onclick = buscar;
     document.getElementById("btnLimpar").onclick = ()=>{
       ["fDataIni","fDataFim","fHoraIni","fHoraFim","fCliente"].forEach(id=>$(id).value="");
@@ -466,227 +252,35 @@
       window.__rows = [];
     };
 
-    /* =================== EXPORTAÇÃO XLSX =================== */
-    async function exportarXLSX(){
-      const rows = Array.isArray(window.__rows) ? JSON.parse(JSON.stringify(window.__rows)) : [];
-      if (!rows.length){ alert("Faça uma busca primeiro."); return; }
-
-      const modo = (document.getElementById("fModo")?.value || "reduzido");
-      const XLSXlib = window.XLSX;
-      if (!XLSXlib){ alert("Biblioteca XLSX não carregou."); return; }
-
-      let aoa = [];
-      if (modo === "reduzido"){
-        aoa = [["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagamento"]];
-        for (const r of rows){
-          const itensCount = Array.isArray(r.itens) ? r.itens.length : 0;
-          aoa.push([
-            toBR(r.dataEntregaISO||""), r.horaEntrega||"", r.cliente||"", itensCount,
-            (Number(r.totalPedido||0)).toFixed(2), (r.entrega?.tipo||""), r.pagamento||""
-          ]);
-        }
-      } else {
-        aoa = [["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagamento","—","Produto","Tipo Item","Qtd","R$ Unit","R$ Total"]];
-        for (const r of rows){
-          const itens = Array.isArray(r.itens) ? r.itens : [];
-          aoa.push([
-            toBR(r.dataEntregaISO||""), r.horaEntrega||"", r.cliente||"", itens.length,
-            (Number(r.totalPedido||0)).toFixed(2), (r.entrega?.tipo||""), r.pagamento||"", ""
-          ]);
-          for (const it of itens){
-            const totalItem = Number(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))));
-            aoa.push([
-              "","","","","","","","",
-              it.produto||"", it.tipo||"", Number(it.quantidade||0),
-              Number(it.precoUnit||it.preco||0), Number(totalItem||0)
-            ]);
-          }
-        }
-      }
-
-      const ws = XLSXlib.utils.aoa_to_sheet(aoa);
-      const wb = XLSXlib.utils.book_new();
-      XLSXlib.utils.book_append_sheet(wb, ws, modo === "reduzido" ? "Relatório" : "Relatório Detalhado");
-
-      const maxCols = Math.max(...aoa.map(r => r.length));
-      ws['!cols'] = Array.from({length: maxCols}, (_, i) => {
-        const largura = Math.max(...aoa.map(r => (r[i] ? String(r[i]).length : 0))) + 2;
-        return { wch: Math.min(Math.max(largura, 8), 40) };
-      });
-
-      const filename = `relatorio_serranobre_${modo}_${new Date().toISOString().slice(0,10)}.xlsx`;
-      try {
-        XLSXlib.writeFile(wb, filename, { compression: true });
-      } catch (e) {
-        try {
-          const wbout = XLSXlib.write(wb, { bookType: "xlsx", type: "array", compression: true });
-          const blob = new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-          const url  = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url; a.download = filename;
-          document.body.appendChild(a); a.click(); a.remove();
-          setTimeout(()=>URL.revokeObjectURL(url), 20000);
-        } catch (err) {
-          console.error("Falha ao gerar XLSX:", err);
-          alert("Não foi possível gerar o arquivo XLSX.");
-        }
-      }
-    }
-    document.getElementById("btnXLSX").onclick = exportarXLSX;
-
-    // ====== PDF via jsPDF (reduzido/detalhado) ======
-    document.getElementById("btnPDF").onclick = ()=>{
-      const rows = window.__rows || [];
-      if (!rows.length){ alert("Faça uma busca primeiro."); return; }
-      const modo = (document.getElementById("fModo")?.value || "reduzido");
-
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
-
-      doc.setFont("helvetica","bold"); doc.setFontSize(14);
-      doc.text("Relatório de Pedidos — Serra Nobre", 10, 12);
-      doc.setFontSize(10); doc.setFont("helvetica","normal");
-      const periodo = (()=> {
-        const di = $("fDataIni").value, df=$("fDataFim").value;
-        if (di || df) return `Período: ${toBR(di)||'...'} a ${toBR(df)||'...'}`;
-        return "Período: (todos por criação recente)";
-      })();
-      doc.text(periodo, 10, 18);
-
-      const headers = ["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagto."];
-      const colX = [10, 30, 50, 140, 160, 185, 215];
-      const rowH = 7;
-      let y = 26;
-
-      doc.setFont("helvetica","bold");
-      for(let i=0;i<headers.length;i++){ doc.text(headers[i], colX[i], y); }
-      doc.setLineWidth(0.2); doc.line(10, y+2, 285, y+2);
-      doc.setFont("helvetica","normal");
-
-      y += 6;
-      let totalGeral = 0;
-
-      const drawRow = (r)=>{
-        if (y > 190){
-          doc.addPage("a4","landscape");
-          doc.setFont("helvetica","bold"); doc.setFontSize(10);
-          for(let i=0;i<headers.length;i++){ doc.text(headers[i], colX[i], 12); }
-          doc.line(10, 14, 285, 14);
-          doc.setFont("helvetica","normal"); y = 20;
-        }
-        const itens = Array.isArray(r.itens) ? r.itens : [];
-        const itensCount = itens.length;
-        const tot = Number(r.totalPedido||0); totalGeral += tot;
-
-        doc.text(toBR(r.dataEntregaISO||""), colX[0], y);
-        doc.text(r.horaEntrega||"", colX[1], y);
-        const cliente = (r.cliente||"").toString();
-        const clienteBreak = doc.splitTextToSize(cliente, colX[3]-colX[2]-2);
-        doc.text(clienteBreak, colX[2], y);
-        doc.text(String(itensCount), colX[3], y);
-        doc.text(tot.toFixed(2), colX[4], y);
-        doc.text((r.entrega?.tipo||"").toString(), colX[5], y);
-        doc.text(r.pagamento||"", colX[6], y);
-
-        y += Math.max(rowH, (clienteBreak.length)*5);
-        doc.setDrawColor(230); doc.line(10, y-2, 285, y-2);
-        doc.setDrawColor(0);
-
-        if (modo==="detalhado" && itensCount){
-          const startX = 50;
-          const wCols = [90, 25, 25, 25, 25];
-          doc.setFont("helvetica","bold"); doc.setFontSize(9);
-          const hdr = ["Produto","Tipo","Qtd/Peso","R$ Unit","R$ Total"];
-          let yy = y+2; let xx = startX;
-          for (let i=0;i<hdr.length;i++){ doc.text(hdr[i], xx+2, yy); xx += wCols[i]; }
-          yy += 4; doc.setFont("helvetica","normal");
-
-          for (const it of itens){
-            const linha = [
-              (it.produto||""), (it.tipo||""),
-              String(Number(it.quantidade||0)),
-              money(it.precoUnit ?? it.preco),
-              money(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))))
-            ];
-            xx = startX;
-            const wrapProd = doc.splitTextToSize(linha[0], wCols[0]-4);
-            const linesH = Math.max(5, wrapProd.length*5);
-            doc.text(wrapProd, xx+2, yy); xx += wCols[0];
-            doc.text(linha[1], xx+2, yy); xx += wCols[1];
-            doc.text(linha[2], xx+2, yy); xx += wCols[2];
-            doc.text(linha[3], xx+2, yy); xx += wCols[3];
-            doc.text(linha[4], xx+2, yy);
-            yy += linesH;
-          }
-          y = yy + 2;
-          doc.setDrawColor(230); doc.line(10, y-2, 285, y-2);
-          doc.setDrawColor(0);
-        }
-      };
-
-      rows.forEach(drawRow);
-
-      doc.setFont("helvetica","bold");
-      doc.text(`Total de pedidos: ${rows.length}`, 10, y+8);
-      doc.text(`Soma (R$): ${totalGeral.toFixed(2)}`, 80, y+8);
-
-      doc.save(`relatorio_serranobre_${new Date().toISOString().slice(0,10)}.pdf`);
-    };
-
-    // ---- Inicialização: autentica e deixa pronto para buscar ----
     await ensureAnonAuth();
-    // buscar(); // se quiser abrir já buscando
   </script>
 
-  <!-- Registro do Service Worker (atualização rápida) -->
+  <!-- Registro do Service Worker -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', async () => {
         try {
           const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-
           document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') reg.update();
           });
           setInterval(() => reg.update(), 10 * 60 * 1000);
-
-          function showUpdateBar(onConfirm) {
-            let bar = document.getElementById('sw-update-bar');
-            if (!bar) {
-              bar = document.createElement('div');
-              bar.id = 'sw-update-bar';
-              bar.style.cssText =
-                'position:fixed;left:0;right:0;bottom:0;padding:10px;background:#0f766e;color:#fff;' +
-                'display:flex;gap:10px;align-items:center;justify-content:center;z-index:99999';
-              bar.innerHTML = `
-                <span>Nova versão disponível.</span>
-                <button id="sw-reload-btn" style="background:#fff;color:#0f766e;border:none;padding:6px 10px;border-radius:6px;cursor:pointer">
-                  Atualizar agora
-                </button>`;
-              document.body.appendChild(bar);
-            }
-            document.getElementById('sw-reload-btn').onclick = onConfirm;
-          }
-
           reg.addEventListener('updatefound', () => {
             const newSW = reg.installing;
             if (!newSW) return;
             newSW.addEventListener('statechange', () => {
               if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
-                showUpdateBar(() => reg.waiting?.postMessage('SKIP_WAITING'));
+                reg.waiting?.postMessage('SKIP_WAITING');
               }
             });
           });
-
           navigator.serviceWorker.addEventListener('controllerchange', () => {
             if (!window.__reloadedBySW) {
               window.__reloadedBySW = true;
               location.reload();
             }
           });
-        } catch (e) {
-          // silencioso
-        }
+        } catch (e) {}
       });
     }
   </script>
