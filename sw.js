@@ -1,5 +1,5 @@
 /* Serra Nobre – Pedidos: Service Worker (v3.1.4) */
-const SW_VERSION = 'pedidos-v3.1.4-2025-08-29';
+const SW_VERSION = 'pedidos-v3.1.5-2025-09-01';
 const CACHE_NAME = `sn-pedidos::${SW_VERSION}`;
 
 // Arquivos principais a manter em cache
