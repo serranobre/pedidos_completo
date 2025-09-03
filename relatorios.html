@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Relatórios — Serra Nobre V3.1.8</title>
+  <title>Relatórios — Serra Nobre V3.1.9</title>
   <link rel="manifest" href="manifest.json" />
   <style>
     :root{
@@ -34,6 +34,761 @@
     thead th:nth-child(3){width:260px}
     thead th:nth-child(4){width:70px}
     thead th:nth-child(5){width:120px}
+    thead th:nth-child(6){width:140px}
+    thead th:nth-child(7){width:130px}
+    thead th:nth-child(8){width:120px}
+    tbody td{ border-bottom:1px solid #f1f5f9; padding:10px; font-size:14px; vertical-align:top; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+    tbody td.wrap{ white-space:normal }
+    tfoot td{ background:#f8fafc; font-weight:600; padding:10px; border-top:1px solid var(--line) }
+    .muted{ color:var(--muted); font-size:12px }
+    .row-actions button{ padding:6px 10px }
+    .cell-client{ color:#0f766e; cursor:pointer; text-decoration:underline }
+    .details-row td{ background:#fbfeff }
+    .mini-table{ width:100%; border-collapse:collapse; margin-top:4px }
+    .mini-table th, .mini-table td{ border:1px solid #e2e8f0; padding:6px; font-size:12px }
+    .mini-table th{ background:#f8fafc; text-align:left }
+    .mini-table input[type="number"]{ width:100%; padding:6px; font-size:12px }
+    .mini-table select{ width:100%; padding:6px; font-size:12px }
+    .flex-end{ display:flex; justify-content:flex-end; gap:8px; margin-top:8px }
+    .totals-line{ display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin-top:6px }
+    .totals-line .pill{ background:#eef7f7; padding:6px 10px; border-radius:999px; font-size:12px }
+    .col-tipo select{ width:100% }
+    @media (max-width: 980px){ .filters{grid-template-columns:repeat(3,minmax(0,1fr))} }
+    @media (max-width: 560px){ .filters{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  </style>
+  <!-- SheetJS p/ XLSX -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.19.3/dist/xlsx.full.min.js"></script>
+  <!-- jsPDF para PDF do relatório -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <a href="index.html">← Voltar</a>
+    <h1>Relatórios — Serra Nobre V3.1.9</h1>
+    <div style="margin-left:auto"></div>
+  </header>
+
+  <main id="app">
+    <section class="card">
+      <div class="filters">
+        <div><label>Data entrega — de</label><input type="date" id="fDataIni"></div>
+        <div><label>Data entrega — até</label><input type="date" id="fDataFim"></div>
+        <div><label>Horário — de</label><input type="time" id="fHoraIni"></div>
+        <div><label>Horário — até</label><input type="time" id="fHoraFim"></div>
+        <div><label>Cliente (contém)</label><input type="text" id="fCliente" placeholder="ex.: mercado"></div>
+        <div>
+          <label>Tipo (Entrega/Retirada)</label>
+          <select id="fTipo">
+            <option value="">Todos</option>
+            <option value="ENTREGA">ENTREGA</option>
+            <option value="RETIRADA">RETIRADA</option>
+          </select>
+        </div>
+        <div>
+          <label>Formato</label>
+          <select id="fModo">
+            <option value="reduzido">Reduzido</option>
+            <option value="detalhado">Detalhado</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="btnBuscar">Buscar</button>
+        <button class="btn ghost" id="btnLimpar">Limpar</button>
+        <button class="btn warning" id="btnXLSX" title="Exportar resultados para XLSX">Exportar XLSX</button>
+        <button class="btn gray" id="btnPDF" title="Gerar PDF">Gerar PDF</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Hora</th>
+              <th>Cliente (clique para editar)</th>
+              <th>Itens</th>
+              <th>Total (R$)</th>
+              <th>Tipo</th>
+              <th>Pagamento</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3" id="ftCount">0 pedidos</td>
+              <td></td>
+              <td id="ftTotal">R$ 0,00</td>
+              <td colspan="3"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+    import {
+      getFirestore, collection, query, where, getDocs, orderBy, limit,
+      updateDoc, doc, serverTimestamp, enableIndexedDbPersistence
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyB3zBW_WhVfNpX5uoJCq-6WysE5XKYKZt4",
+      authDomain: "serranobrepedidos.firebaseapp.com",
+      projectId: "serranobrepedidos",
+      storageBucket: "serranobrepedidos.firebasestorage.app",
+      messagingSenderId: "948939268023",
+      appId: "1:948939268023:web:3f1f6c18f2c047c82b1232"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
+
+    // Cache offline (best-effort)
+    enableIndexedDbPersistence(db).catch(()=>{});
+
+    async function ensureAnonAuth(){
+      return new Promise((resolve)=>{
+        onAuthStateChanged(auth, async (u)=>{
+          try{
+            if (!u) await signInAnonymously(auth);
+          }catch(_){}
+          resolve();
+        }, async (_err)=>{
+          try{ await signInAnonymously(auth); }catch(_){}
+          resolve();
+        });
+      });
+    }
+
+    const $ = (id)=>document.getElementById(id);
+    function toBR(iso){ if(!iso) return ""; const [y,m,d]=iso.split("-"); return `${d}/${m}/${y}`; }
+    function money(n){ return (Number(n||0)).toFixed(2).replace(".",","); }
+
+    // ===== Helpers PRO =====
+    function normISODate(v){
+      if (!v) return "";
+      if (v && typeof v === "object" && typeof v.toDate === "function") {
+        try { return v.toDate().toISOString().slice(0,10); } catch(_) { return ""; }
+      }
+      if (v instanceof Date && !isNaN(v)) return v.toISOString().slice(0,10);
+      if (typeof v === "string"){
+        if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+        const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+      }
+      return "";
+    }
+    function normTimeHHMM(v){
+      if (!v || typeof v !== "string") return "";
+      const m = v.match(/^(\d{1,2}):(\d{2})/);
+      if (!m) return "";
+      const h = String(Math.min(23, Number(m[1]))).padStart(2,"0");
+      const mm = String(Math.min(59, Number(m[2]))).padStart(2,"0");
+      return `${h}:${mm}`;
+    }
+    function toDiaInt(iso){ return /^\d{4}-\d{2}-\d{2}$/.test(iso||"") ? Number(iso.replaceAll("-","")) : NaN; }
+
+    // Normalização silenciosa (opcional)
+    async function normalizeDocShapeIfNeeded(id, data){
+      try{
+        const iso = normISODate(data.dataEntregaISO || data.dataEntrega || data.dataEntregaTS);
+        if (!iso) return;
+        const dia = toDiaInt(iso);
+        const patch = {};
+        let needs = false;
+        if (data.dataEntregaISO !== iso){ patch.dataEntregaISO = iso; needs = true; }
+        if (!Number.isFinite(data.dataEntregaDia) || data.dataEntregaDia !== dia){ patch.dataEntregaDia = dia; needs = true; }
+        if (needs){
+          patch.updatedAt = serverTimestamp();
+          await updateDoc(doc(db,"pedidos", id), patch);
+        }
+      }catch(_){}
+    }
+
+    function setExportsEnabled(enabled){
+      $("btnXLSX").disabled = !enabled;
+      $("btnPDF").disabled  = !enabled;
+    }
+    // inicia desabilitado
+    setExportsEnabled(false);
+
+    function renderRows(docs){
+      const tbody = $("tbody");
+      const modo = ($("fModo")?.value) || "reduzido";
+
+      if (!docs.length){
+        tbody.innerHTML = '<tr><td colspan="8">Sem resultados.</td></tr>';
+        $("ftCount").textContent = "0 pedidos";
+        $("ftTotal").textContent = "R$ 0,00";
+        setExportsEnabled(false);
+        return;
+      }
+      let total = 0;
+      const rows = [];
+
+      for (const x of docs){
+        const itens = Array.isArray(x.itens) ? x.itens : [];
+        const itensCount = itens.length;
+        const tot = Number(x.totalPedido||0);
+        total += tot;
+
+        const tipoAtual = ((x?.entrega?.tipo)||"").toUpperCase();
+        const tipoTxt = (tipoAtual==="RETIRADA" ? "RETIRADA" : "ENTREGA");
+
+        rows.push(
+`<tr data-rowid="${x.id}">
+  <td>${toBR(normISODate(x.dataEntregaISO || x.dataEntrega || x.dataEntregaTS))}</td>
+  <td>${normTimeHHMM(x.horaEntrega||"")}</td>
+  <td class="cell-client" data-id="${x.id}" title="Clique para editar">${x.cliente||""}</td>
+  <td>${itensCount}</td>
+  <td>R$ ${money(tot)}</td>
+  <td class="col-tipo">${tipoTxt}</td>
+  <td>${x.pagamento||""}</td>
+  <td class="row-actions"><button class="btn gray" data-action="open" data-id="${x.id}">Editar</button></td>
+</tr>${
+  (modo==="detalhado")
+    ? `<tr class="details-row" data-parent="${x.id}">
+         <td colspan="8" class="wrap">
+           ${renderMiniTableReadOnly(itens)}
+           <div class="totals-line">
+             <span class="pill">Frete: R$ ${money(x?.entrega?.valorCobravel||0)}</span>
+             <span class="pill"><strong>Total pedido:</strong> R$ ${money(tot)}</span>
+           </div>
+         </td>
+       </tr>`
+    : ""
+}`
+        );
+      }
+
+      tbody.innerHTML = rows.join("");
+      $("ftCount").textContent = `${docs.length} pedido(s)`;
+      $("ftTotal").textContent = `R$ ${money(total)}`;
+      setExportsEnabled(true);
+
+      tbody.querySelectorAll('.cell-client').forEach(td=>{
+        td.addEventListener('click', ()=> openEditor(td.dataset.id));
+      });
+      tbody.querySelectorAll('button[data-action="open"]').forEach(btn=>{
+        btn.addEventListener('click', ()=> openEditor(btn.dataset.id));
+      });
+    }
+
+    function renderMiniTableReadOnly(itens){
+      if (!Array.isArray(itens) || !itens.length) return '<div class="muted">Sem itens.</div>';
+      const lines = itens.map((it,idx)=>(
+`<tr>
+  <td>${idx+1}</td>
+  <td>${it.produto||""}</td>
+  <td>${it.tipo||""}</td>
+  <td>${Number(it.quantidade||0)}</td>
+  <td>R$ ${money(it.precoUnit ?? it.preco)}</td>
+  <td>R$ ${money(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))))}</td>
+</tr>`
+      )).join("");
+      return (
+`<table class="mini-table">
+  <thead><tr>
+    <th>#</th><th>Produto</th><th>Tipo</th><th>Qtd/Peso</th><th>R$ Unit</th><th>R$ Total</th>
+  </tr></thead>
+  <tbody>${lines}</tbody>
+</table>`
+      );
+    }
+
+    function openEditor(id){
+      const tbody = $("tbody");
+      tbody.querySelectorAll(`tr[data-editfor="${id}"]`).forEach(tr=>tr.remove());
+
+      const rowData = (window.__rows||[]).find(r=>r.id===id);
+      if (!rowData) return;
+
+      const itens = Array.isArray(rowData.itens) ? rowData.itens : [];
+      const tipoAtual = (rowData?.entrega?.tipo || "ENTREGA").toUpperCase();
+
+      const editorHTML =
+`<tr class="details-row" data-editfor="${id}">
+  <td colspan="8" class="wrap">
+    <div style="display:grid; grid-template-columns: 220px 1fr; gap:10px; align-items:center">
+      <div>
+        <label>Tipo de entrega</label>
+        <select id="edit_tipo_${id}">
+          <option value="ENTREGA" ${tipoAtual==="ENTREGA"?"selected":""}>ENTREGA</option>
+          <option value="RETIRADA" ${tipoAtual==="RETIRADA"?"selected":""}>RETIRADA</option>
+        </select>
+      </div>
+      <div class="totals-line">
+        <span class="pill">Frete atual: R$ ${money(rowData?.entrega?.valorCobravel||0)}</span>
+        <span class="pill"><strong>Total atual:</strong> R$ ${money(rowData.totalPedido||0)}</span>
+      </div>
+    </div>
+
+    <div style="margin-top:8px"></div>
+    <table class="mini-table" id="tbl_${id}">
+      <thead>
+        <tr><th>#</th><th style="width:40%">Produto</th><th>Tipo</th><th>Qtd/Peso</th><th>R$ Unit</th><th>R$ Total</th></tr>
+      </thead>
+      <tbody>
+        ${itens.map((it,ix)=>(
+`<tr data-ix="${ix}">
+  <td>${ix+1}</td>
+  <td class="wrap">${it.produto||""}</td>
+  <td>
+    <select class="i_tipo">
+      <option value="KG" ${it.tipo==="KG"?"selected":""}>KG</option>
+      <option value="UN" ${it.tipo==="UN"?"selected":""}>UN</option>
+      <option value="CX" ${it.tipo==="CX"?"selected":""}>CX</option>
+    </select>
+  </td>
+  <td><input type="number" step="0.01" class="i_qtd" value="${Number(it.quantidade||0)}"/></td>
+  <td><input type="number" step="0.01" class="i_unit" value="${Number(it.precoUnit ?? it.preco || 0)}"/></td>
+  <td><input type="number" step="0.01" class="i_total" value="${Number(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))))}" /></td>
+</tr>`
+        )).join("")}
+      </tbody>
+    </table>
+
+    <div class="flex-end">
+      <button class="btn ghost" id="btnRecalc_${id}">Recalcular total</button>
+      <button class="btn gray" id="btnSave_${id}">Salvar alterações</button>
+    </div>
+  </td>
+</tr>`;
+
+      const tr = tbody.querySelector(`tr[data-rowid="${id}"]`);
+      if (tr) tr.insertAdjacentHTML("afterend", editorHTML);
+
+      const tbl = document.getElementById(`tbl_${id}`);
+      const recalc = ()=> recalcTotalsFromEditor(id);
+      tbl.querySelectorAll("input,select").forEach(el=>{
+        el.addEventListener("input", recalc);
+        el.addEventListener("change", recalc);
+      });
+      tbl.querySelectorAll(".i_total").forEach(inp=>{
+        inp.addEventListener("input", ()=> { inp.dataset.userEdit = "1"; });
+        inp.addEventListener("change", ()=> { inp.dataset.userEdit = "1"; });
+      });
+
+      document.getElementById(`btnRecalc_${id}`).onclick = recalc;
+      document.getElementById(`btnSave_${id}`).onclick = ()=> saveEditor(id);
+    }
+
+    function recalcTotalsFromEditor(id){
+      const rowData = (window.__rows||[]).find(r=>r.id===id);
+      if(!rowData) return;
+
+      const tbl = document.getElementById(`tbl_${id}`);
+      if(!tbl) return;
+
+      let subtotal = 0;
+      tbl.querySelectorAll("tbody tr").forEach(tr=>{
+        const qtd  = parseFloat(tr.querySelector(".i_qtd")?.value || "0");
+        const unit = parseFloat(tr.querySelector(".i_unit")?.value || "0");
+        const totInp = tr.querySelector(".i_total");
+        const auto = (qtd*unit);
+        if (totInp && !totInp.dataset.userEdit) totInp.value = auto.toFixed(2);
+        const totVal = parseFloat(totInp?.value || "0");
+        subtotal += (isFinite(totVal) ? totVal : 0);
+      });
+
+      const frete = Number(rowData?.entrega?.valorCobravel || 0);
+      const total = subtotal + frete;
+
+      const host = document.querySelector(`tr[data-editfor="${id}"]`);
+      if(host){
+        const pill = host.querySelectorAll(".totals-line .pill")[1];
+        if (pill) pill.innerHTML = `<strong>Total atual:</strong> R$ ${money(total)}`;
+      }
+      return { subtotal, total };
+    }
+
+    // Anti-duplo clique
+    window.__saving = window.__saving || {};
+
+    async function saveEditor(id){
+      if (window.__saving[id]) return;
+      window.__saving[id] = true;
+
+      const rowData = (window.__rows||[]).find(r=>r.id===id);
+      if(!rowData){ window.__saving[id]=false; return; }
+
+      const tbl = document.getElementById(`tbl_${id}`);
+      const tipoSel = document.getElementById(`edit_tipo_${id}`);
+
+      const novosItens = [];
+      tbl.querySelectorAll("tbody tr").forEach(tr=>{
+        const ix    = Number(tr.getAttribute("data-ix"));
+        const base  = (rowData.itens||[])[ix] || {};
+
+        const tipo  = (tr.querySelector(".i_tipo")?.value || base.tipo || "KG").toUpperCase();
+        const qtd   = parseFloat(tr.querySelector(".i_qtd")?.value || "0") || 0;
+        const unit  = parseFloat(tr.querySelector(".i_unit")?.value || "0") || 0;
+        const total = parseFloat(tr.querySelector(".i_total")?.value || (qtd*unit) || "0") || 0;
+
+        novosItens.push({
+          produto: base.produto || "",
+          tipo, quantidade: Number(qtd), precoUnit: Number(unit), total: Number(total)
+        });
+      });
+
+      const subtotal = novosItens.reduce((s,i)=> s + Number(i.total||0), 0);
+      const frete = Number(rowData?.entrega?.valorCobravel || 0);
+      const totalPedido = Number((subtotal + frete).toFixed(2));
+      const novoTipo = (tipoSel?.value || "ENTREGA").toUpperCase();
+
+      const btn = document.getElementById(`btnSave_${id}`);
+      const old = btn?.textContent;
+      if (btn){ btn.disabled = true; btn.textContent = "Salvando…"; }
+
+      try{
+        await updateDoc(doc(db, "pedidos", id), {
+          itens: novosItens,
+          subtotal: Number(subtotal.toFixed(2)),
+          totalPedido,
+          "entrega.tipo": novoTipo,
+          updatedAt: serverTimestamp()
+        });
+
+        rowData.itens = novosItens;
+        rowData.subtotal = Number(subtotal.toFixed(2));
+        rowData.totalPedido = totalPedido;
+        rowData.entrega = rowData.entrega || {};
+        rowData.entrega.tipo = novoTipo;
+
+        renderRows(window.__rows || []);
+      }catch(e){
+        console.error(e);
+        alert("Falha ao salvar no banco.");
+      }finally{
+        if (btn){ btn.textContent = old; btn.disabled = false; }
+        window.__saving[id] = false;
+      }
+    }
+
+    // ===== BUSCA PRO (ISO-first + fallback) =====
+    async function buscar(){
+      const btn = $("btnBuscar");
+      btn.disabled = true; const old = btn.textContent; btn.textContent = "Buscando…";
+      try{
+        await ensureAnonAuth(); // garante auth antes da consulta
+
+        const di = $("fDataIni").value || "";
+        const df = $("fDataFim").value || "";
+        const hi = normTimeHHMM($("fHoraIni").value || "");
+        const hf = normTimeHHMM($("fHoraFim").value || "");
+        const cliente = $("fCliente").value.trim().toUpperCase();
+        const tipoSel = $("fTipo").value.trim().toUpperCase();
+
+        let list = [];
+
+        try{
+          let qRef;
+          if (di || df){
+            const conds = [];
+            if (di) conds.push(where("dataEntregaISO", ">=", di));
+            if (df) conds.push(where("dataEntregaISO", "<=", df));
+            qRef = query(collection(db,"pedidos"), ...conds, orderBy("dataEntregaISO","desc"), limit(1000));
+          } else {
+            qRef = query(collection(db,"pedidos"), orderBy("createdAt","desc"), limit(1000));
+          }
+          const snap = await getDocs(qRef);
+          snap.forEach(d=> list.push({ id:d.id, ...d.data() }));
+        }catch(err){
+          console.warn("Busca principal falhou, aplicando fallback:", err);
+          try{
+            const snap2 = await getDocs(query(collection(db,"pedidos"), orderBy("createdAt","desc"), limit(1000)));
+            snap2.forEach(d=> list.push({ id:d.id, ...d.data() }));
+          }catch(err2){
+            console.error(err2);
+          }
+        }
+
+        // Normaliza docs retornados (assíncrono, sem travar a UI)
+        list.forEach(d => { normalizeDocShapeIfNeeded(d.id, d); });
+
+        // Filtros em memória
+        let out = list.filter(x=>{
+          const iso = normISODate(x.dataEntregaISO || x.dataEntrega || x.dataEntregaTS);
+          const dia = toDiaInt(iso);
+          const hHM = normTimeHHMM(x.horaEntrega || "");
+
+          if ((di || df) && !Number.isFinite(dia)) return false;
+
+          if (di && Number.isFinite(dia) && dia < Number(di.replaceAll("-",""))) return false;
+          if (df && Number.isFinite(dia) && dia > Number(df.replaceAll("-",""))) return false;
+
+          if (hi && hHM && hHM < hi) return false;
+          if (hf && hHM && hHM > hf) return false;
+
+          if (cliente && !(x.cliente||"").toUpperCase().includes(cliente)) return false;
+
+          if (tipoSel){
+            const t = ((x.entrega?.tipo)||"").toUpperCase();
+            if (t !== tipoSel) return false;
+          }
+          return true;
+        });
+
+        window.__rows = out;
+        renderRows(out);
+      } catch(e){
+        console.error(e);
+        alert("Falha ao buscar pedidos.\n\n"+(e?.message||String(e)));
+      } finally {
+        btn.textContent = old; btn.disabled = false;
+      }
+    }
+
+    $("btnBuscar").onclick = buscar;
+
+    $("btnLimpar").onclick = ()=>{
+      ["fDataIni","fDataFim","fHoraIni","fHoraFim","fCliente"].forEach(id=>$(id).value="");
+      $("fTipo").value = "";
+      $("tbody").innerHTML = "";
+      $("ftCount").textContent = "0 pedidos";
+      $("ftTotal").textContent = "R$ 0,00";
+      window.__rows = [];
+      setExportsEnabled(false);
+    };
+
+    async function exportarXLSX(){
+      const rows = Array.isArray(window.__rows) ? JSON.parse(JSON.stringify(window.__rows)) : [];
+      if (!rows.length){ alert("Faça uma busca primeiro."); return; }
+
+      const modo = (document.getElementById("fModo")?.value || "reduzido");
+      const XLSXlib = window.XLSX;
+      if (!XLSXlib){ alert("Biblioteca XLSX não carregou."); return; }
+
+      let aoa = [];
+      if (modo === "reduzido"){
+        aoa = [["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagamento"]];
+        for (const r of rows){
+          const itensCount = Array.isArray(r.itens) ? r.itens.length : 0;
+          aoa.push([
+            toBR(normISODate(r.dataEntregaISO||r.dataEntrega||r.dataEntregaTS))||"",
+            normTimeHHMM(r.horaEntrega||""),
+            r.cliente||"",
+            itensCount,
+            (Number(r.totalPedido||0)).toFixed(2),
+            (r.entrega?.tipo||""),
+            r.pagamento||""
+          ]);
+        }
+      } else {
+        aoa = [["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagamento","—","Produto","Tipo Item","Qtd","R$ Unit","R$ Total"]];
+        for (const r of rows){
+          const itens = Array.isArray(r.itens) ? r.itens : [];
+          aoa.push([
+            toBR(normISODate(r.dataEntregaISO||r.dataEntrega||r.dataEntregaTS))||"",
+            normTimeHHMM(r.horaEntrega||""),
+            r.cliente||"",
+            itens.length,
+            (Number(r.totalPedido||0)).toFixed(2),
+            (r.entrega?.tipo||""),
+            r.pagamento||"",
+            ""
+          ]);
+          for (const it of itens){
+            const totalItem = Number(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))));
+            aoa.push([
+              "","","","","","","","",
+              it.produto||"", it.tipo||"", Number(it.quantidade||0),
+              Number(it.precoUnit||it.preco||0), Number(totalItem||0)
+            ]);
+          }
+        }
+      }
+
+      const ws = XLSXlib.utils.aoa_to_sheet(aoa);
+      const wb = XLSXlib.utils.book_new();
+      XLSXlib.utils.book_append_sheet(wb, ws, modo === "reduzido" ? "Relatório" : "Relatório Detalhado");
+
+      const maxCols = Math.max(...aoa.map(r => r.length));
+      ws['!cols'] = Array.from({length: maxCols}, (_, i) => {
+        const largura = Math.max(...aoa.map(r => (r[i] ? String(r[i]).length : 0))) + 2;
+        return { wch: Math.min(Math.max(largura, 8), 40) };
+      });
+
+      const filename = `relatorio_serranobre_${modo}_${new Date().toISOString().slice(0,10)}.xlsx`;
+      try {
+        XLSXlib.writeFile(wb, filename, { compression: true });
+      } catch (e) {
+        try {
+          const wbout = XLSXlib.write(wb, { bookType: "xlsx", type: "array", compression: true });
+          const blob = new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+          const url  = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url; a.download = filename;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(()=>URL.revokeObjectURL(url), 20000);
+        } catch (err) {
+          console.error("Falha ao gerar XLSX:", err);
+          alert("Não foi possível gerar o arquivo XLSX.");
+        }
+      }
+    }
+    $("btnXLSX").onclick = exportarXLSX;
+
+    $("btnPDF").onclick = ()=>{
+      const rows = window.__rows || [];
+      if (!rows.length){ alert("Faça uma busca primeiro."); return; }
+      const modo = (document.getElementById("fModo")?.value || "reduzido");
+
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
+
+      pdf.setFont("helvetica","bold"); pdf.setFontSize(14);
+      pdf.text("Relatório de Pedidos — Serra Nobre", 10, 12);
+      pdf.setFontSize(10); pdf.setFont("helvetica","normal");
+      const periodo = (()=>{
+        const di = $("fDataIni").value, df=$("fDataFim").value;
+        if (di || df) return `Período: ${toBR(di)||'...'} a ${toBR(df)||'...'}`;
+        return "Período: (criação recente / padrão)";
+      })();
+      pdf.text(periodo, 10, 18);
+
+      const headers = ["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagto."];
+      const colX = [10, 30, 50, 140, 160, 185, 215];
+      const rowH = 7;
+      let y = 26;
+
+      pdf.setFont("helvetica","bold");
+      for(let i=0;i<headers.length;i++){ pdf.text(headers[i], colX[i], y); }
+      pdf.setLineWidth(0.2); pdf.line(10, y+2, 285, y+2);
+      pdf.setFont("helvetica","normal");
+
+      y += 6;
+      let totalGeral = 0;
+
+      const drawRow = (r)=>{
+        if (y > 190){
+          pdf.addPage("a4","landscape");
+          pdf.setFont("helvetica","bold"); pdf.setFontSize(10);
+          for(let i=0;i<headers.length;i++){ pdf.text(headers[i], 10 + (colX[i]-10), 12); }
+          pdf.line(10, 14, 285, 14);
+          pdf.setFont("helvetica","normal"); y = 20;
+        }
+        const itens = Array.isArray(r.itens) ? r.itens : [];
+        const itensCount = itens.length;
+        const tot = Number(r.totalPedido||0); totalGeral += tot;
+
+        const iso = normISODate(r.dataEntregaISO||r.dataEntrega||r.dataEntregaTS);
+
+        pdf.text(toBR(iso), colX[0], y);
+        pdf.text(normTimeHHMM(r.horaEntrega||""), colX[1], y);
+        const cliente = (r.cliente||"").toString();
+        const clienteBreak = pdf.splitTextToSize(cliente, colX[3]-colX[2]-2);
+        pdf.text(clienteBreak, colX[2], y);
+        pdf.text(String(itensCount), colX[3], y);
+        pdf.text(money(tot), colX[4], y);
+        pdf.text((r.entrega?.tipo||"").toString(), colX[5], y);
+        pdf.text(r.pagamento||"", colX[6], y);
+
+        y += Math.max(rowH, (clienteBreak.length)*5);
+        pdf.setDrawColor(230); pdf.line(10, y-2, 285, y-2);
+        pdf.setDrawColor(0);
+
+        if (modo==="detalhado" && itensCount){
+          const startX = 50;
+          const wCols = [90, 25, 25, 25, 25];
+          pdf.setFont("helvetica","bold"); pdf.setFontSize(9);
+          const hdr = ["Produto","Tipo","Qtd/Peso","R$ Unit","R$ Total"];
+          let yy = y+2; let xx = startX;
+          for (let i=0;i<hdr.length;i++){ pdf.text(hdr[i], xx+2, yy); xx += wCols[i]; }
+          yy += 4; pdf.setFont("helvetica","normal");
+
+          for (const it of itens){
+            const linha = [
+              (it.produto||""), (it.tipo||""),
+              String(Number(it.quantidade||0)),
+              money(it.precoUnit ?? it.preco),
+              money(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))))
+            ];
+            xx = startX;
+            const wrapProd = pdf.splitTextToSize(linha[0], wCols[0]-4);
+            const linesH = Math.max(5, wrapProd.length*5);
+            pdf.text(wrapProd, xx+2, yy); xx += wCols[0];
+            pdf.text(linha[1], xx+2, yy); xx += wCols[1];
+            pdf.text(linha[2], xx+2, yy); xx += wCols[2];
+            pdf.text(linha[3], xx+2, yy); xx += wCols[3];
+            pdf.text(linha[4], xx+2, yy);
+            yy += linesH;
+          }
+          y = yy + 2;
+          pdf.setDrawColor(230); pdf.line(10, y-2, 285, y-2);
+          pdf.setDrawColor(0);
+        }
+      };
+
+      rows.forEach(drawRow);
+
+      pdf.setFont("helvetica","bold");
+      pdf.text(`Total de pedidos: ${rows.length}`, 10, y+8);
+      pdf.text(`Soma (R$): ${money(totalGeral)}`, 80, y+8);
+
+      pdf.save(`relatorio_serranobre_${new Date().toISOString().slice(0,10)}.pdf`);
+    };
+
+    await ensureAnonAuth();
+  </script>
+
+  <!-- Service Worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', async () => {
+        try {
+          const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+          document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') reg.update();
+          });
+          setInterval(() => reg.update(), 10 * 60 * 1000);
+
+          function showUpdateBar(onConfirm) {
+            let bar = document.getElementById('sw-update-bar');
+            if (!bar) {
+              bar = document.createElement('div');
+              bar.id = 'sw-update-bar';
+              bar.style.cssText =
+                'position:fixed;left:0;right:0;bottom:0;padding:10px;background:#0f766e;color:#fff;' +
+                'display:flex;gap:10px;align-items:center;justify-content:center;z-index:99999';
+              bar.innerHTML = `
+                <span>Nova versão disponível.</span>
+                <button id="sw-reload-btn" style="background:#fff;color:#0f766e;border:none;padding:6px 10px;border-radius:6px;cursor:pointer">
+                  Atualizar agora
+                </button>`;
+              document.body.appendChild(bar);
+            }
+            document.getElementById('sw-reload-btn').onclick = onConfirm;
+          }
+
+          reg.addEventListener('updatefound', () => {
+            const newSW = reg.installing;
+            if (!newSW) return;
+            newSW.addEventListener('statechange', () => {
+              if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+                showUpdateBar(() => reg.waiting?.postMessage('SKIP_WAITING'));
+              }
+            });
+          });
+
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (!window.__reloadedBySW) {
+              window.__reloadedBySW = true;
+              location.reload();
+            }
+          });
+        } catch (e) {}
+      });
+    }
+  </script>
+</body>
+</html>
     thead th:nth-child(6){width:140px}
     thead th:nth-child(7){width:130px}
     thead th:nth-child(8){width:120px}
