@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Relatórios — Serra Nobre V3.1.6</title>
+  <title>Relatórios — Serra Nobre V3.1.8</title>
   <link rel="manifest" href="manifest.json" />
   <style>
     :root{
@@ -22,6 +22,7 @@
     input, select{ width:100%; padding:8px; border:1px solid var(--line); border-radius:8px; outline:0; background:#fff }
     .actions{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap }
     .btn{ border:1px solid var(--teal-600); background:var(--teal-600); color:#fff; padding:8px 12px; border-radius:8px; cursor:pointer }
+    .btn[disabled]{ opacity:.6; cursor:not-allowed }
     .btn.ghost{ background:#fff; color:var(--teal-600) }
     .btn.warning{ background:#0b5; border-color:#0b5 }
     .btn.gray{ background:#475569; border-color:#475569 }
@@ -63,7 +64,7 @@
 <body>
   <header>
     <a href="index.html">← Voltar</a>
-    <h1>Relatórios — Serra Nobre V3.1.6</h1>
+    <h1>Relatórios — Serra Nobre V3.1.8</h1>
     <div style="margin-left:auto"></div>
   </header>
 
@@ -132,7 +133,7 @@
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
     import {
       getFirestore, collection, query, where, getDocs, orderBy, limit,
-      updateDoc, doc, serverTimestamp
+      updateDoc, doc, serverTimestamp, enableIndexedDbPersistence
     } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -147,6 +148,9 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db   = getFirestore(app);
+
+    // Cache offline (best-effort)
+    enableIndexedDbPersistence(db).catch(()=>{});
 
     async function ensureAnonAuth(){
       return new Promise((resolve)=>{
@@ -166,6 +170,54 @@
     function toBR(iso){ if(!iso) return ""; const [y,m,d]=iso.split("-"); return `${d}/${m}/${y}`; }
     function money(n){ return (Number(n||0)).toFixed(2).replace(".",","); }
 
+    // ===== Helpers PRO =====
+    function normISODate(v){
+      if (!v) return "";
+      if (v && typeof v === "object" && typeof v.toDate === "function") {
+        try { return v.toDate().toISOString().slice(0,10); } catch(_) { return ""; }
+      }
+      if (v instanceof Date && !isNaN(v)) return v.toISOString().slice(0,10);
+      if (typeof v === "string"){
+        if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+        const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+      }
+      return "";
+    }
+    function normTimeHHMM(v){
+      if (!v || typeof v !== "string") return "";
+      const m = v.match(/^(\d{1,2}):(\d{2})/);
+      if (!m) return "";
+      const h = String(Math.min(23, Number(m[1]))).padStart(2,"0");
+      const mm = String(Math.min(59, Number(m[2]))).padStart(2,"0");
+      return `${h}:${mm}`;
+    }
+    function toDiaInt(iso){ return /^\d{4}-\d{2}-\d{2}$/.test(iso||"") ? Number(iso.replaceAll("-","")) : NaN; }
+
+    // Normalização silenciosa (opcional)
+    async function normalizeDocShapeIfNeeded(id, data){
+      try{
+        const iso = normISODate(data.dataEntregaISO || data.dataEntrega || data.dataEntregaTS);
+        if (!iso) return;
+        const dia = toDiaInt(iso);
+        const patch = {};
+        let needs = false;
+        if (data.dataEntregaISO !== iso){ patch.dataEntregaISO = iso; needs = true; }
+        if (!Number.isFinite(data.dataEntregaDia) || data.dataEntregaDia !== dia){ patch.dataEntregaDia = dia; needs = true; }
+        if (needs){
+          patch.updatedAt = serverTimestamp();
+          await updateDoc(doc(db,"pedidos", id), patch);
+        }
+      }catch(_){}
+    }
+
+    function setExportsEnabled(enabled){
+      $("btnXLSX").disabled = !enabled;
+      $("btnPDF").disabled  = !enabled;
+    }
+    // inicia desabilitado (Ajuste #3)
+    setExportsEnabled(false);
+
     function renderRows(docs){
       const tbody = $("tbody");
       const modo = ($("fModo")?.value) || "reduzido";
@@ -174,6 +226,7 @@
         tbody.innerHTML = '<tr><td colspan="8">Sem resultados.</td></tr>';
         $("ftCount").textContent = "0 pedidos";
         $("ftTotal").textContent = "R$ 0,00";
+        setExportsEnabled(false);
         return;
       }
       let total = 0;
@@ -190,8 +243,8 @@
 
         rows.push(
 `<tr data-rowid="${x.id}">
-  <td>${toBR(x.dataEntregaISO)||""}</td>
-  <td>${x.horaEntrega||""}</td>
+  <td>${toBR(normISODate(x.dataEntregaISO || x.dataEntrega || x.dataEntregaTS))||""}</td>
+  <td>${normTimeHHMM(x.horaEntrega||"")}</td>
   <td class="cell-client" data-id="${x.id}" title="Clique para editar">${x.cliente||""}</td>
   <td>${itensCount}</td>
   <td>R$ ${money(tot)}</td>
@@ -215,7 +268,8 @@
 
       tbody.innerHTML = rows.join("");
       $("ftCount").textContent = `${docs.length} pedido(s)`;
-      $("ftTotal").textContent = `R$ ${total.toFixed(2)}`;
+      $("ftTotal").textContent = `R$ ${money(total)}`;
+      setExportsEnabled(true);
 
       tbody.querySelectorAll('.cell-client').forEach(td=>{
         td.addEventListener('click', ()=> openEditor(td.dataset.id));
@@ -288,6 +342,7 @@
     <select class="i_tipo">
       <option value="KG" ${it.tipo==="KG"?"selected":""}>KG</option>
       <option value="UN" ${it.tipo==="UN"?"selected":""}>UN</option>
+      <option value="CX" ${it.tipo==="CX"?"selected":""}>CX</option>
     </select>
   </td>
   <td><input type="number" step="0.01" class="i_qtd" value="${Number(it.quantidade||0)}"/></td>
@@ -310,10 +365,17 @@
 
       const tbl = document.getElementById(`tbl_${id}`);
       const recalc = ()=> recalcTotalsFromEditor(id);
+      // Eventos padrão
       tbl.querySelectorAll("input,select").forEach(el=>{
         el.addEventListener("input", recalc);
         el.addEventListener("change", recalc);
       });
+      // (Ajuste #2) – Marca edição manual de R$ Total
+      tbl.querySelectorAll(".i_total").forEach(inp=>{
+        inp.addEventListener("input", ()=> { inp.dataset.userEdit = "1"; });
+        inp.addEventListener("change", ()=> { inp.dataset.userEdit = "1"; });
+      });
+
       document.getElementById(`btnRecalc_${id}`).onclick = recalc;
       document.getElementById(`btnSave_${id}`).onclick = ()=> saveEditor(id);
     }
@@ -347,9 +409,15 @@
       return { subtotal, total };
     }
 
+    // Anti-duplo clique
+    window.__saving = window.__saving || {};
+
     async function saveEditor(id){
+      if (window.__saving[id]) return;
+      window.__saving[id] = true;
+
       const rowData = (window.__rows||[]).find(r=>r.id===id);
-      if(!rowData) return;
+      if(!rowData){ window.__saving[id]=false; return; }
 
       const tbl = document.getElementById(`tbl_${id}`);
       const tipoSel = document.getElementById(`edit_tipo_${id}`);
@@ -375,6 +443,10 @@
       const totalPedido = Number((subtotal + frete).toFixed(2));
       const novoTipo = (tipoSel?.value || "ENTREGA").toUpperCase();
 
+      const btn = document.getElementById(`btnSave_${id}`);
+      const old = btn?.textContent;
+      if (btn){ btn.disabled = true; btn.textContent = "Salvando…"; }
+
       try{
         await updateDoc(doc(db, "pedidos", id), {
           itens: novosItens,
@@ -394,47 +466,84 @@
       }catch(e){
         console.error(e);
         alert("Falha ao salvar no banco.");
+      }finally{
+        if (btn){ btn.textContent = old; btn.disabled = false; }
+        window.__saving[id] = false;
       }
     }
 
+    // ===== BUSCA PRO com fallback =====
     async function buscar(){
-      const di = $("fDataIni").value;
-      const df = $("fDataFim").value;
-      const hi = $("fHoraIni").value;
-      const hf = $("fHoraFim").value;
-      const cliente = $("fCliente").value.trim().toUpperCase();
-      const tipoSel = $("fTipo").value.trim();
+      const btn = $("btnBuscar");
+      btn.disabled = true; const old = btn.textContent; btn.textContent = "Buscando…";
+      try{
+        const di = $("fDataIni").value || "";
+        const df = $("fDataFim").value || "";
+        const hi = normTimeHHMM($("fHoraIni").value || "");
+        const hf = normTimeHHMM($("fHoraFim").value || "");
+        const cliente = $("fCliente").value.trim().toUpperCase();
+        const tipoSel = $("fTipo").value.trim().toUpperCase();
 
-      let ref = collection(db, "pedidos");
-      let qRef;
+        const parts = [ orderBy("dataEntregaDia","desc"), limit(1000) ];
+        if (di) parts.push(where("dataEntregaDia", ">=", Number(di.replaceAll("-",""))));
+        if (df) parts.push(where("dataEntregaDia", "<=", Number(df.replaceAll("-",""))));
 
-      if (di || df){
-        const conds = [];
-        if (di) conds.push(where("dataEntregaISO", ">=", di));
-        if (df) conds.push(where("dataEntregaISO", "<=", df));
-        if (conds.length) qRef = query(ref, ...conds, orderBy("dataEntregaISO", "desc"), limit(1000));
-        else              qRef = query(ref, orderBy("dataEntregaISO", "desc"), limit(1000));
-      } else {
-        qRef = query(ref, orderBy("createdAt", "desc"), limit(1000));
+        let list = [];
+        try{
+          const snap = await getDocs(query(collection(db,"pedidos"), ...parts));
+          snap.forEach(d=> list.push({ id:d.id, ...d.data() }));
+        }catch(err){
+          console.warn("Busca por dataEntregaDia falhou, aplicando fallback:", err);
+        }
+
+        // Fallback por createdAt se necessário
+        if (!list.length){
+          try{
+            const snap2 = await getDocs(query(collection(db,"pedidos"), orderBy("createdAt","desc"), limit(1000)));
+            snap2.forEach(d=> list.push({ id:d.id, ...d.data() }));
+          }catch(err2){
+            console.error(err2);
+          }
+        }
+
+        // Normaliza docs retornados (assíncrono, sem travar a UI)
+        list.forEach(d => { normalizeDocShapeIfNeeded(d.id, d); });
+
+        // Filtros no cliente (+ Ajuste #1: excluir sem data quando período definido)
+        let out = list.filter(x=>{
+          const iso = normISODate(x.dataEntregaISO || x.dataEntrega || x.dataEntregaTS);
+          const dia = toDiaInt(iso);
+          const hHM = normTimeHHMM(x.horaEntrega || "");
+
+          if ((di || df) && !Number.isFinite(dia)) return false; // exigência de data válida no período
+
+          if (di && Number.isFinite(dia) && dia < Number(di.replaceAll("-",""))) return false;
+          if (df && Number.isFinite(dia) && dia > Number(df.replaceAll("-",""))) return false;
+
+          if (hi && hHM && hHM < hi) return false;
+          if (hf && hHM && hHM > hf) return false;
+
+          if (cliente && !(x.cliente||"").toUpperCase().includes(cliente)) return false;
+
+          if (tipoSel){
+            const t = ((x.entrega?.tipo)||"").toUpperCase();
+            if (t !== tipoSel) return false;
+          }
+          return true;
+        });
+
+        window.__rows = out;
+        renderRows(out);
+      } catch(e){
+        console.error(e);
+        alert("Falha ao buscar pedidos.\n\n"+(e?.message||String(e)));
+      } finally {
+        btn.textContent = old; btn.disabled = false;
       }
-
-      const snap = await getDocs(qRef);
-      const list = [];
-      snap.forEach(d => list.push({ id:d.id, ...d.data() }));
-
-      const out = list.filter(x=>{
-        if (hi && (x.horaEntrega || "") < hi) return false;
-        if (hf && (x.horaEntrega || "") > hf) return false;
-        if (cliente && !(x.cliente||"").toUpperCase().includes(cliente)) return false;
-        if (tipoSel && ((x.entrega?.tipo||"").toUpperCase() !== tipoSel)) return false;
-        return true;
-      });
-
-      window.__rows = out;
-      renderRows(out);
     }
 
     $("btnBuscar").onclick = buscar;
+
     $("btnLimpar").onclick = ()=>{
       ["fDataIni","fDataFim","fHoraIni","fHoraFim","fCliente"].forEach(id=>$(id).value="");
       $("fTipo").value = "";
@@ -442,6 +551,7 @@
       $("ftCount").textContent = "0 pedidos";
       $("ftTotal").textContent = "R$ 0,00";
       window.__rows = [];
+      setExportsEnabled(false);
     };
 
     async function exportarXLSX(){
@@ -458,8 +568,13 @@
         for (const r of rows){
           const itensCount = Array.isArray(r.itens) ? r.itens.length : 0;
           aoa.push([
-            toBR(r.dataEntregaISO||""), r.horaEntrega||"", r.cliente||"", itensCount,
-            (Number(r.totalPedido||0)).toFixed(2), (r.entrega?.tipo||""), r.pagamento||""
+            toBR(normISODate(r.dataEntregaISO||r.dataEntrega||r.dataEntregaTS))||"",
+            normTimeHHMM(r.horaEntrega||""),
+            r.cliente||"",
+            itensCount,
+            (Number(r.totalPedido||0)).toFixed(2),
+            (r.entrega?.tipo||""),
+            r.pagamento||""
           ]);
         }
       } else {
@@ -467,8 +582,14 @@
         for (const r of rows){
           const itens = Array.isArray(r.itens) ? r.itens : [];
           aoa.push([
-            toBR(r.dataEntregaISO||""), r.horaEntrega||"", r.cliente||"", itens.length,
-            (Number(r.totalPedido||0)).toFixed(2), (r.entrega?.tipo||""), r.pagamento||"", ""
+            toBR(normISODate(r.dataEntregaISO||r.dataEntrega||r.dataEntregaTS))||"",
+            normTimeHHMM(r.horaEntrega||""),
+            r.cliente||"",
+            itens.length,
+            (Number(r.totalPedido||0)).toFixed(2),
+            (r.entrega?.tipo||""),
+            r.pagamento||"",
+            ""
           ]);
           for (const it of itens){
             const totalItem = Number(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))));
@@ -525,7 +646,7 @@
       const periodo = (()=>{
         const di = $("fDataIni").value, df=$("fDataFim").value;
         if (di || df) return `Período: ${toBR(di)||'...'} a ${toBR(df)||'...'}`;
-        return "Período: (todos por criação recente)";
+        return "Período: (criação recente / padrão)";
       })();
       pdf.text(periodo, 10, 18);
 
@@ -546,7 +667,7 @@
         if (y > 190){
           pdf.addPage("a4","landscape");
           pdf.setFont("helvetica","bold"); pdf.setFontSize(10);
-          for(let i=0;i<headers.length;i++){ pdf.text(headers[i], colX[i], 12); }
+          for(let i=0;i<headers.length;i++){ pdf.text(headers[i], 10 + (colX[i]-10), 12); }
           pdf.line(10, 14, 285, 14);
           pdf.setFont("helvetica","normal"); y = 20;
         }
@@ -554,13 +675,15 @@
         const itensCount = itens.length;
         const tot = Number(r.totalPedido||0); totalGeral += tot;
 
-        pdf.text(toBR(r.dataEntregaISO||""), colX[0], y);
-        pdf.text(r.horaEntrega||"", colX[1], y);
+        const iso = normISODate(r.dataEntregaISO||r.dataEntrega||r.dataEntregaTS);
+
+        pdf.text(toBR(iso), colX[0], y);
+        pdf.text(normTimeHHMM(r.horaEntrega||""), colX[1], y);
         const cliente = (r.cliente||"").toString();
         const clienteBreak = pdf.splitTextToSize(cliente, colX[3]-colX[2]-2);
         pdf.text(clienteBreak, colX[2], y);
         pdf.text(String(itensCount), colX[3], y);
-        pdf.text(tot.toFixed(2), colX[4], y);
+        pdf.text(money(tot), colX[4], y);
         pdf.text((r.entrega?.tipo||"").toString(), colX[5], y);
         pdf.text(r.pagamento||"", colX[6], y);
 
@@ -604,7 +727,7 @@
 
       pdf.setFont("helvetica","bold");
       pdf.text(`Total de pedidos: ${rows.length}`, 10, y+8);
-      pdf.text(`Soma (R$): ${totalGeral.toFixed(2)}`, 80, y+8);
+      pdf.text(`Soma (R$): ${money(totalGeral)}`, 80, y+8);
 
       pdf.save(`relatorio_serranobre_${new Date().toISOString().slice(0,10)}.pdf`);
     };
