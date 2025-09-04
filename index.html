@@ -86,7 +86,7 @@
     </div>
   </div>
 
-  <!-- TROCA solicitada: TELEFONE à esquerda e CEP à direita -->
+  <!-- TELEFONE à esquerda e CEP à direita -->
   <div class="field-group grid-2">
     <div>
       <label for="contato">Contato (tel/WhatsApp):</label>
@@ -201,14 +201,67 @@
   // ---------- Normalizadores ----------
   function up(v){ return String(v||"").toUpperCase().trim(); }
   function digits(v){ return String(v||"").replace(/\D/g,""); }
+  function removeAcentos(str){
+    return String(str||"").normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  }
 
-  // ---- Clientes helpers ----
+  // ---- Clientes helpers (versão tolerante) ----
   async function getClienteDocByNome(nomeUpper) {
     await authReady;
-    const qCli = query(collection(db, "clientes"), where("nome", "==", nomeUpper), limit(1));
-    const snap = await getDocs(qCli);
-    if (snap.empty) return null;
-    return { id: snap.docs[0].id, ref: snap.docs[0].ref, data: snap.docs[0].data() };
+    const nomeSemAcento = removeAcentos(nomeUpper);
+
+    // 1) match exato em 'nome'
+    try{
+      const q1 = query(collection(db, "clientes"), where("nome", "==", nomeUpper), limit(1));
+      const s1 = await getDocs(q1);
+      if (!s1.empty) return { id: s1.docs[0].id, ref: s1.docs[0].ref, data: s1.docs[0].data() };
+    }catch(_){}
+
+    // 2) match exato em 'nomeUpper'
+    try{
+      const q2 = query(collection(db, "clientes"), where("nomeUpper", "==", nomeUpper), limit(1));
+      const s2 = await getDocs(q2);
+      if (!s2.empty) return { id: s2.docs[0].id, ref: s2.docs[0].ref, data: s2.docs[0].data() };
+    }catch(_){}
+
+    // 3) prefix search por 'nome'
+    try{
+      const start = nomeUpper, end = nomeUpper + '\uf8ff';
+      const q3 = query(
+        collection(db, "clientes"),
+        orderBy("nome"),
+        where("nome", ">=", start),
+        where("nome", "<=", end),
+        limit(5)
+      );
+      const s3 = await getDocs(q3);
+      if (!s3.empty){
+        const hit = s3.docs.find(d=>{
+          const n = (d.data()?.nome || "").toString().toUpperCase();
+          return removeAcentos(n) === nomeSemAcento;
+        }) || s3.docs[0];
+        return { id: hit.id, ref: hit.ref, data: hit.data() };
+      }
+    }catch(_){}
+
+    // 4) prefix search por 'nomeUpper'
+    try{
+      const start = nomeUpper, end = nomeUpper + '\uf8ff';
+      const q4 = query(
+        collection(db, "clientes"),
+        orderBy("nomeUpper"),
+        where("nomeUpper", ">=", start),
+        where("nomeUpper", "<=", end),
+        limit(5)
+      );
+      const s4 = await getDocs(q4);
+      if (!s4.empty){
+        const hit = s4.docs[0];
+        return { id: hit.id, ref: hit.ref, data: hit.data() };
+      }
+    }catch(_){}
+
+    return null;
   }
 
   async function salvarCliente(nome, endereco, isentoFrete=false, extras={}) {
@@ -225,7 +278,7 @@
     const exist = await getClienteDocByNome(nomeNorm);
     if (exist) {
       const atual = exist.data || {};
-      const campos = { atualizadoEm: serverTimestamp() };
+      const campos = { atualizadoEm: serverTimestamp(), nomeUpper: nomeNorm };
       if ((atual.endereco || "") !== enderecoNorm) campos.endereco = enderecoNorm;
       if (typeof isentoFrete === "boolean" && (atual.isentoFrete !== isentoFrete)) campos.isentoFrete = isentoFrete;
 
@@ -239,6 +292,7 @@
     } else {
       await addDoc(collection(db, "clientes"), {
         nome: nomeNorm,
+        nomeUpper: nomeNorm,
         endereco: enderecoNorm,
         isentoFrete: !!isentoFrete,
         cnpj: cnpj || "",
@@ -259,25 +313,35 @@
     if (!found) return null;
     const d = found.data || {};
     return {
-      endereco: d.endereco || "",
-      isentoFrete: !!d.isentoFrete,
+      endereco: (d.endereco || d.end || ""),
+      isentoFrete: !!(d.isentoFrete || d.isento_frete),
       cnpj: d.cnpj || "",
-      ie: d.ie || "",
+      ie: d.ie || d.inscricao_estadual || "",
       cep: d.cep || "",
-      contato: d.contato || ""
+      contato: d.contato || d.telefone || ""
     };
   }
 
   async function clientesMaisUsados(limitQtd = 50) {
     await authReady;
     const lista = [];
-    const qs = await getDocs(collection(db, "clientes"));
-    qs.forEach(d => {
-      const x = d.data();
-      if ((x?.nome || "").trim()) lista.push({ nome: x.nome.trim(), compras: x.compras || 0 });
-    });
+    try{
+      const qs = await getDocs(query(collection(db, "clientes"), orderBy("compras","desc"), limit(limitQtd)));
+      qs.forEach(d => {
+        const x = d.data() || {};
+        const nome = (x.nome || x.nomeUpper || "").toString().trim();
+        if (nome) lista.push({ nome, compras: x.compras || 0 });
+      });
+    }catch(_){
+      const qs2 = await getDocs(query(collection(db, "clientes"), orderBy("nome"), limit(limitQtd)));
+      qs2.forEach(d => {
+        const x = d.data() || {};
+        const nome = (x.nome || x.nomeUpper || "").toString().trim();
+        if (nome) lista.push({ nome, compras: x.compras || 0 });
+      });
+    }
     lista.sort((a,b)=> b.compras - a.compras || a.nome.localeCompare(b.nome));
-    return lista.slice(0, limitQtd).map(x => x.nome);
+    return lista.map(x => x.nome);
   }
 
   async function buscarUltimoPreco(clienteNome, produtoNome) {
@@ -782,7 +846,7 @@
       const h2 = drawLabeledBox(doc, margemX+half+2, y, half, "INSCRIÇÃO ESTADUAL", vIE, {maxLines:2});
       y += Math.max(h1,h2) + 1;
 
-      // TELEFONE (esq.) | CEP (dir.)  **AJUSTE**
+      // CONTATO | CEP
       const vTel = (document.getElementById("contato").value||"").toUpperCase();
       const vCEP = (document.getElementById("cep").value||"").toUpperCase();
       ensureSpace(12);
@@ -790,7 +854,7 @@
       const h4 = drawLabeledBox(doc, margemX+half+2, y, half, "CEP", vCEP, {maxLines:2});
       y += Math.max(h3,h4) + 1;
 
-      // ENDEREÇO (altura dinâmica, sem sobrepor título)
+      // ENDEREÇO
       ensureSpace(14);
       y += drawLabeledBox(doc, margemX, y, larguraCaixa,
         "ENDEREÇO", (document.getElementById("endereco").value||"").toUpperCase(),
@@ -825,7 +889,6 @@
       // Título da tabela
       ensureSpace(14);
       doc.setFont("helvetica","bold"); doc.setFontSize(7);
-      const W_PROD=23.5, W_QDE=13, W_UNIT=13, W_TOTAL=18.5;
       doc.rect(margemX,y,W_PROD,10,"S");
       doc.rect(margemX+W_PROD,y,W_QDE,10,"S");
       doc.rect(margemX+W_PROD+W_QDE,y,W_UNIT,10,"S");
