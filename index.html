@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Serra Nobre" />
   <link rel="manifest" href="manifest.json" />
-  <title>PEDIDOS V3.1.8</title>
+  <title>PEDIDOS V3.2.0</title>
   <style>
     :root{
       --teal:#0ea5a6; --ink:#0f172a; --muted:#666; --bg:#f4f4f4; --line:#e2e8f0;
@@ -55,7 +55,7 @@
 </head>
 <body>
   <img src="Serra-Nobre_3.png" alt="Logo" class="logo-header" onerror="this.style.display='none'">
-  <h1>PEDIDOS V3.1.8</h1>
+  <h1>PEDIDOS V3.2.0</h1>
 
   <div class="top-actions">
     <a href="relatorios.html" title="Abrir Relatórios">Relatórios</a>
@@ -86,20 +86,21 @@
     </div>
   </div>
 
+  <!-- TROCA solicitada: TELEFONE à esquerda e CEP à direita -->
   <div class="field-group grid-2">
-    <div>
-      <label for="cep">CEP:</label>
-      <input type="text" id="cep" inputmode="numeric" placeholder="00000-000"
-             maxlength="9"
-             oninput="maskCEP(this)"
-             onblur="normalizeCEP(this); atualizarFreteUI()"/>
-    </div>
     <div>
       <label for="contato">Contato (tel/WhatsApp):</label>
       <input type="text" id="contato" inputmode="numeric" placeholder="(00) 00000-0000"
              maxlength="16"
              oninput="maskTelefone(this)"
              onblur="normalizeTelefone(this)"/>
+    </div>
+    <div>
+      <label for="cep">CEP:</label>
+      <input type="text" id="cep" inputmode="numeric" placeholder="00000-000"
+             maxlength="9"
+             oninput="maskCEP(this)"
+             onblur="normalizeCEP(this); atualizarFreteUI()"/>
     </div>
   </div>
 
@@ -329,7 +330,7 @@
     if (found) await updateDoc(found.ref, { compras: increment(1), atualizadoEm: serverTimestamp() });
   }
 
-  // ======= SAVE com Idempotência (reforçada) =======
+  // ======= SAVE com Idempotência =======
   function normalizeEnderecoForKey(str){ return up(str).replace(/\s+/g,' ').trim(); }
   function buildItemsSignature(items){
     if (!Array.isArray(items)) return '';
@@ -401,7 +402,7 @@
   <!-- App + PDF -->
   <script>
     // Versão app (para barra de update do SW)
-    window.__APP_VERSION = '3.1.8';
+    window.__APP_VERSION = '3.1.10';
 
     let itens = [{ produto: "", tipo: "KG", quantidade: 0, preco: 0, total: 0, obs: "" }];
 
@@ -781,15 +782,15 @@
       const h2 = drawLabeledBox(doc, margemX+half+2, y, half, "INSCRIÇÃO ESTADUAL", vIE, {maxLines:2});
       y += Math.max(h1,h2) + 1;
 
-      // CEP | CONTATO
-      const vCEP = (document.getElementById("cep").value||"").toUpperCase();
+      // TELEFONE (esq.) | CEP (dir.)  **AJUSTE**
       const vTel = (document.getElementById("contato").value||"").toUpperCase();
+      const vCEP = (document.getElementById("cep").value||"").toUpperCase();
       ensureSpace(12);
-      const h3 = drawLabeledBox(doc, margemX, y, half, "CEP", vCEP, {maxLines:2});
-      const h4 = drawLabeledBox(doc, margemX+half+2, y, half, "CONTATO", vTel, {maxLines:2});
+      const h3 = drawLabeledBox(doc, margemX, y, half, "CONTATO", vTel, {maxLines:2});
+      const h4 = drawLabeledBox(doc, margemX+half+2, y, half, "CEP", vCEP, {maxLines:2});
       y += Math.max(h3,h4) + 1;
 
-      // ENDEREÇO
+      // ENDEREÇO (altura dinâmica, sem sobrepor título)
       ensureSpace(14);
       y += drawLabeledBox(doc, margemX, y, larguraCaixa,
         "ENDEREÇO", (document.getElementById("endereco").value||"").toUpperCase(),
@@ -824,6 +825,7 @@
       // Título da tabela
       ensureSpace(14);
       doc.setFont("helvetica","bold"); doc.setFontSize(7);
+      const W_PROD=23.5, W_QDE=13, W_UNIT=13, W_TOTAL=18.5;
       doc.rect(margemX,y,W_PROD,10,"S");
       doc.rect(margemX+W_PROD,y,W_QDE,10,"S");
       doc.rect(margemX+W_PROD+W_QDE,y,W_UNIT,10,"S");
