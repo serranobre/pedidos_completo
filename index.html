@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Serra Nobre" />
   <link rel="manifest" href="manifest.json" />
-  <title>PEDIDOS V3.2.0</title>
+  <title>PEDIDOS V3.2.1</title>
   <style>
     :root{
       --teal:#0ea5a6; --ink:#0f172a; --muted:#666; --bg:#f4f4f4; --line:#e2e8f0;
@@ -55,7 +55,7 @@
 </head>
 <body>
   <img src="Serra-Nobre_3.png" alt="Logo" class="logo-header" onerror="this.style.display='none'">
-  <h1>PEDIDOS V3.2.0</h1>
+  <h1>PEDIDOS V3.2.1</h1>
 
   <div class="top-actions">
     <a href="relatorios.html" title="Abrir Relatórios">Relatórios</a>
@@ -466,7 +466,7 @@
   <!-- App + PDF -->
   <script>
     // Versão app (para barra de update do SW)
-    window.__APP_VERSION = '3.1.10';
+    window.__APP_VERSION = '3.2.1';
 
     let itens = [{ produto: "", tipo: "KG", quantidade: 0, preco: 0, total: 0, obs: "" }];
 
@@ -575,6 +575,23 @@
       }
     }
     window.atualizarFreteUI = atualizarFreteUI;
+
+    // Pré-calcula frete SEM debounce para não travar o PDF
+    async function ensureFreteBeforePDF(){
+      try{
+        let end = document.getElementById("endereco").value.trim().toUpperCase();
+        if(!end){ __frete = { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"" }; return; }
+        end = appendPOA(end);
+        const subtotal = itens.reduce((s,i)=> s + (Number(i.total)||0), 0);
+        __frete = await calcularFrete(end, subtotal);
+        const isManual = !!document.getElementById('isentarFrete')?.checked;
+        const rotuloExtra = isManual ? "(ISENTO manual)" : (__frete?.labelIsencao || (__frete?._err?"(falha no cálculo)":""));
+        document.getElementById("freteValor").textContent =
+          __frete?.valorBase==null ? "—" : `R$ ${Number(__frete.valorBase||0).toFixed(2)} ${rotuloExtra}`;
+      }catch(_){
+        __frete = { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"" };
+      }
+    }
 
     function getClienteExtrasFromForm(){
       return {
@@ -760,6 +777,37 @@
       return rowH;
     }
 
+    // Caixa com pares LABEL:valor em linha (CNPJ/I.E. e CONTATO/CEP)
+    function drawInlineKeyValues(doc, x, y, w, opts){
+      const {
+        leftLabel, leftValue, rightLabel, rightValue,
+        rowH=10, pad=3, titleSize=7, valueSize=9, gap=10
+      } = opts;
+      doc.setDrawColor(0); doc.setLineWidth(0.2);
+      doc.rect(x, y, w, rowH, "S");
+
+      doc.setFont("helvetica","bold"); doc.setFontSize(titleSize);
+      const yBase = y + rowH/2 + 0.5;
+      const xLeft = x + pad;
+      const leftLabelText = (leftLabel||"").toUpperCase() + ": ";
+      const leftLabelW = doc.getTextWidth(leftLabelText);
+      doc.text(leftLabelText, xLeft, yBase);
+
+      doc.setFont("helvetica","normal"); doc.setFontSize(valueSize);
+      doc.text(String(leftValue||"").toUpperCase(), xLeft + leftLabelW, yBase);
+
+      const xRight = x + w/2 + gap;
+      doc.setFont("helvetica","bold"); doc.setFontSize(titleSize);
+      const rightLabelText = (rightLabel||"").toUpperCase() + ": ";
+      const rightLabelW = doc.getTextWidth(rightLabelText);
+      doc.text(rightLabelText, xRight, yBase);
+
+      doc.setFont("helvetica","normal"); doc.setFontSize(valueSize);
+      doc.text(String(rightValue||"").toUpperCase(), xRight + rightLabelW, yBase);
+
+      return rowH;
+    }
+
     async function preencherEnderecoEIsencaoCliente(){
       const n=(document.getElementById("cliente").value||"").trim().toUpperCase();
       if(!n) return;
@@ -837,24 +885,27 @@
         "CLIENTE", (document.getElementById("cliente").value||"").toUpperCase(),
         { titleSize:8, valueSize:8, maxLines:3 }) + 1;
 
-      // CNPJ | IE (mesma linha)
-      const vCNPJ = (document.getElementById("cnpj").value||"").toUpperCase();
-      const vIE   = (document.getElementById("ie").value||"").toUpperCase();
-      ensureSpace(12);
-      const half = larguraCaixa/2 - 1;
-      const h1 = drawLabeledBox(doc, margemX, y, half, "CNPJ", vCNPJ, {maxLines:2});
-      const h2 = drawLabeledBox(doc, margemX+half+2, y, half, "INSCRIÇÃO ESTADUAL", vIE, {maxLines:2});
-      y += Math.max(h1,h2) + 1;
+      // CNPJ + I.E. (mesma caixa, linha única)
+      const vCNPJ = (document.getElementById("cnpj").value||"");
+      const vIE   = (document.getElementById("ie").value||"");
+      ensureSpace(10);
+      y += drawInlineKeyValues(doc, margemX, y, larguraCaixa, {
+        leftLabel: "CNPJ", leftValue: vCNPJ,
+        rightLabel: "I.E.", rightValue: vIE,
+        rowH:10, titleSize:7, valueSize:9
+      }) + 1;
 
-      // CONTATO | CEP
-      const vTel = (document.getElementById("contato").value||"").toUpperCase();
-      const vCEP = (document.getElementById("cep").value||"").toUpperCase();
-      ensureSpace(12);
-      const h3 = drawLabeledBox(doc, margemX, y, half, "CONTATO", vTel, {maxLines:2});
-      const h4 = drawLabeledBox(doc, margemX+half+2, y, half, "CEP", vCEP, {maxLines:2});
-      y += Math.max(h3,h4) + 1;
+      // CONTATO + CEP (mesma caixa, linha única)
+      const vTel = (document.getElementById("contato").value||"");
+      const vCEP = (document.getElementById("cep").value||"");
+      ensureSpace(10);
+      y += drawInlineKeyValues(doc, margemX, y, larguraCaixa, {
+        leftLabel: "CONTATO", leftValue: vTel,
+        rightLabel: "CEP", rightValue: vCEP,
+        rowH:10, titleSize:7, valueSize:9
+      }) + 1;
 
-      // ENDEREÇO
+      // ENDEREÇO (com wrap)
       ensureSpace(14);
       y += drawLabeledBox(doc, margemX, y, larguraCaixa,
         "ENDEREÇO", (document.getElementById("endereco").value||"").toUpperCase(),
@@ -968,20 +1019,14 @@
         if (i < itens.length - 1) y += 2;
       }
 
-      // Frete + Total final
-      let frete = __frete;
-      try{
-        if(!frete){
-          const end = document.getElementById("endereco").value.trim().toUpperCase();
-          frete = await calcularFrete(appendPOA(end), subtotal);
-        }
-      }catch(_){ frete = { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"" }; }
+      // Frete + Total final (NÃO recalcula frete aqui para não travar)
+      const frete = __frete || { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"" };
 
       y += 2;
-      const freteBoxH = 10;
-      ensureSpace(freteBoxH + 20);
+      const freteBoxH = 8; // mais baixo
+      ensureSpace(freteBoxH + 18);
       doc.rect(margemX, y, larguraCaixa, freteBoxH, "S");
-      doc.setFont("helvetica","normal"); doc.setFontSize(10);
+      doc.setFont("helvetica","normal"); doc.setFontSize(9);
       const isIsentoManual = !!document.getElementById('isentarFrete')?.checked;
       const isIsento = isIsentoManual || !!frete?.isento;
       const freteMostrar = isIsento ? "ISENTO DE FRETE" : ("R$ " + Number(frete?.valorBase || 0).toFixed(2));
@@ -1013,24 +1058,26 @@
         y += h + 3;
       }
 
-      // Persistências de cliente/histórico
-      try{
-        if (demandaAtualizarCadastroCliente() && typeof window.salvarCliente === "function") {
-          await window.salvarCliente(
-            document.getElementById("cliente").value.trim().toUpperCase(),
-            document.getElementById("endereco").value.trim().toUpperCase(),
-            !!document.getElementById('isentarFrete')?.checked,
-            getClienteExtrasFromForm()
-          );
-        }
-        const nomeCli=document.getElementById("cliente").value.trim().toUpperCase();
-        if (typeof window.registrarPrecoCliente === "function") {
-          await Promise.all(
-            itens.filter(i=> (i?.produto||"").trim() && !isNaN(parseFloat(i?.preco)))
-                 .map(i=> window.registrarPrecoCliente(nomeCli, String(i.produto).trim(), parseFloat(i.preco)))
-          );
-        }
-      }catch(e){ console.error(e); }
+      // Persistências de cliente/histórico **apenas** quando salvar/compartilhar
+      if (querSalvarNoBanco){
+        try{
+          if (demandaAtualizarCadastroCliente() && typeof window.salvarCliente === "function") {
+            await window.salvarCliente(
+              document.getElementById("cliente").value.trim().toUpperCase(),
+              document.getElementById("endereco").value.trim().toUpperCase(),
+              !!document.getElementById('isentarFrete')?.checked,
+              getClienteExtrasFromForm()
+            );
+          }
+          const nomeCli=document.getElementById("cliente").value.trim().toUpperCase();
+          if (typeof window.registrarPrecoCliente === "function") {
+            await Promise.all(
+              itens.filter(i=> (i?.produto||"").trim() && !isNaN(parseFloat(i?.preco)))
+                  .map(i=> window.registrarPrecoCliente(nomeCli, String(i.produto).trim(), parseFloat(i.preco)))
+            );
+          }
+        }catch(e){ console.error(e); }
+      }
 
       // Monta payload p/ /pedidos
       const cliente   = document.getElementById("cliente").value.trim().toUpperCase();
@@ -1102,6 +1149,9 @@
 
         salvarCamposAntesRender();
 
+        // garante frete pronto e evita chamada dentro do PDF
+        await ensureFreteBeforePDF();
+
         const { doc, nomeArquivo } = await montarPDF(/*querSalvarNoBanco*/apenasSalvar);
         if (apenasSalvar) doc.save(nomeArquivo);
         else window.open(doc.output('bloburl'), '_blank');
@@ -1117,6 +1167,10 @@
       try{
         if (!camposObrigatoriosPreenchidos()) { alert("Preencha Cliente, Endereço, Data, Horário e ao menos 1 item com quantidade e preço."); return; }
         salvarCamposAntesRender();
+
+        // garante frete pronto
+        await ensureFreteBeforePDF();
+
         const { doc, nomeArquivo } = await montarPDF(/*querSalvarNoBanco*/true);
         if (navigator.canShare && window.Blob){
           const blob = await doc.output("blob");
