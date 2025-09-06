@@ -1,5 +1,5 @@
 /* Serra Nobre – Pedidos: Service Worker (v3.1.8) */
-const APP_VERSION = '3.2.4';
+const APP_VERSION = '3.2.5';
 const SW_VERSION  = `pedidos-v${APP_VERSION}-2025-09-03`;
 const CACHE_NAME  = `sn-pedidos::${SW_VERSION}`;
 
