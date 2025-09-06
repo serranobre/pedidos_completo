@@ -10,14 +10,14 @@
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Serra Nobre" />
   <link rel="manifest" href="manifest.json" />
-  <title>PEDIDOS V3.2.4</title>
+  <title>PEDIDOS V3.2.5</title>
   <style>
     :root{
       --teal:#0ea5a6; --ink:#0f172a; --muted:#666; --bg:#f4f4f4; --line:#e2e8f0;
       --ok:#3d7311; --accent:#005580; --warn:#b06912; --danger:#c0392b; --primary:#008000;
     }
     body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background: var(--bg); color:var(--ink) }
-    h1 { text-align: right; margin-bottom: 10px; font-size: 30px; }
+    h1 { text-align: right; margin: 6px 0 10px; font-size: 30px; }
     .logo-header { width: 360px; display: block; }
     .topbar {
       display:flex; align-items:center; justify-content:space-between;
@@ -28,10 +28,14 @@
     .login-inline { display:flex; align-items:center; gap:6px; }
     .login-inline input { padding:6px 8px; border:1px solid var(--line); border-radius:6px; width:140px; }
     .login-inline button { padding:6px 10px; background:var(--teal); color:#fff; border:none; border-radius:6px; cursor:pointer; }
+    #btnSair{ padding:6px 10px; background:#475569; color:#fff; border:none; border-radius:6px; cursor:pointer; }
+    #btnSair:hover{ filter:brightness(.95) }
+
     .offline-banner{
       display:none; text-align:center; margin:8px 0;
       background:#fee2e2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:6px 10px; font-weight:700;
     }
+
     input, select, textarea { width: 100%; padding: 8px; margin: 5px 0; box-sizing: border-box; border:1px solid var(--line); border-radius:6px; }
     .item { border: 1px solid var(--line); padding: 10px; background: #fff; margin-bottom: 10px; border-radius:8px; }
     .total { font-weight: bold; font-size: 1.2em; }
@@ -54,6 +58,11 @@
     .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px }
     .inline-help{ font-size:12px; color:#475569 }
     .peso-info { font-size:12px; color:#475569; margin:.25rem 0 .5rem }
+
+    /* Bloqueio de UI enquanto sem login */
+    .app-disabled *:where(input,select,textarea,button,.pdf-btn,a){ pointer-events:none; opacity:.6 }
+    .app-disabled .login-inline, .app-disabled #userChip { pointer-events:auto; opacity:1 }
+
     @media (max-width: 900px) { .logo-header{ width:240px } }
     @media (max-width: 740px) { .grid-2{ grid-template-columns: 1fr } .logo-header{ width:180px } }
     @media (max-width: 450px) {
@@ -69,11 +78,12 @@
   </style>
 </head>
 <body>
-  <!-- TOPO: Logo à esquerda + usuário à direita (login inline até autenticar) -->
+  <!-- TOPO: Logo à esquerda + usuário à direita -->
   <div class="topbar">
     <img src="Serra-Nobre_3.png" alt="Logo" class="logo-header" onerror="this.style.display='none'">
     <div class="user-area">
       <span id="userChip" class="user-chip">Desconectado</span>
+      <button id="btnSair" style="display:none">Sair</button>
       <div id="loginInline" class="login-inline" title="Digite a senha do operador (Jayson 0987, Karen 4321, Serra Nobre 0003, Leo 1210)">
         <input id="senhaOperador" type="password" inputmode="numeric" placeholder="Senha do operador"/>
         <button id="btnEntrarOperador" type="button">Entrar</button>
@@ -82,116 +92,118 @@
   </div>
 
   <div id="offlineBanner" class="offline-banner">OFFLINE — pedidos serão gerados normalmente, mas não serão salvos.</div>
-  <h1>PEDIDOS V3.2.4</h1>
+  <h1>PEDIDOS V3.2.5</h1>
 
-  <div class="top-actions">
-    <a href="relatorios.html" title="Abrir Relatórios">Relatórios</a>
-  </div>
-
-  <div class="field-group">
-    <label for="cliente">Cliente:</label>
-    <input list="listaClientes" type="text" id="cliente" autocomplete="off" required
-           onfocus="popularClientesMaisUsados()"
-           onblur="forcarUppercase(this); preencherEnderecoEIsencaoCliente(); carregarSugestoesProdutosDoCliente();" />
-    <datalist id="listaClientes"></datalist>
-  </div>
-
-  <div class="field-group grid-2">
-    <div>
-      <label for="cnpj">CNPJ:</label>
-      <input type="text" id="cnpj" inputmode="numeric" placeholder="00.000.000/0000-00"
-             maxlength="18"
-             oninput="maskCNPJ(this)"
-             onblur="normalizeCNPJ(this)"/>
-      <small class="inline-help">Serão salvos apenas dígitos. Validação leve.</small>
+  <main id="appMain">
+    <div class="top-actions">
+      <a href="relatorios.html" title="Abrir Relatórios">Relatórios</a>
     </div>
-    <div>
-      <label for="ie">Inscrição Estadual:</label>
-      <input type="text" id="ie" placeholder="Ex.: ISENTO ou número"
-             onblur="forcarUppercase(this)"/>
-      <small class="inline-help">Aceita “ISENTO”.</small>
+
+    <div class="field-group">
+      <label for="cliente">Cliente:</label>
+      <input list="listaClientes" type="text" id="cliente" autocomplete="off" required
+             onfocus="popularClientesMaisUsados()"
+             onblur="forcarUppercase(this); preencherEnderecoEIsencaoCliente(); carregarSugestoesProdutosDoCliente();" />
+      <datalist id="listaClientes"></datalist>
     </div>
-  </div>
 
-  <!-- ENDEREÇO abaixo de CNPJ/I.E. -->
-  <div class="field-group">
-    <label for="endereco">Endereço:</label>
-    <input type="text" id="endereco" autocomplete="off" required
-           onblur="forcarUppercase(this); atualizarFreteUI()"/>
-    <small class="muted" id="hint-endereco">
-      Se for outra cidade, inclua <b>o nome da cidade</b> no fim do endereço.
-      Sem cidade, será considerado <b>Porto Alegre - RS</b>.
-    </small>
-  </div>
-
-  <!-- CONTATO à esquerda | CEP à direita -->
-  <div class="field-group grid-2">
-    <div>
-      <label for="contato">Contato (tel/WhatsApp):</label>
-      <input type="text" id="contato" inputmode="numeric" placeholder="(00) 00000-0000"
-             maxlength="16"
-             oninput="maskTelefone(this)"
-             onblur="normalizeTelefone(this)"/>
+    <div class="field-group grid-2">
+      <div>
+        <label for="cnpj">CNPJ:</label>
+        <input type="text" id="cnpj" inputmode="numeric" placeholder="00.000.000/0000-00"
+               maxlength="18"
+               oninput="maskCNPJ(this)"
+               onblur="normalizeCNPJ(this)"/>
+        <small class="inline-help">Serão salvos apenas dígitos. Validação leve.</small>
+      </div>
+      <div>
+        <label for="ie">Inscrição Estadual:</label>
+        <input type="text" id="ie" placeholder="Ex.: ISENTO ou número"
+               onblur="forcarUppercase(this)"/>
+        <small class="inline-help">Aceita “ISENTO”.</small>
+      </div>
     </div>
-    <div>
-      <label for="cep">CEP:</label>
-      <input type="text" id="cep" inputmode="numeric" placeholder="00000-000"
-             maxlength="9"
-             oninput="maskCEP(this)"
-             onblur="normalizeCEP(this); atualizarFreteUI()"/>
+
+    <!-- ENDEREÇO abaixo de CNPJ/I.E. -->
+    <div class="field-group">
+      <label for="endereco">Endereço:</label>
+      <input type="text" id="endereco" autocomplete="off" required
+             onblur="forcarUppercase(this); atualizarFreteUI()"/>
+      <small class="muted" id="hint-endereco">
+        Se for outra cidade, inclua <b>o nome da cidade</b> no fim do endereço.
+        Sem cidade, será considerado <b>Porto Alegre - RS</b>.
+      </small>
     </div>
-  </div>
 
-  <div class="field-group">
-    <label for="entrega">Data de Entrega:</label>
-    <input type="date" id="entrega" required/>
-  </div>
-
-  <div class="field-group">
-    <label for="horaEntrega">Horário de Entrega:</label>
-    <input type="time" id="horaEntrega" required/>
-  </div>
-
-  <div class="field-group switch-box">
-    <label>Entrega/Retirada:</label>
-    <label><input type="radio" name="tipoEntrega" value="ENTREGA" checked> Entrega</label>
-    <label><input type="radio" name="tipoEntrega" value="RETIRADA"> Retirada</label>
-  </div>
-
-  <div class="field-group">
-    <label>Valor do Frete:</label>
-    <div class="frete-row">
-      <div id="freteValor" class="muted">—</div>
-      <label class="inline">
-        <input type="checkbox" id="isentarFrete" onchange="onToggleIsencaoManual()"/>
-        Isentar frete
-      </label>
+    <!-- CONTATO à esquerda | CEP à direita -->
+    <div class="field-group grid-2">
+      <div>
+        <label for="contato">Contato (tel/WhatsApp):</label>
+        <input type="text" id="contato" inputmode="numeric" placeholder="(00) 00000-0000"
+               maxlength="16"
+               oninput="maskTelefone(this)"
+               onblur="normalizeTelefone(this)"/>
+      </div>
+      <div>
+        <label for="cep">CEP:</label>
+        <input type="text" id="cep" inputmode="numeric" placeholder="00000-000"
+               maxlength="9"
+               oninput="maskCEP(this)"
+               onblur="normalizeCEP(this); atualizarFreteUI()"/>
+      </div>
     </div>
-  </div>
 
-  <div id="itens"></div>
-  <button onclick="adicionarItem()">Adicionar Item</button>
+    <div class="field-group">
+      <label for="entrega">Data de Entrega:</label>
+      <input type="date" id="entrega" required/>
+    </div>
 
-  <hr/>
-  <label for="pagamento">Forma de Pagamento:</label>
-  <select id="pagamento">
-    <option value="PIX">PIX</option>
-    <option value="DINHEIRO">DINHEIRO</option>
-    <option value="CARTÃO (LEVAR MAQUINA)">CARTÃO (LEVAR MAQUINA)</option>
-    <option value="OUTRO">OUTRO</option>
-  </select>
-  <input type="text" id="pagamentoOutro" placeholder="Digite outra forma de pagamento" style="display:none"/>
+    <div class="field-group">
+      <label for="horaEntrega">Horário de Entrega:</label>
+      <input type="time" id="horaEntrega" required/>
+    </div>
 
-  <hr/>
-  <label for="obsGeral">Observação geral do pedido:</label>
-  <textarea id="obsGeral"></textarea>
-  <hr/>
+    <div class="field-group switch-box">
+      <label>Entrega/Retirada:</label>
+      <label><input type="radio" name="tipoEntrega" value="ENTREGA" checked> Entrega</label>
+      <label><input type="radio" name="tipoEntrega" value="RETIRADA"> Retirada</label>
+    </div>
 
-  <button class="pdf-btn"            onclick="gerarPDF(false)">Gerar PDF</button>
-  <button class="pdf-btn salvar"     onclick="gerarPDF(true)">Salvar PDF</button>
-  <button class="pdf-btn compartilhar" onclick="compartilharPDF()">Compartilhar PDF</button>
+    <div class="field-group">
+      <label>Valor do Frete:</label>
+      <div class="frete-row">
+        <div id="freteValor" class="muted">—</div>
+        <label class="inline">
+          <input type="checkbox" id="isentarFrete" onchange="onToggleIsencaoManual()"/>
+          Isentar frete
+        </label>
+      </div>
+    </div>
 
-  <div id="resumo"></div>
+    <div id="itens"></div>
+    <button onclick="adicionarItem()">Adicionar Item</button>
+
+    <hr/>
+    <label for="pagamento">Forma de Pagamento:</label>
+    <select id="pagamento">
+      <option value="PIX">PIX</option>
+      <option value="DINHEIRO">DINHEIRO</option>
+      <option value="CARTÃO (LEVAR MAQUINA)">CARTÃO (LEVAR MAQUINA)</option>
+      <option value="OUTRO">OUTRO</option>
+    </select>
+    <input type="text" id="pagamentoOutro" placeholder="Digite outra forma de pagamento" style="display:none"/>
+
+    <hr/>
+    <label for="obsGeral">Observação geral do pedido:</label>
+    <textarea id="obsGeral"></textarea>
+    <hr/>
+
+    <button class="pdf-btn"            onclick="gerarPDF(false)">Gerar PDF</button>
+    <button class="pdf-btn salvar"     onclick="gerarPDF(true)">Salvar PDF</button>
+    <button class="pdf-btn compartilhar" onclick="compartilharPDF()">Compartilhar PDF</button>
+
+    <div id="resumo"></div>
+  </main>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
@@ -233,26 +245,23 @@
     return String(str||"").normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   }
 
-  // ---- Clientes helpers (versão tolerante) ----
+  // ---- Clientes helpers (tolerante) ----
   async function getClienteDocByNome(nomeUpper) {
     await authReady;
     const nomeSemAcento = removeAcentos(nomeUpper);
 
-    // 1) match exato em 'nome'
     try{
       const q1 = query(collection(db, "clientes"), where("nome", "==", nomeUpper), limit(1));
       const s1 = await getDocs(q1);
       if (!s1.empty) return { id: s1.docs[0].id, ref: s1.docs[0].ref, data: s1.docs[0].data() };
     }catch(_){}
 
-    // 2) match exato em 'nomeUpper'
     try{
       const q2 = query(collection(db, "clientes"), where("nomeUpper", "==", nomeUpper), limit(1));
       const s2 = await getDocs(q2);
       if (!s2.empty) return { id: s2.docs[0].id, ref: s2.docs[0].ref, data: s2.docs[0].data() };
     }catch(_){}
 
-    // 3) prefix search por 'nome'
     try{
       const start = nomeUpper, end = nomeUpper + '\uf8ff';
       const q3 = query(
@@ -272,7 +281,6 @@
       }
     }catch(_){}
 
-    // 4) prefix search por 'nomeUpper'
     try{
       const start = nomeUpper, end = nomeUpper + '\uf8ff';
       const q4 = query(
@@ -292,9 +300,9 @@
     return null;
   }
 
-  // Salva cliente somente se online
+  // Salva/atualiza cliente (só online)
   async function salvarCliente(nome, endereco, isentoFrete=false, extras={}) {
-    if (!navigator.onLine) return; // offline: não salva
+    if (!navigator.onLine) return;
     await authReady;
     const nomeNorm = up(nome);
     const enderecoNorm = up(endereco);
@@ -312,7 +320,6 @@
       if ((atual.endereco || "") !== enderecoNorm) campos.endereco = enderecoNorm;
       if (typeof isentoFrete === "boolean" && (atual.isentoFrete !== isentoFrete)) campos.isentoFrete = isentoFrete;
 
-      // campos fiscais/logísticos
       if (cnpj)   campos.cnpj = cnpj;
       if (ie)     campos.ie = ie;
       if (cep)    campos.cep = cep;
@@ -411,7 +418,7 @@
   }
 
   async function registrarPrecoCliente(clienteNome, produtoNome, preco) {
-    if (!navigator.onLine) return; // offline: não salva
+    if (!navigator.onLine) return;
     await authReady;
     const nomeCli  = up(clienteNome);
     const nomeProd = String(produtoNome || "").trim();
@@ -440,7 +447,7 @@
   }
 
   async function savePedidoIdempotente(payload){
-    if (!navigator.onLine) return null; // offline não salva
+    if (!navigator.onLine) return null;
     await authReady;
 
     const key = [
@@ -474,7 +481,7 @@
     return id;
   }
 
-  // === NOVO: atualizar lastFrete do cliente após salvar pedido ===
+  // Atualiza lastFrete no cliente
   async function updateLastFreteCliente(nomeCliente, lastFreteNumber){
     if (!navigator.onLine) return;
     await authReady;
@@ -516,18 +523,16 @@
   <!-- App + PDF -->
   <script>
     // Versão app (para barra de update do SW)
-    window.__APP_VERSION = '3.2.4';
+    window.__APP_VERSION = '3.2.5';
 
     // ===============================
     // (1) LOGIN POR SENHA (OFUSCADO)
     // ===============================
-    // Salt fixo (ofuscação leve, não substitui autenticação de servidor)
     const PASS_SALT = 'SNv1#2025';
-    // Hashes SHA-256 de `${PASS_SALT}:${senha}`
     const PASS_DB = {
       // Leo: 1210
       'e6b031cac259253ba3bd6e03c61c9569675481887b4e305e0c937958a60ce3b9': { nome:'Leo', role:'master' },
-      // serra nobre: 0003
+      // Serra Nobre: 0003
       '26ebfd86e6beb9540717aa713360947072c8ddad18524d514e04db38bb68cd72': { nome:'Serra Nobre', role:'user' },
       // Jayson: 0987
       '5fc5633d563f6e42641a7c402445dd09360a097bb07806d53b3dafa66551911b': { nome:'Jayson', role:'user' },
@@ -544,23 +549,43 @@
       const hash = await sha256Hex(`${PASS_SALT}:${pass}`);
       return PASS_DB[hash] || null;
     }
-    function setUsuario(usuario){
-      window.__usuario = usuario; // {nome, role}
-      const chip = document.getElementById('userChip');
-      chip.textContent = usuario ? `${usuario.nome} (${usuario.role})` : 'Desconectado';
-      const login = document.getElementById('loginInline');
-      if (usuario) login.style.display = 'none';
-      else login.style.display = '';
+
+    function setFormEnabled(enabled){
+      const app = document.getElementById('appMain');
+      if (!enabled){ app.classList.add('app-disabled'); }
+      else { app.classList.remove('app-disabled'); }
     }
+
+    function setUsuario(usuario){
+      window.__usuario = usuario || null; // {nome, role}
+      const chip = document.getElementById('userChip');
+      const login = document.getElementById('loginInline');
+      const btnSair = document.getElementById('btnSair');
+
+      if (usuario){
+        chip.textContent = usuario.nome; // sem "(role)"
+        login.style.display = 'none';
+        btnSair.style.display = '';
+        setFormEnabled(true);
+      } else {
+        chip.textContent = 'Desconectado';
+        login.style.display = '';
+        btnSair.style.display = 'none';
+        setFormEnabled(false);
+      }
+    }
+
     (function bootstrapUsuario(){
       try{
         const raw = localStorage.getItem('sn_usuario_v1');
         if (raw){
           const u = JSON.parse(raw);
-          if (u && u.nome) setUsuario(u);
+          if (u && u.nome) { setUsuario(u); return; }
         }
       }catch(_){}
+      setUsuario(null); // força login ao abrir
     })();
+
     document.getElementById('btnEntrarOperador').addEventListener('click', async ()=>{
       const pass = (document.getElementById('senhaOperador').value||'').trim();
       const u = await autenticarOperadorPorSenha(pass);
@@ -568,6 +593,11 @@
       localStorage.setItem('sn_usuario_v1', JSON.stringify(u));
       setUsuario(u);
       document.getElementById('senhaOperador').value = '';
+    });
+
+    document.getElementById('btnSair').addEventListener('click', ()=>{
+      localStorage.removeItem('sn_usuario_v1');
+      setUsuario(null);
     });
 
     let itens = [{ produto: "", tipo: "KG", quantidade: 0, preco: 0, total: 0, obs: "" }];
@@ -619,6 +649,16 @@
     }
     function normalizeTelefone(el){ el.value = digitsOnly(el.value).slice(0,11); }
 
+    // ===== Formatação para PDF =====
+    function fmtCNPJ(d){ d = String(d||'').replace(/\D/g,'').slice(0,14);
+      return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2}).*$/, "$1.$2.$3/$4-$5"); }
+    function fmtCEP(d){ d = String(d||'').replace(/\D/g,'').slice(0,8);
+      return d.replace(/^(\d{5})(\d{3}).*$/, "$1-$2"); }
+    function fmtTel(d){ d = String(d||'').replace(/\D/g,'').slice(0,11);
+      return (d.length<=10)
+        ? d.replace(/^(\d{2})(\d{4})(\d{0,4}).*$/, "($1) $2-$3")
+        : d.replace(/^(\d{2})(\d{5})(\d{0,4}).*$/, "($1) $2-$3"); }
+
     // ===== Frete =====
     function appendPOA(str){
       const t = String(str||"").trim();
@@ -631,19 +671,15 @@
 
     const ABS_FRETE_BASE = "https://serranobre-iota.vercel.app";
 
-    // Debounce util
     function debounce(fn, ms){ let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args), ms); }; }
 
     async function calcularFrete(enderecoTexto, totalItens){
-      // se offline: não tenta chamar API
       if (!navigator.onLine){
         return { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"(offline)", km:null, min:null, tier:null, _offline:true };
       }
-
       const isentoManual = !!document.getElementById('isentarFrete')?.checked;
       const payload = { enderecoTexto, totalItens, clienteIsento: isentoManual };
 
-      // timeout simples
       const ctrl = new AbortController();
       const timer = setTimeout(()=>ctrl.abort('timeout'), 8000);
 
@@ -671,20 +707,18 @@
     }
 
     let __frete = null;
-    let __freteSugestao = null; // <<< NOVO: sugerido a partir do lastFrete do cliente
+    let __freteSugestao = null;
     const _atualizarFreteUIDebounced = debounce(_atualizarFreteUI, 350);
     async function atualizarFreteUI(){ _atualizarFreteUIDebounced(); }
     async function _atualizarFreteUI(){
       try{
         let end = document.getElementById("endereco").value.trim().toUpperCase();
         if(!end){
-          // se tiver sugestão, mostra; senão, ‘—’
           document.getElementById("freteValor").textContent = (__freteSugestao!=null ? `R$ ${Number(__freteSugestao).toFixed(2)} (último)` : "—");
           __frete=null; return;
         }
         end = appendPOA(end);
         const subtotal = itens.reduce((s,i)=> s + (Number(i.total)||0), 0);
-        // antes de calcular, exibir sugestão se houver
         if (__freteSugestao!=null && !document.getElementById('isentarFrete').checked){
           document.getElementById("freteValor").textContent = `R$ ${Number(__freteSugestao).toFixed(2)} (último)`;
         }
@@ -938,7 +972,7 @@
 
     async function preencherEnderecoEIsencaoCliente(){
       const n=(document.getElementById("cliente").value||"").trim().toUpperCase();
-      __freteSugestao = null; // reset sugestão ao trocar cliente
+      __freteSugestao = null;
       if(!n) return;
       try{
         const info = (typeof window.buscarClienteInfo==="function") ? await window.buscarClienteInfo(n) : null;
@@ -947,18 +981,15 @@
           const chk = document.getElementById("isentarFrete");
           if (chk) chk.checked = !!info.isentoFrete;
 
-          // fiscais/logísticos
           if (info.cnpj) document.getElementById("cnpj").value = info.cnpj;
           if (info.ie)   document.getElementById("ie").value = info.ie;
           if (info.cep)  document.getElementById("cep").value = info.cep;
           if (info.contato) document.getElementById("contato").value = info.contato;
 
-          // aplica máscaras visuais
           maskCNPJ(document.getElementById("cnpj"));
           maskCEP(document.getElementById("cep"));
           maskTelefone(document.getElementById("contato"));
 
-          // <<< NOVO: sugestão de frete pelo último valor salvo do cliente
           if (!chk.checked && typeof info.lastFrete === 'number' && info.lastFrete > 0){
             __freteSugestao = info.lastFrete;
             const elF = document.getElementById("freteValor");
@@ -1003,8 +1034,15 @@
 
       try{
         const b64=await getLogoBase64();
-        if(b64){ doc.addImage(b64, guessImageFormatFromDataURL(b64), 20, y, 32, 12, '', 'FAST'); y+=14; }
-        else { y+=2; }
+        if(b64){
+          doc.addImage(b64, guessImageFormatFromDataURL(b64), 20, y, 32, 12, '', 'FAST');
+          // Nome do usuário (fonte 8) no canto esquerdo, mesma linha do logo
+          if (window.__usuario?.nome){
+            doc.setFont("helvetica","normal"); doc.setFontSize(8);
+            doc.text(String(window.__usuario.nome).toUpperCase(), 2, y+3);
+          }
+          y+=14;
+        } else { y+=2; }
       }catch(_){ y+=2; }
 
       function ensureSpace(h){
@@ -1021,8 +1059,8 @@
         { titleSize:8, valueSize:8, maxLines:3 }) + 1;
 
       // CNPJ + I.E.
-      const vCNPJ = (document.getElementById("cnpj").value||"");
-      const vIE   = (document.getElementById("ie").value||"");
+      const vCNPJ = fmtCNPJ(document.getElementById("cnpj").value);
+      const vIE   = (document.getElementById("ie").value||"").toUpperCase();
       ensureSpace(10);
       y += drawInlineKeyValues(doc, margemX, y, larguraCaixa, {
         leftLabel: "CNPJ", leftValue: vCNPJ,
@@ -1037,8 +1075,8 @@
         { titleSize:8, valueSize:8, maxLines:4 }) + 1;
 
       // CONTATO + CEP
-      const vTel = (document.getElementById("contato").value||"");
-      const vCEP = (document.getElementById("cep").value||"");
+      const vTel = fmtTel(document.getElementById("contato").value);
+      const vCEP = fmtCEP(document.getElementById("cep").value);
       ensureSpace(10);
       y += drawInlineKeyValues(doc, margemX, y, larguraCaixa, {
         leftLabel: "CONTATO", leftValue: vTel,
@@ -1065,24 +1103,26 @@
       doc.text(document.getElementById("horaEntrega").value, margemX+3*larguraCaixa/4, y+8, {align:"center"});
       y+=12;
 
-      // ENTREGA à esquerda | FRETE à direita (mesma linha)
+      // ENTREGA (2/3) + FRETE (1/3)
+      ensureSpace(12);
       doc.setLineWidth(1.1);
-      const boxW = larguraCaixa*0.48;
-      doc.rect(margemX, y, boxW, 10, "S");
-      doc.rect(margemX + larguraCaixa - boxW, y, boxW, 10, "S");
+      const entregaW = Math.round(larguraCaixa * (2/3));
+      const freteW   = larguraCaixa - entregaW;
+
+      doc.rect(margemX, y, entregaW, 10, "S");
       doc.setFont("helvetica","bold"); doc.setFontSize(10);
       const tipoEntrega=document.querySelector('input[name="tipoEntrega"]:checked').value;
-      doc.text(tipoEntrega, margemX + boxW/2, y+6.5, {align:"center"});
-      doc.text("FRETE", margemX + larguraCaixa - boxW/2, y+4, {align:"center"});
-      // valor do frete logo abaixo do título FRETE
+      doc.text(tipoEntrega, margemX + entregaW/2, y+6.5, {align:"center"});
+
+      doc.rect(margemX + entregaW, y, freteW, 10, "S");
+      doc.text("FRETE", margemX + entregaW + freteW/2, y+4, {align:"center"});
       doc.setFont("helvetica","normal"); doc.setFontSize(9);
       const fretePreview = (()=>{
-        const f = __frete || {valorBase:0,isento:false,labelIsencao:""};
+        const f = __frete || {valorBase:0,isento:false};
         const isIsentoManual = !!document.getElementById('isentarFrete')?.checked;
-        const isIsento = isIsentoManual || !!f.isento;
-        return isIsento ? "ISENTO DE FRETE" : ("R$ " + Number(f.valorBase||0).toFixed(2));
+        return (isIsentoManual || f.isento) ? "ISENTO DE FRETE" : ("R$ " + Number(f.valorBase||0).toFixed(2));
       })();
-      doc.text(fretePreview, margemX + larguraCaixa - boxW/2, y+8.2, {align:"center"});
+      doc.text(fretePreview, margemX + entregaW + freteW/2, y+8.2, {align:"center"});
       doc.setLineWidth(0.2);
       y+=12;
 
@@ -1166,23 +1206,11 @@
         if (i < itens.length - 1) y += 2;
       }
 
-      // Frete + Total final (sem recalcular aqui)
-      const frete = __frete || { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"" };
-
-      y += 2;
-      const freteBoxH = 8;
-      ensureSpace(freteBoxH + 18);
-      doc.rect(margemX, y, larguraCaixa, freteBoxH, "S");
-      doc.setFont("helvetica","normal"); doc.setFontSize(9);
-      const isIsentoManual = !!document.getElementById('isentarFrete')?.checked;
-      const isIsento = isIsentoManual || !!frete?.isento;
-      const freteMostrar = isIsento ? "ISENTO DE FRETE" : ("R$ " + Number(frete?.valorBase || 0).toFixed(2));
-      const fLines = splitToWidth(doc, freteMostrar, larguraCaixa - 6);
-      const block=(fLines.length-1)*5; const baseY = y + (freteBoxH - block)/2 + 3;
-      fLines.forEach((ln,i)=>doc.text(ln, margemX+larguraCaixa/2, baseY+i*5, {align:"center"}));
-      y += freteBoxH + 3;
-
-      const totalGeral = subtotal + Number(frete?.valorCobravel||0);
+      // Total final mostrado no PDF
+      const isentoMan = !!document.getElementById('isentarFrete')?.checked;
+      const frete = __frete || { valorBase:0, valorCobravel:0, isento:false };
+      const freteCobravelParaTotal = isentoMan ? 0 : Number(frete.valorCobravel||0);
+      const totalGeral = subtotal + freteCobravelParaTotal;
 
       doc.setFont("helvetica","bold"); doc.setLineWidth(1.1);
       doc.rect(margemX,y,larguraCaixa,12,"S");
@@ -1226,14 +1254,14 @@
         }catch(e){ console.error(e); }
       }
 
-      // Monta payload p/ /pedidos
+      // ===== Payload do pedido (salvamento) =====
       const cliente   = document.getElementById("cliente").value.trim().toUpperCase();
       const pagamento = document.getElementById("pagamento").value;
       const endereco  = document.getElementById("endereco").value.trim().toUpperCase();
       const entregaISO= document.getElementById("entrega").value;
       const hora      = document.getElementById("horaEntrega").value;
       const tipoEnt   = document.querySelector('input[name="tipoEntrega"]:checked').value;
-      const isentoMan = !!document.getElementById('isentarFrete')?.checked;
+      // isentoMan já declarado acima
 
       const clienteFiscal = {
         cnpj: digitsOnly(document.getElementById("cnpj").value),
@@ -1242,19 +1270,23 @@
         contato: digitsOnly(document.getElementById("contato").value)
       };
 
+      const subtotalPayload = Number(itens.reduce((s,i)=> s + Number(i.total||0), 0).toFixed(2));
+      const freteCobravel = isentoMan ? 0 : Number(__frete?.valorCobravel || 0);
+      const totalPedidoPayload = Number((subtotalPayload + freteCobravel).toFixed(2));
+
       const payload = {
         cliente,
         pagamento,
         itens: itens.map(i=>({ produto:i.produto, tipo:i.tipo, quantidade:i.quantidade, precoUnit:i.preco, total:i.total, obs:i.obs||"" })),
-        subtotal: Number(itens.reduce((s,i)=> s + Number(i.total||0), 0).toFixed(2)),
-        totalPedido: Number((itens.reduce((s,i)=> s + Number(i.total||0), 0) + Number(__frete?.valorCobravel||0)).toFixed(2)),
+        subtotal: subtotalPayload,
+        totalPedido: totalPedidoPayload,
         entrega: {
           tipo: tipoEnt,
           endereco,
           km: __frete?.km ?? null,
           min: __frete?.min ?? null,
           valorBase: __frete?.valorBase ?? 0,
-          valorCobravel: __frete?.valorCobravel ?? 0,
+          valorCobravel: freteCobravel,
           isento: !!__frete?.isento || isentoMan,
           isentoManual: isentoMan,
           status: "PENDENTE",
@@ -1265,7 +1297,7 @@
         horaEntrega: hora,
         anoMes: entregaISO ? entregaISO.slice(0,7) : "",
         status: "ABERTO",
-        vendedor: (window.__usuario?.nome || "Operador"),   /* <<< usa operador logado */
+        vendedor: (window.__usuario?.nome || "Operador"),
         obsGeral: (document.getElementById("obsGeral").value||"").toUpperCase(),
         clienteFiscal
       };
@@ -1273,7 +1305,6 @@
       if (querSalvarNoBanco && navigator.onLine && typeof window.savePedidoIdempotente === "function"){
         try{
           await window.savePedidoIdempotente(payload);
-          // <<< NOVO: grava lastFrete no cliente
           const lastFreteToSave = payload.entrega.isento ? 0 : Number(payload.entrega.valorCobravel||0);
           if (typeof window.updateLastFreteCliente === "function"){
             await window.updateLastFreteCliente(payload.cliente, lastFreteToSave);
@@ -1288,14 +1319,12 @@
       return { doc, nomeArquivo };
     }
 
-    // ===== Ações com trava anti-duplo clique + fallbacks de abertura =====
+    // ===== Ações com trava + fallback de abertura =====
     async function abrirPDFComFallback(doc, nomeArquivo, baixarSeBloquear=false){
       try{
-        // 1) tentar bloburl em nova aba
         const url = doc.output('bloburl');
         const win = window.open(url, '_blank');
         if (win) return;
-        // 2) se bloqueado, gerar blob e tentar força-download
         const blob = await doc.output('blob');
         const a = document.createElement('a');
         const objURL = URL.createObjectURL(blob);
@@ -1305,7 +1334,6 @@
           setTimeout(()=>URL.revokeObjectURL(objURL), 20000);
           return;
         }
-        // 3) último recurso
         doc.save(nomeArquivo || 'pedido.pdf');
       }catch(_){
         doc.save(nomeArquivo || 'pedido.pdf');
@@ -1313,6 +1341,7 @@
     }
 
     async function gerarPDF(apenasSalvar=false){
+      if (!window.__usuario){ alert("Faça login para continuar."); return; }
       if (window.__busy) return;
       window.__busy = true;
       try{
@@ -1329,7 +1358,6 @@
 
         const { doc, nomeArquivo } = await montarPDF(/*querSalvarNoBanco*/apenasSalvar);
         if (apenasSalvar){
-          // salvar direto (não depende de internet)
           doc.save(nomeArquivo);
         } else {
           await abrirPDFComFallback(doc, nomeArquivo, /*baixarSeBloquear*/true);
@@ -1341,6 +1369,7 @@
     window.gerarPDF = gerarPDF;
 
     async function compartilharPDF(){
+      if (!window.__usuario){ alert("Faça login para continuar."); return; }
       if (window.__busy) return;
       window.__busy = true;
       try{
@@ -1348,7 +1377,7 @@
         salvarCamposAntesRender();
         await ensureFreteBeforePDF();
 
-        const { doc, nomeArquivo } = await montarPDF(/*querSalvarNoBanco*/navigator.onLine); // só salva no banco se online
+        const { doc, nomeArquivo } = await montarPDF(/*querSalvarNoBanco*/navigator.onLine);
         const blob = await doc.output("blob");
         if (navigator.canShare && window.File){
           const file = new File([blob], nomeArquivo, { type: "application/pdf" });
@@ -1357,1185 +1386,6 @@
         const url = URL.createObjectURL(blob);
         window.open(url, "_blank");
         setTimeout(()=>URL.revokeObjectURL(url), 20000);
-      } finally {
-        window.__busy = false;
-      }
-    }
-    window.compartilharPDF = compartilharPDF;
-
-    // ===== Service Worker (update rápido) =====
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', async () => {
-        try {
-          const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-          document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update(); });
-          setInterval(() => reg.update(), 10 * 60 * 1000);
-          reg.addEventListener('updatefound', () => {
-            const nw = reg.installing; if (!nw) return;
-            nw.addEventListener('statechange', () => {
-              if (nw.state === 'installed' && navigator.serviceWorker.controller) reg.waiting && reg.waiting.postMessage('SKIP_WAITING');
-            });
-          });
-          navigator.serviceWorker.addEventListener('controllerchange', () => {
-            if (!window.__reloadedBySW) { window.__reloadedBySW = true; location.reload(); }
-          });
-        } catch (e) {}
-      });
-    }
-  </script>
-
-  <datalist id="listaProdutos"></datalist>
-</body>
-</html>
-    .muted{ color:var(--muted); font-size:0.9em }
-    #freteValor { font-weight: bold; }
-    .frete-row { display:flex; align-items:center; gap:10px; flex-wrap: wrap; }
-    .frete-row .inline { display:flex; align-items:center; gap:6px; }
-    .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px }
-    .inline-help{ font-size:12px; color:#475569 }
-    .peso-info { font-size:12px; color:#475569; margin:.25rem 0 .5rem }
-    @media (max-width: 740px) { .grid-2{ grid-template-columns: 1fr } }
-    @media (max-width: 450px) {
-      h1 { font-size: 1.1em; }
-      .logo-header { width: 110px; }
-      .item { padding: 6px; }
-      button, .pdf-btn { padding: 7px; font-size: 0.96em; }
-      input, select, textarea { padding: 6px; }
-      .field-group { margin-bottom: 8px; }
-      .top-actions a { padding:6px 8px; font-size:0.9em; }
-    }
-  </style>
-</head>
-<body>
-  <img src="Serra-Nobre_3.png" alt="Logo" class="logo-header" onerror="this.style.display='none'">
-  <h1>PEDIDOS V3.2.1</h1>
-
-  <div class="top-actions">
-    <a href="relatorios.html" title="Abrir Relatórios">Relatórios</a>
-  </div>
-
-  <div class="field-group">
-    <label for="cliente">Cliente:</label>
-    <input list="listaClientes" type="text" id="cliente" autocomplete="off" required
-           onfocus="popularClientesMaisUsados()"
-           onblur="forcarUppercase(this); preencherEnderecoEIsencaoCliente(); carregarSugestoesProdutosDoCliente();" />
-    <datalist id="listaClientes"></datalist>
-  </div>
-
-  <div class="field-group grid-2">
-    <div>
-      <label for="cnpj">CNPJ:</label>
-      <input type="text" id="cnpj" inputmode="numeric" placeholder="00.000.000/0000-00"
-             maxlength="18"
-             oninput="maskCNPJ(this)"
-             onblur="normalizeCNPJ(this)"/>
-      <small class="inline-help">Serão salvos apenas dígitos. Validação leve.</small>
-    </div>
-    <div>
-      <label for="ie">Inscrição Estadual:</label>
-      <input type="text" id="ie" placeholder="Ex.: ISENTO ou número"
-             onblur="forcarUppercase(this)"/>
-      <small class="inline-help">Aceita “ISENTO”.</small>
-    </div>
-  </div>
-
-  <!-- TELEFONE à esquerda e CEP à direita -->
-  <div class="field-group grid-2">
-    <div>
-      <label for="contato">Contato (tel/WhatsApp):</label>
-      <input type="text" id="contato" inputmode="numeric" placeholder="(00) 00000-0000"
-             maxlength="16"
-             oninput="maskTelefone(this)"
-             onblur="normalizeTelefone(this)"/>
-    </div>
-    <div>
-      <label for="cep">CEP:</label>
-      <input type="text" id="cep" inputmode="numeric" placeholder="00000-000"
-             maxlength="9"
-             oninput="maskCEP(this)"
-             onblur="normalizeCEP(this); atualizarFreteUI()"/>
-    </div>
-  </div>
-
-  <div class="field-group">
-    <label for="endereco">Endereço:</label>
-    <input type="text" id="endereco" autocomplete="off" required
-           onblur="forcarUppercase(this); atualizarFreteUI()"/>
-    <small class="muted" id="hint-endereco">
-      Se for outra cidade, inclua <b>o nome da cidade</b> no fim do endereço.
-      Sem cidade, será considerado <b>Porto Alegre - RS</b>.
-    </small>
-  </div>
-
-  <div class="field-group">
-    <label for="entrega">Data de Entrega:</label>
-    <input type="date" id="entrega" required/>
-  </div>
-
-  <div class="field-group">
-    <label for="horaEntrega">Horário de Entrega:</label>
-    <input type="time" id="horaEntrega" required/>
-  </div>
-
-  <div class="field-group switch-box">
-    <label>Entrega/Retirada:</label>
-    <label><input type="radio" name="tipoEntrega" value="ENTREGA" checked> Entrega</label>
-    <label><input type="radio" name="tipoEntrega" value="RETIRADA"> Retirada</label>
-  </div>
-
-  <div class="field-group">
-    <label>Valor do Frete:</label>
-    <div class="frete-row">
-      <div id="freteValor" class="muted">—</div>
-      <label class="inline">
-        <input type="checkbox" id="isentarFrete" onchange="onToggleIsencaoManual()"/>
-        Isentar frete
-      </label>
-    </div>
-  </div>
-
-  <div id="itens"></div>
-  <button onclick="adicionarItem()">Adicionar Item</button>
-
-  <hr/>
-  <label for="pagamento">Forma de Pagamento:</label>
-  <select id="pagamento">
-    <option value="PIX">PIX</option>
-    <option value="DINHEIRO">DINHEIRO</option>
-    <option value="CARTÃO (LEVAR MAQUINA)">CARTÃO (LEVAR MAQUINA)</option>
-    <option value="OUTRO">OUTRO</option>
-  </select>
-  <input type="text" id="pagamentoOutro" placeholder="Digite outra forma de pagamento" style="display:none"/>
-
-  <hr/>
-  <label for="obsGeral">Observação geral do pedido:</label>
-  <textarea id="obsGeral"></textarea>
-  <hr/>
-
-  <button class="pdf-btn"            onclick="gerarPDF(false)">Gerar PDF</button>
-  <button class="pdf-btn salvar"     onclick="gerarPDF(true)">Salvar PDF</button>
-  <button class="pdf-btn compartilhar" onclick="compartilharPDF()">Compartilhar PDF</button>
-
-  <div id="resumo"></div>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
-  <!-- Firebase (module): App + Firestore + Auth -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-  import {
-    getFirestore, collection, addDoc, getDocs, query, where, orderBy, limit,
-    updateDoc, increment, doc, setDoc, serverTimestamp
-  } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyB3zBW_WhVfNpX5uoJCq-6WysE5XKYKZt4",
-    authDomain: "serranobrepedidos.firebaseapp.com",
-    projectId: "serranobrepedidos",
-    storageBucket: "serranobrepedidos.firebasestorage.app",
-    messagingSenderId: "948939268023",
-    appId: "1:948939268023:web:3f1f6c18f2c047c82b1232"
-  };
-
-  const app = initializeApp(firebaseConfig);
-
-  const auth = getAuth(app);
-  const authReady = new Promise((resolve) => {
-    onAuthStateChanged(auth, (user) => {
-      if (user) resolve(user);
-      else signInAnonymously(auth).catch((e) => console.error("Anon auth:", e));
-    });
-  });
-
-  const db = getFirestore(app);
-  window.firebaseReady = authReady;
-
-  // ---------- Normalizadores ----------
-  function up(v){ return String(v||"").toUpperCase().trim(); }
-  function digits(v){ return String(v||"").replace(/\D/g,""); }
-  function removeAcentos(str){
-    return String(str||"").normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  }
-
-  // ---- Clientes helpers (versão tolerante) ----
-  async function getClienteDocByNome(nomeUpper) {
-    await authReady;
-    const nomeSemAcento = removeAcentos(nomeUpper);
-
-    // 1) match exato em 'nome'
-    try{
-      const q1 = query(collection(db, "clientes"), where("nome", "==", nomeUpper), limit(1));
-      const s1 = await getDocs(q1);
-      if (!s1.empty) return { id: s1.docs[0].id, ref: s1.docs[0].ref, data: s1.docs[0].data() };
-    }catch(_){}
-
-    // 2) match exato em 'nomeUpper'
-    try{
-      const q2 = query(collection(db, "clientes"), where("nomeUpper", "==", nomeUpper), limit(1));
-      const s2 = await getDocs(q2);
-      if (!s2.empty) return { id: s2.docs[0].id, ref: s2.docs[0].ref, data: s2.docs[0].data() };
-    }catch(_){}
-
-    // 3) prefix search por 'nome'
-    try{
-      const start = nomeUpper, end = nomeUpper + '\uf8ff';
-      const q3 = query(
-        collection(db, "clientes"),
-        orderBy("nome"),
-        where("nome", ">=", start),
-        where("nome", "<=", end),
-        limit(5)
-      );
-      const s3 = await getDocs(q3);
-      if (!s3.empty){
-        const hit = s3.docs.find(d=>{
-          const n = (d.data()?.nome || "").toString().toUpperCase();
-          return removeAcentos(n) === nomeSemAcento;
-        }) || s3.docs[0];
-        return { id: hit.id, ref: hit.ref, data: hit.data() };
-      }
-    }catch(_){}
-
-    // 4) prefix search por 'nomeUpper'
-    try{
-      const start = nomeUpper, end = nomeUpper + '\uf8ff';
-      const q4 = query(
-        collection(db, "clientes"),
-        orderBy("nomeUpper"),
-        where("nomeUpper", ">=", start),
-        where("nomeUpper", "<=", end),
-        limit(5)
-      );
-      const s4 = await getDocs(q4);
-      if (!s4.empty){
-        const hit = s4.docs[0];
-        return { id: hit.id, ref: hit.ref, data: hit.data() };
-      }
-    }catch(_){}
-
-    return null;
-  }
-
-  async function salvarCliente(nome, endereco, isentoFrete=false, extras={}) {
-    await authReady;
-    const nomeNorm = up(nome);
-    const enderecoNorm = up(endereco);
-    if (!nomeNorm) return;
-
-    const cnpj   = digits(extras.cnpj);
-    const ie     = up(extras.ie);
-    const cep    = digits(extras.cep);
-    const contato= digits(extras.contato);
-
-    const exist = await getClienteDocByNome(nomeNorm);
-    if (exist) {
-      const atual = exist.data || {};
-      const campos = { atualizadoEm: serverTimestamp(), nomeUpper: nomeNorm };
-      if ((atual.endereco || "") !== enderecoNorm) campos.endereco = enderecoNorm;
-      if (typeof isentoFrete === "boolean" && (atual.isentoFrete !== isentoFrete)) campos.isentoFrete = isentoFrete;
-
-      // Fiscais/logísticos
-      if (cnpj)   campos.cnpj = cnpj;
-      if (ie)     campos.ie = ie; // permite ISENTO
-      if (cep)    campos.cep = cep;
-      if (contato)campos.contato = contato;
-
-      await updateDoc(exist.ref, campos);
-    } else {
-      await addDoc(collection(db, "clientes"), {
-        nome: nomeNorm,
-        nomeUpper: nomeNorm,
-        endereco: enderecoNorm,
-        isentoFrete: !!isentoFrete,
-        cnpj: cnpj || "",
-        ie: ie || "",
-        cep: cep || "",
-        contato: contato || "",
-        compras: 0,
-        criadoEm: serverTimestamp()
-      });
-    }
-  }
-
-  async function buscarClienteInfo(nomeCliente) {
-    await authReady;
-    const nome = up(nomeCliente);
-    if (!nome) return null;
-    const found = await getClienteDocByNome(nome);
-    if (!found) return null;
-    const d = found.data || {};
-    return {
-      endereco: (d.endereco || d.end || ""),
-      isentoFrete: !!(d.isentoFrete || d.isento_frete),
-      cnpj: d.cnpj || "",
-      ie: d.ie || d.inscricao_estadual || "",
-      cep: d.cep || "",
-      contato: d.contato || d.telefone || ""
-    };
-  }
-
-  async function clientesMaisUsados(limitQtd = 50) {
-    await authReady;
-    const lista = [];
-    try{
-      const qs = await getDocs(query(collection(db, "clientes"), orderBy("compras","desc"), limit(limitQtd)));
-      qs.forEach(d => {
-        const x = d.data() || {};
-        const nome = (x.nome || x.nomeUpper || "").toString().trim();
-        if (nome) lista.push({ nome, compras: x.compras || 0 });
-      });
-    }catch(_){
-      const qs2 = await getDocs(query(collection(db, "clientes"), orderBy("nome"), limit(limitQtd)));
-      qs2.forEach(d => {
-        const x = d.data() || {};
-        const nome = (x.nome || x.nomeUpper || "").toString().trim();
-        if (nome) lista.push({ nome, compras: x.compras || 0 });
-      });
-    }
-    lista.sort((a,b)=> b.compras - a.compras || a.nome.localeCompare(b.nome));
-    return lista.map(x => x.nome);
-  }
-
-  async function buscarUltimoPreco(clienteNome, produtoNome) {
-    await authReady;
-    const nomeCli  = up(clienteNome);
-    const nomeProd = String(produtoNome || "").trim();
-    if (!nomeCli || !nomeProd) return null;
-
-    const q = query(
-      collection(db, "historico_precos"),
-      where("cliente", "==", nomeCli),
-      where("produto", "==", nomeProd),
-      orderBy("data", "desc"),
-      limit(1)
-    );
-    const qs = await getDocs(q);
-    if (qs.empty) return null;
-    const dados = qs.docs[0].data();
-    return typeof dados.preco === "number" ? dados.preco : parseFloat(dados.preco);
-  }
-
-  async function produtosDoCliente(nomeCliente) {
-    await authReady;
-    const nome = up(nomeCliente);
-    if (!nome) return [];
-    const set = new Set();
-    const q = query(
-      collection(db, "historico_precos"),
-      where("cliente", "==", nome),
-      orderBy("data", "desc"),
-      limit(1000)
-    );
-    const qs = await getDocs(q);
-    qs.forEach(d => { const p = (d.data().produto || "").trim(); if (p) set.add(p); });
-    return [...set].sort((a,b)=>a.localeCompare(b));
-  }
-
-  async function registrarPrecoCliente(clienteNome, produtoNome, preco) {
-    await authReady;
-    const nomeCli  = up(clienteNome);
-    const nomeProd = String(produtoNome || "").trim();
-    const valor    = parseFloat(preco);
-    if (!nomeCli || !nomeProd || isNaN(valor)) return;
-
-    await addDoc(collection(db, "historico_precos"), {
-      cliente: nomeCli, produto: nomeProd, preco: valor, data: serverTimestamp()
-    });
-
-    const found = await getClienteDocByNome(nomeCli);
-    if (found) await updateDoc(found.ref, { compras: increment(1), atualizadoEm: serverTimestamp() });
-  }
-
-  // ======= SAVE com Idempotência =======
-  function normalizeEnderecoForKey(str){ return up(str).replace(/\s+/g,' ').trim(); }
-  function buildItemsSignature(items){
-    if (!Array.isArray(items)) return '';
-    return items.map(i=>[
-      (i.produto||'').trim().replace(/\|/g,'/'),
-      (i.tipo||''),
-      Number(i.quantidade||0).toFixed(3),
-      Number(i.precoUnit||i.preco||0).toFixed(2),
-      Number(i.total||0).toFixed(2)
-    ].join(':')).join(';');
-  }
-
-  async function savePedidoIdempotente(payload){
-    await authReady;
-
-    const key = [
-      payload.dataEntregaISO||"",
-      payload.horaEntrega||"",
-      up(payload.cliente||""),
-      (payload.entrega?.tipo||""),
-      normalizeEnderecoForKey(payload.entrega?.endereco||""),
-      String(payload.subtotal?.toFixed ? payload.subtotal.toFixed(2) : Number(payload.subtotal||0).toFixed(2)),
-      String(Array.isArray(payload.itens) ? payload.itens.length : 0),
-      buildItemsSignature(payload.itens),
-      (payload.clienteFiscal?.cnpj||""),
-      (payload.clienteFiscal?.ie||""),
-      (payload.clienteFiscal?.cep||""),
-      (payload.clienteFiscal?.contato||"")
-    ].join("|");
-
-    const qKey = query(collection(db,"pedidos"), where("idempotencyKey","==", key), limit(1));
-    const snap = await getDocs(qKey);
-    if (!snap.empty){
-      return snap.docs[0].id;
-    }
-
-    const id = `${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
-    await setDoc(doc(collection(db, "pedidos"), id), {
-      ...payload,
-      idempotencyKey: key,
-      dataEntregaDia: payload.dataEntregaISO ? Number(payload.dataEntregaISO.replaceAll('-','')) : null,
-      createdAt: serverTimestamp()
-    });
-    return id;
-  }
-
-  // Globais p/ script não-module
-  window.salvarCliente = salvarCliente;
-  window.buscarClienteInfo = buscarClienteInfo;
-  window.buscarUltimoPreco = buscarUltimoPreco;
-  window.registrarPrecoCliente = registrarPrecoCliente;
-  window.carregarSugestoesProdutosDoCliente = async function(){
-    await authReady;
-    const nome = document.getElementById("cliente").value.trim().toUpperCase();
-    const listaProdutos = document.getElementById("listaProdutos");
-    if (!listaProdutos) return;
-    const nomes = await produtosDoCliente(nome);
-    listaProdutos.innerHTML = nomes.map(p => `<option value="${p}"></option>`).join("");
-  };
-  window.popularClientesMaisUsados = async function(){
-    await authReady;
-    const lista = await clientesMaisUsados();
-    document.getElementById("listaClientes").innerHTML =
-      lista.map(n => `<option value="${n}"></option>`).join("");
-  };
-  window.savePedidoIdempotente = savePedidoIdempotente;
-</script>
-
-  <!-- App + PDF -->
-  <script>
-    // Versão app (para barra de update do SW)
-    window.__APP_VERSION = '3.2.1';
-
-    let itens = [{ produto: "", tipo: "KG", quantidade: 0, preco: 0, total: 0, obs: "" }];
-
-    /* Logo cache */
-    const LOGO_PATH = 'Serra-Nobre_3.png';
-    const LOGO_KEY  = 'logoBase64';
-    function blobToDataURL(blob){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(blob);});}
-    function logoVersionParam(){const d=new Date();return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;}
-    async function fetchRepoLogoAsBase64(){const resp=await fetch(`${LOGO_PATH}?v=${logoVersionParam()}`,{cache:'reload'});if(!resp.ok)throw new Error('Logo não carregou');return blobToDataURL(await resp.blob());}
-    async function ensureRepoLogoCached(){let b64=localStorage.getItem(LOGO_KEY);if(!b64){try{b64=await fetchRepoLogoAsBase64();localStorage.setItem(LOGO_KEY,b64);}catch(_){b64="";}}return b64;}
-    async function getLogoBase64(){return localStorage.getItem(LOGO_KEY) || await ensureRepoLogoCached();}
-    function guessImageFormatFromDataURL(u){return u.startsWith('data:image/jpeg')||u.startsWith('data:image/jpg')?'JPEG':'PNG';}
-
-    // ===== Helpers de formatação/normalização =====
-    function forcarUppercase(el){ if(!el || !el.value) return; el.value = el.value.toUpperCase(); }
-    function digitsOnly(v){ return String(v||"").replace(/\D/g,""); }
-    function maskCNPJ(el){
-      const d = digitsOnly(el.value).slice(0,14);
-      let out = d;
-      if (d.length>2) out = d.slice(0,2)+'.'+d.slice(2);
-      if (d.length>5) out = out.slice(0,6)+'.'+d.slice(5);
-      if (d.length>8) out = out.slice(0,10)+'/'+d.slice(8);
-      if (d.length>12) out = out.slice(0,15)+'-'+d.slice(12);
-      el.value = out;
-    }
-    function normalizeCNPJ(el){ el.value = digitsOnly(el.value).slice(0,14); }
-    function maskCEP(el){
-      const d = digitsOnly(el.value).slice(0,8);
-      el.value = d.length>5 ? d.slice(0,5)+'-'+d.slice(5) : d;
-    }
-    function normalizeCEP(el){ el.value = digitsOnly(el.value).slice(0,8); }
-    function maskTelefone(el){
-      const d = digitsOnly(el.value).slice(0,11);
-      if (d.length<=10){
-        el.value = d.replace(/^(\d{0,2})(\d{0,4})(\d{0,4}).*$/, (_,a,b,c)=> (a?`(${a}`:'')+(a&&a.length===2?`) `:'')+(b||'')+(c?'-'+c:''));
-      } else {
-        el.value = d.replace(/^(\d{2})(\d{5})(\d{0,4}).*$/, '($1) $2-$3');
-      }
-    }
-    function normalizeTelefone(el){ el.value = digitsOnly(el.value).slice(0,11); }
-
-    // ===== Frete =====
-    function appendPOA(str){
-      const t = String(str||"").trim();
-      if (!t) return t;
-      if (/porto\s*alegre/i.test(t)) return t;
-      const TEM_CIDADE = /,\s*([A-Za-zÀ-ÿ'.\-\s]{2,})(?:\s*-\s*[A-Za-z]{2})?(?:\s*,\s*Brasil)?\s*$/i;
-      if (TEM_CIDADE.test(t)) return t;
-      return `${t}, Porto Alegre - RS`;
-    }
-
-    const ABS_FRETE_BASE = "https://serranobre-iota.vercel.app";
-
-    // Debounce util
-    function debounce(fn, ms){ let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args), ms); }; }
-
-    async function calcularFrete(enderecoTexto, totalItens){
-      const isentoManual = !!document.getElementById('isentarFrete')?.checked;
-      const payload = { enderecoTexto, totalItens, clienteIsento: isentoManual };
-
-      // timeout simples
-      const ctrl = new AbortController();
-      const timer = setTimeout(()=>ctrl.abort('timeout'), 8000);
-
-      try{
-        const r = await fetch("/api/calcular-entrega", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          body: JSON.stringify(payload),
-          signal: ctrl.signal
-        });
-        clearTimeout(timer);
-        if(!r.ok) throw new Error("HTTP "+r.status);
-        return await r.json();
-      }catch(e1){
-        try{
-          const r2 = await fetch(`${ABS_FRETE_BASE}/api/calcular-entrega`, {
-            method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload)
-          });
-          if(!r2.ok) throw new Error("HTTP "+r2.status);
-          return await r2.json();
-        }catch(e2){
-          return { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"", km:null, min:null, tier:null, _err:true };
-        }
-      }
-    }
-
-    let __frete = null;
-    const _atualizarFreteUIDebounced = debounce(_atualizarFreteUI, 350);
-    async function atualizarFreteUI(){ _atualizarFreteUIDebounced(); }
-    async function _atualizarFreteUI(){
-      try{
-        let end = document.getElementById("endereco").value.trim().toUpperCase();
-        if(!end){ document.getElementById("freteValor").textContent = "—"; __frete=null; return; }
-        end = appendPOA(end);
-        const subtotal = itens.reduce((s,i)=> s + (Number(i.total)||0), 0);
-        const r = await calcularFrete(end, subtotal);
-        const isManual = !!document.getElementById('isentarFrete')?.checked;
-        const rotuloExtra = isManual ? "(ISENTO manual)" : (r?.labelIsencao || (r?._err?"(falha no cálculo)":""));
-        document.getElementById("freteValor").textContent =
-          r?.valorBase==null ? "—" : `R$ ${Number(r.valorBase||0).toFixed(2)} ${rotuloExtra}`;
-        __frete = r || { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"" };
-      }catch(e){
-        document.getElementById("freteValor").textContent = "—";
-        __frete = { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"" };
-      }
-    }
-    window.atualizarFreteUI = atualizarFreteUI;
-
-    // Pré-calcula frete SEM debounce para não travar o PDF
-    async function ensureFreteBeforePDF(){
-      try{
-        let end = document.getElementById("endereco").value.trim().toUpperCase();
-        if(!end){ __frete = { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"" }; return; }
-        end = appendPOA(end);
-        const subtotal = itens.reduce((s,i)=> s + (Number(i.total)||0), 0);
-        __frete = await calcularFrete(end, subtotal);
-        const isManual = !!document.getElementById('isentarFrete')?.checked;
-        const rotuloExtra = isManual ? "(ISENTO manual)" : (__frete?.labelIsencao || (__frete?._err?"(falha no cálculo)":""));
-        document.getElementById("freteValor").textContent =
-          __frete?.valorBase==null ? "—" : `R$ ${Number(__frete.valorBase||0).toFixed(2)} ${rotuloExtra}`;
-      }catch(_){
-        __frete = { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"" };
-      }
-    }
-
-    function getClienteExtrasFromForm(){
-      return {
-        cnpj: document.getElementById("cnpj").value,
-        ie: document.getElementById("ie").value,
-        cep: document.getElementById("cep").value,
-        contato: document.getElementById("contato").value
-      };
-    }
-
-    async function onToggleIsencaoManual(){
-      await atualizarFreteUI();
-      const nome = document.getElementById("cliente").value.trim().toUpperCase();
-      if (!nome) return;
-      const end = document.getElementById("endereco").value.trim().toUpperCase();
-      const isento = !!document.getElementById('isentarFrete').checked;
-      try {
-        if (typeof window.salvarCliente === "function")
-          await window.salvarCliente(nome, end, isento, getClienteExtrasFromForm());
-      } catch(_){}
-    }
-    window.onToggleIsencaoManual = onToggleIsencaoManual;
-
-    document.addEventListener('DOMContentLoaded', async () => {
-      await ensureRepoLogoCached();
-      renderItens();
-      document.getElementById('pagamento').addEventListener('change', function(){
-        document.getElementById('pagamentoOutro').style.display = (this.value === 'OUTRO') ? '' : 'none';
-      });
-    });
-
-    // ===== Itens =====
-    function criarSelectProduto(i){
-      return `<input list="listaProdutos" class="produto" data-index="${i}"
-               placeholder="Digite ou selecione"
-               value="${itens[i].produto || ''}"
-               onblur="preencherUltimoPreco(${i}); atualizarFreteUI();"/>`;
-    }
-    function criarTipoSelect(i){
-      return `<select class="tipo-select" data-index="${i}" onchange="atualizarTipo(${i}, this.value)">
-        <option value="KG" ${itens[i].tipo === 'KG' ? 'selected' : ''}>KG</option>
-        <option value="UN" ${itens[i].tipo === 'UN' ? 'selected' : ''}>UN</option>
-      </select>`;
-    }
-
-    function renderItens(){
-      salvarCamposAntesRender();
-      const container = document.getElementById("itens");
-      container.innerHTML = "";
-      itens.forEach((item, i) => {
-        container.innerHTML += `
-        <div class="item">
-          <label>Produto:</label>
-          ${criarSelectProduto(i)}
-          <label>Tipo:</label>
-          ${criarTipoSelect(i)}
-          <label>Quantidade:</label>
-          <input type="number" step="0.01" class="quantidade" data-index="${i}" value="${item.quantidade || ''}" oninput="calcularItem(${i}); atualizarFreteUI();"/>
-          <label>Preço Unitário:</label>
-          <input type="number" step="0.01" class="preco" data-index="${i}" value="${item.preco || ''}" oninput="calcularItem(${i}); atualizarFreteUI();"/>
-          <div class="peso-info" id="pesoInfo_${i}"></div>
-          <label>Observação do item:</label>
-          <textarea class="obsItem" data-index="${i}" oninput="salvarCamposAntesRender()">${item.obs || ''}</textarea>
-          <p class="total">Total do Item: R$ <span id="totalItem_${i}">${Number(item.total || 0).toFixed(2)}</span></p>
-          <button class="remove" onclick="removerItem(${i}); atualizarFreteUI();">Remover Item</button>
-        </div>`;
-      });
-      if (!document.getElementById("listaProdutos")) {
-        const dl = document.createElement("datalist"); dl.id = "listaProdutos"; document.body.appendChild(dl);
-      }
-    }
-
-    function atualizarTipo(i,v){ itens[i].tipo=v; calcularItem(i); }
-    function salvarCamposAntesRender(){
-      document.querySelectorAll(".item").forEach((el, idx) => {
-        if (typeof itens[idx] === "undefined") return;
-        const prod  = el.querySelector(".produto")?.value || "";
-        const tipo  = el.querySelector(".tipo-select")?.value || "KG";
-        const qtd   = el.querySelector(".quantidade")?.value || 0;
-        const preco = el.querySelector(".preco")?.value || 0;
-        const obs   = el.querySelector(".obsItem")?.value || "";
-        const { total, pesoTotalKg } = calcTotalComPesoSeAplicavel({produto:prod, tipo, quantidade:qtd, preco});
-        itens[idx] = {
-          produto: prod, tipo: tipo,
-          quantidade: parseFloat(qtd) || 0,
-          preco: parseFloat(preco) || 0,
-          obs: obs,
-          total: Number(total || 0),
-          _pesoTotalKg: pesoTotalKg || 0
-        };
-      });
-      window.itens = itens;
-    }
-
-    function adicionarItem(){ salvarCamposAntesRender(); itens.push({ produto:"", tipo:"KG", quantidade:0, preco:0, total:0, obs:"" }); renderItens(); }
-    function removerItem(i){ salvarCamposAntesRender(); itens.splice(i,1); if(!itens.length) itens.push({ produto:"", tipo:"KG", quantidade:0, preco:0, total:0, obs:"" }); renderItens(); }
-
-    function parsePesoFromProduto(nome){
-      const s = String(nome||"").toLowerCase().replace(',', '.');
-      // procura última ocorrência de número seguido de g/gr/kg/quilo(s)
-      const re = /(\d+(?:\.\d+)?)[\s]*(kg|quilo|quilos|g|gr|grama|gramas)\b/g;
-      let m, last=null;
-      while ((m = re.exec(s)) !== null) last = m;
-      if(!last) return null;
-      const val = parseFloat(last[1]);
-      const unit = last[2];
-      if(!isFinite(val) || val<=0) return null;
-      if (unit === 'kg' || unit.startsWith('quilo')) return val; // kg direto
-      // gramas
-      return val / 1000;
-    }
-
-    function calcTotalComPesoSeAplicavel({produto, tipo, quantidade, preco}){
-      const q = parseFloat(quantidade)||0;
-      const p = parseFloat(preco)||0;
-      if (tipo === 'UN'){
-        const kgUn = parsePesoFromProduto(produto);
-        if (kgUn){ // preço é por KG
-          const pesoTotalKg = q * kgUn;
-          const total = pesoTotalKg * p;
-          return { total, pesoTotalKg };
-        }
-      }
-      return { total: (q*p), pesoTotalKg: 0 };
-    }
-
-    function calcularItem(i){
-      const prod = document.querySelectorAll(".produto")[i]?.value || "";
-      const tipo = document.querySelectorAll(".tipo-select")[i]?.value || "KG";
-      const q = document.querySelectorAll(".quantidade")[i]?.value || 0;
-      const p = document.querySelectorAll(".preco")[i]?.value || 0;
-
-      const { total, pesoTotalKg } = calcTotalComPesoSeAplicavel({produto:prod, tipo, quantidade:q, preco:p});
-      itens[i].produto = prod;
-      itens[i].quantidade = parseFloat(q)||0;
-      itens[i].preco = parseFloat(p)||0;
-      itens[i].tipo = tipo;
-      itens[i].total = Number(total||0);
-      itens[i]._pesoTotalKg = pesoTotalKg||0;
-
-      const tgt = document.getElementById(`totalItem_${i}`);
-      if(tgt) tgt.innerText = itens[i].total ? itens[i].total.toFixed(2) : "—";
-
-      const pi = document.getElementById(`pesoInfo_${i}`);
-      if (pi){
-        if (tipo==='UN' && (pesoTotalKg||0)>0){
-          pi.textContent = `Peso total estimado: ${pesoTotalKg.toFixed(3)} kg (preço por kg)`;
-        } else {
-          pi.textContent = "";
-        }
-      }
-    }
-
-    function camposObrigatoriosPreenchidos(){
-      return document.getElementById("cliente").value.trim()
-          && document.getElementById("endereco").value.trim()
-          && document.getElementById("entrega").value
-          && document.getElementById("horaEntrega").value
-          && itens.some(i=> (i.quantidade>0) && (i.preco>0));
-    }
-
-    // ===== Helpers PDF e caixas com altura dinâmica =====
-    function formatarData(s){ if(!s) return ""; const [a,m,d]=s.split("-"); return `${d}/${m}/${a.slice(-2)}`; }
-    function diaDaSemanaExtenso(s){ if(!s) return ""; const d=new Date(s+"T00:00:00"); return d.toLocaleDateString('pt-BR',{weekday:'long'}).toUpperCase(); }
-    function splitToWidth(doc,t,w){ return doc.splitTextToSize(t||"", w); }
-
-    function drawLabeledBox(doc, x, y, w, title, value, opts={}){
-      const { titleSize=8, valueSize=8, pad=3, maxLines=4 } = opts;
-      doc.setFont("helvetica","bold"); doc.setFontSize(titleSize);
-      doc.setFont("helvetica","normal"); doc.setFontSize(valueSize);
-      const lines = splitToWidth(doc, String(value||""), w-2);
-      const use = lines.slice(0, maxLines);
-      const rowH = Math.max(10, pad*2 + use.length*5 + 4); // +4 espaço do título
-      doc.setDrawColor(0); doc.setLineWidth(0.2);
-      doc.rect(x, y, w, rowH, "S");
-      doc.setFont("helvetica","bold"); doc.setFontSize(titleSize);
-      doc.text(title, x+w/2, y+4.2, {align:"center"});
-      doc.setFont("helvetica","normal"); doc.setFontSize(valueSize);
-      const usable = rowH - 8;
-      const block = (use.length-1)*5;
-      const y0 = y + 7 + (usable - block)/2;
-      use.forEach((ln,i)=>doc.text(ln, x+w/2, y0 + i*5, {align:"center"}));
-      return rowH;
-    }
-
-    // Caixa com pares LABEL:valor em linha (CNPJ/I.E. e CONTATO/CEP)
-    function drawInlineKeyValues(doc, x, y, w, opts){
-      const {
-        leftLabel, leftValue, rightLabel, rightValue,
-        rowH=10, pad=3, titleSize=7, valueSize=9, gap=10
-      } = opts;
-      doc.setDrawColor(0); doc.setLineWidth(0.2);
-      doc.rect(x, y, w, rowH, "S");
-
-      doc.setFont("helvetica","bold"); doc.setFontSize(titleSize);
-      const yBase = y + rowH/2 + 0.5;
-      const xLeft = x + pad;
-      const leftLabelText = (leftLabel||"").toUpperCase() + ": ";
-      const leftLabelW = doc.getTextWidth(leftLabelText);
-      doc.text(leftLabelText, xLeft, yBase);
-
-      doc.setFont("helvetica","normal"); doc.setFontSize(valueSize);
-      doc.text(String(leftValue||"").toUpperCase(), xLeft + leftLabelW, yBase);
-
-      const xRight = x + w/2 + gap;
-      doc.setFont("helvetica","bold"); doc.setFontSize(titleSize);
-      const rightLabelText = (rightLabel||"").toUpperCase() + ": ";
-      const rightLabelW = doc.getTextWidth(rightLabelText);
-      doc.text(rightLabelText, xRight, yBase);
-
-      doc.setFont("helvetica","normal"); doc.setFontSize(valueSize);
-      doc.text(String(rightValue||"").toUpperCase(), xRight + rightLabelW, yBase);
-
-      return rowH;
-    }
-
-    async function preencherEnderecoEIsencaoCliente(){
-      const n=(document.getElementById("cliente").value||"").trim().toUpperCase();
-      if(!n) return;
-      try{
-        const info = (typeof window.buscarClienteInfo==="function") ? await window.buscarClienteInfo(n) : null;
-        if(info){
-          if(info.endereco){ const el=document.getElementById("endereco"); el.value=String(info.endereco||"").toUpperCase(); }
-          const chk = document.getElementById("isentarFrete");
-          if (chk) chk.checked = !!info.isentoFrete;
-
-          // novos campos
-          if (info.cnpj) document.getElementById("cnpj").value = info.cnpj;
-          if (info.ie)   document.getElementById("ie").value = info.ie;
-          if (info.cep)  document.getElementById("cep").value = info.cep;
-          if (info.contato) document.getElementById("contato").value = info.contato;
-
-          // aplica máscaras visuais
-          maskCNPJ(document.getElementById("cnpj"));
-          maskCEP(document.getElementById("cep"));
-          maskTelefone(document.getElementById("contato"));
-        }
-      }catch(_){}
-      atualizarFreteUI();
-    }
-    window.preencherEnderecoEIsencaoCliente = preencherEnderecoEIsencaoCliente;
-
-    async function preencherUltimoPreco(index){
-      const nome=(document.getElementById("cliente").value||"").trim().toUpperCase();
-      const el=document.querySelectorAll(".produto")[index];
-      if(!el) return; const prod=el.value.trim();
-      if(!nome||!prod||typeof window.buscarUltimoPreco!=="function") return;
-      const preco=await window.buscarUltimoPreco(nome, prod);
-      if(preco!==null){
-        const input=document.querySelectorAll(".preco")[index];
-        if(!input) return;
-        input.value=preco; itens[index].preco=parseFloat(preco)||0; calcularItem(index);
-        atualizarFreteUI();
-      }
-    }
-    window.preencherUltimoPreco = preencherUltimoPreco;
-
-    function demandaAtualizarCadastroCliente(){
-      const nome = document.getElementById("cliente").value.trim();
-      const end  = document.getElementById("endereco").value.trim();
-      if (!nome || !end) return false;
-      return true;
-    }
-
-    async function montarPDF(querSalvarNoBanco){
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:[72,297] });
-
-      const margemX=2, larguraCaixa=68;
-      const W_PROD=23.5, W_QDE=13, W_UNIT=13, W_TOTAL=18.5;
-      const SAFE_BOTTOM = 287;
-      let y=10;
-
-      try{
-        const b64=await getLogoBase64();
-        if(b64){ doc.addImage(b64, guessImageFormatFromDataURL(b64), 20, y, 32, 12, '', 'FAST'); y+=14; }
-        else { y+=2; }
-      }catch(_){ y+=2; }
-
-      // Quebra de página
-      function ensureSpace(h){
-        if (y + h > SAFE_BOTTOM){
-          doc.addPage([72,297],"portrait");
-          y = 10;
-        }
-      }
-
-      // CLIENTE
-      ensureSpace(14);
-      y += drawLabeledBox(doc, margemX, y, larguraCaixa,
-        "CLIENTE", (document.getElementById("cliente").value||"").toUpperCase(),
-        { titleSize:8, valueSize:8, maxLines:3 }) + 1;
-
-      // CNPJ + I.E. (mesma caixa, linha única)
-      const vCNPJ = (document.getElementById("cnpj").value||"");
-      const vIE   = (document.getElementById("ie").value||"");
-      ensureSpace(10);
-      y += drawInlineKeyValues(doc, margemX, y, larguraCaixa, {
-        leftLabel: "CNPJ", leftValue: vCNPJ,
-        rightLabel: "I.E.", rightValue: vIE,
-        rowH:10, titleSize:7, valueSize:9
-      }) + 1;
-
-      // CONTATO + CEP (mesma caixa, linha única)
-      const vTel = (document.getElementById("contato").value||"");
-      const vCEP = (document.getElementById("cep").value||"");
-      ensureSpace(10);
-      y += drawInlineKeyValues(doc, margemX, y, larguraCaixa, {
-        leftLabel: "CONTATO", leftValue: vTel,
-        rightLabel: "CEP", rightValue: vCEP,
-        rowH:10, titleSize:7, valueSize:9
-      }) + 1;
-
-      // ENDEREÇO (com wrap)
-      ensureSpace(14);
-      y += drawLabeledBox(doc, margemX, y, larguraCaixa,
-        "ENDEREÇO", (document.getElementById("endereco").value||"").toUpperCase(),
-        { titleSize:8, valueSize:8, maxLines:4 }) + 1;
-
-      const diaSemana = diaDaSemanaExtenso(document.getElementById("entrega").value);
-      ensureSpace(12);
-      doc.rect(margemX,y,larguraCaixa,10,"S");
-      doc.setFont("helvetica","bold"); doc.setFontSize(9);
-      doc.text("DIA DA SEMANA:", margemX+3, y+6);
-      doc.text(diaSemana, margemX+larguraCaixa/2+12, y+6, {align:"center"});
-      y+=11;
-
-      doc.setFont("helvetica","bold"); doc.setFontSize(7);
-      doc.rect(margemX,y,larguraCaixa/2,10,"S");
-      doc.rect(margemX+larguraCaixa/2,y,larguraCaixa/2,10,"S");
-      doc.text("DATA ENTREGA", margemX+larguraCaixa/4, y+4, {align:"center"});
-      doc.text("HORÁRIO ENTREGA", margemX+3*larguraCaixa/4, y+4, {align:"center"});
-      doc.setFont("helvetica","normal"); doc.setFontSize(9);
-      doc.text(formatarData(document.getElementById("entrega").value), margemX+larguraCaixa/4, y+8, {align:"center"});
-      doc.text(document.getElementById("horaEntrega").value, margemX+3*larguraCaixa/4, y+8, {align:"center"});
-      y+=12;
-
-      doc.setLineWidth(1.1);
-      doc.rect(margemX+larguraCaixa*0.235, y, larguraCaixa*0.53, 10, "S");
-      doc.setLineWidth(0.2);
-      doc.setFont("helvetica","bold"); doc.setFontSize(10);
-      const tipoEntrega=document.querySelector('input[name="tipoEntrega"]:checked').value;
-      doc.text(tipoEntrega, margemX+larguraCaixa/2, y+6.5, {align:"center"});
-      y+=12;
-
-      // Título da tabela
-      ensureSpace(14);
-      doc.setFont("helvetica","bold"); doc.setFontSize(7);
-      doc.rect(margemX,y,W_PROD,10,"S");
-      doc.rect(margemX+W_PROD,y,W_QDE,10,"S");
-      doc.rect(margemX+W_PROD+W_QDE,y,W_UNIT,10,"S");
-      doc.rect(margemX+W_PROD+W_QDE+W_UNIT,y,W_TOTAL,10,"S");
-      doc.text("PRODUTO", margemX+W_PROD/2, y+6, {align:"center"});
-      doc.text("QDE", margemX+W_PROD+W_QDE/2, y+6, {align:"center"});
-      doc.text("R$ UNIT.", margemX+W_PROD+W_QDE+W_UNIT/2, y+6, {align:"center"});
-      const valorX=margemX+W_PROD+W_QDE+W_UNIT+W_TOTAL/2;
-      doc.text("VALOR", valorX, y+4, {align:"center"});
-      doc.text("PRODUTO", valorX, y+8.5, {align:"center"});
-      y+=12;
-
-      let subtotal = 0;
-      doc.setFont("helvetica","normal"); doc.setFontSize(9);
-
-      for (let i=0;i<itens.length;i++){
-        const it = itens[i];
-        const prod = it.produto || "";
-        const qtdStr  = (it.quantidade || 0).toString();
-        const tipo = it.tipo || "KG";
-        const precoNum = parseFloat(it.preco) || 0;
-
-        // Cálculo consistente com a UI
-        const kgUn = (tipo==='UN') ? parsePesoFromProduto(prod) : null;
-        const pesoTotalKg = (kgUn ? (it.quantidade||0)*kgUn : 0);
-        const totalNum = kgUn ? pesoTotalKg * precoNum : (it.quantidade||0) * precoNum;
-
-        const prodLines = splitToWidth(doc, prod, W_PROD-2).slice(0,3);
-        const rowH = Math.max(14, 6 + prodLines.length*5);
-
-        ensureSpace(rowH + (kgUn?6:0));
-
-        doc.rect(margemX,y,W_PROD,rowH,"S");
-        doc.rect(margemX+W_PROD,y,W_QDE,rowH,"S");
-        doc.rect(margemX+W_PROD+W_QDE,y,W_UNIT,rowH,"S");
-        doc.rect(margemX+W_PROD+W_QDE+W_UNIT,y,W_TOTAL,rowH,"S");
-
-        const center = (cx, lines)=> {
-          const block=(lines.length-1)*5; const base=y+(rowH - block)/2;
-          lines.forEach((ln,k)=>doc.text(ln, cx, base + k*5, {align:"center"}));
-        }
-        center(margemX+W_PROD/2, prodLines);
-        center(margemX+W_PROD+W_QDE/2, qtdStr ? [qtdStr, tipo] : [""]);
-        if (kgUn){
-          center(margemX+W_PROD+W_QDE+W_UNIT/2, precoNum ? ["R$/KG", precoNum.toFixed(2).replace(".", ",")] : ["—"]);
-        } else {
-          center(margemX+W_PROD+W_QDE+W_UNIT/2, precoNum ? ["R$", precoNum.toFixed(2).replace(".", ",")] : ["—"]);
-        }
-        center(margemX+W_PROD+W_QDE+W_UNIT+W_TOTAL/2, (precoNum && (it.quantidade||0)) ? ["R$", totalNum.toFixed(2).replace(".", ",")] : ["—"]);
-
-        y += rowH;
-
-        // Observação e/ou peso total
-        if (kgUn){
-          doc.setFontSize(7); doc.setFont("helvetica","italic");
-          doc.text(`(*) Peso total: ${pesoTotalKg.toFixed(3)} kg`, margemX+3, y+4);
-          doc.setFont("helvetica","normal"); doc.setFontSize(9);
-          y += 4;
-        }
-
-        const obs = (it.obs || "").trim();
-        if (obs){
-          const corpoLines = splitToWidth(doc, obs.toUpperCase(), larguraCaixa-6);
-          const obsH = 9 + corpoLines.length*5;
-          ensureSpace(obsH);
-          doc.rect(margemX,y,larguraCaixa,obsH,"S");
-          doc.setFont("helvetica","bold"); doc.setFontSize(9);
-          const titulo="OBSERVAÇÕES:"; const tx=margemX+3, ty=y+6;
-          doc.text(titulo, tx, ty);
-          doc.line(tx, ty+0.8, tx+doc.getTextWidth(titulo), ty+0.8);
-          doc.setFont("helvetica","normal");
-          let baseY=y+12; corpoLines.forEach((ln,ix)=>doc.text(ln, margemX+3, baseY+ix*5));
-          y += obsH;
-        }
-
-        subtotal += totalNum;
-        if (i < itens.length - 1) y += 2;
-      }
-
-      // Frete + Total final (NÃO recalcula frete aqui para não travar)
-      const frete = __frete || { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"" };
-
-      y += 2;
-      const freteBoxH = 8; // mais baixo
-      ensureSpace(freteBoxH + 18);
-      doc.rect(margemX, y, larguraCaixa, freteBoxH, "S");
-      doc.setFont("helvetica","normal"); doc.setFontSize(9);
-      const isIsentoManual = !!document.getElementById('isentarFrete')?.checked;
-      const isIsento = isIsentoManual || !!frete?.isento;
-      const freteMostrar = isIsento ? "ISENTO DE FRETE" : ("R$ " + Number(frete?.valorBase || 0).toFixed(2));
-      const fLines = splitToWidth(doc, freteMostrar, larguraCaixa - 6);
-      const block=(fLines.length-1)*5; const baseY = y + (freteBoxH - block)/2 + 3;
-      fLines.forEach((ln,i)=>doc.text(ln, margemX+larguraCaixa/2, baseY+i*5, {align:"center"}));
-      y += freteBoxH + 3;
-
-      const totalGeral = subtotal + Number(frete?.valorCobravel||0);
-
-      doc.setFont("helvetica","bold"); doc.setLineWidth(1.1);
-      doc.rect(margemX,y,larguraCaixa,12,"S");
-      doc.text("TOTAL DO PEDIDO", margemX+larguraCaixa/2, y+4.5, {align:"center"});
-      doc.setFontSize(10);
-      doc.text("R$ " + totalGeral.toFixed(2), margemX+larguraCaixa/2, y+9, {align:"center"});
-      y += 15;
-
-      const obsG=(document.getElementById("obsGeral").value||"").trim();
-      if (obsG){
-        const corpoLines=splitToWidth(doc, obsG.toUpperCase(), larguraCaixa-6);
-        const h=9+corpoLines.length*5;
-        ensureSpace(h+2);
-        doc.rect(margemX,y,larguraCaixa,h,"S");
-        doc.setFont("helvetica","bold"); doc.setFontSize(9);
-        const titulo="OBSERVAÇÃO DO PEDIDO:"; const tx=margemX+3, ty=y+6;
-        doc.text(titulo, tx, ty); doc.line(tx, ty+0.8, tx+doc.getTextWidth(titulo), ty+0.8);
-        doc.setFont("helvetica","normal");
-        let baseY=y+12; corpoLines.forEach((ln,ix)=>doc.text(ln, margemX+3, baseY+ix*5));
-        y += h + 3;
-      }
-
-      // Persistências de cliente/histórico **apenas** quando salvar/compartilhar
-      if (querSalvarNoBanco){
-        try{
-          if (demandaAtualizarCadastroCliente() && typeof window.salvarCliente === "function") {
-            await window.salvarCliente(
-              document.getElementById("cliente").value.trim().toUpperCase(),
-              document.getElementById("endereco").value.trim().toUpperCase(),
-              !!document.getElementById('isentarFrete')?.checked,
-              getClienteExtrasFromForm()
-            );
-          }
-          const nomeCli=document.getElementById("cliente").value.trim().toUpperCase();
-          if (typeof window.registrarPrecoCliente === "function") {
-            await Promise.all(
-              itens.filter(i=> (i?.produto||"").trim() && !isNaN(parseFloat(i?.preco)))
-                  .map(i=> window.registrarPrecoCliente(nomeCli, String(i.produto).trim(), parseFloat(i.preco)))
-            );
-          }
-        }catch(e){ console.error(e); }
-      }
-
-      // Monta payload p/ /pedidos
-      const cliente   = document.getElementById("cliente").value.trim().toUpperCase();
-      const pagamento = document.getElementById("pagamento").value;
-      const endereco  = document.getElementById("endereco").value.trim().toUpperCase();
-      const entregaISO= document.getElementById("entrega").value;
-      const hora      = document.getElementById("horaEntrega").value;
-      const tipoEnt   = document.querySelector('input[name="tipoEntrega"]:checked').value;
-      const isentoMan = !!document.getElementById('isentarFrete')?.checked;
-
-      const clienteFiscal = {
-        cnpj: digitsOnly(document.getElementById("cnpj").value),
-        ie: (document.getElementById("ie").value||"").toUpperCase(),
-        cep: digitsOnly(document.getElementById("cep").value),
-        contato: digitsOnly(document.getElementById("contato").value)
-      };
-
-      const payload = {
-        cliente,
-        pagamento,
-        itens: itens.map(i=>({ produto:i.produto, tipo:i.tipo, quantidade:i.quantidade, precoUnit:i.preco, total:i.total, obs:i.obs||"" })),
-        subtotal: Number(itens.reduce((s,i)=> s + Number(i.total||0), 0).toFixed(2)),
-        totalPedido: Number((itens.reduce((s,i)=> s + Number(i.total||0), 0) + Number(__frete?.valorCobravel||0)).toFixed(2)),
-        entrega: {
-          tipo: tipoEnt,
-          endereco,
-          km: __frete?.km ?? null,
-          min: __frete?.min ?? null,
-          valorBase: __frete?.valorBase ?? 0,
-          valorCobravel: __frete?.valorCobravel ?? 0,
-          isento: !!__frete?.isento || isentoMan,
-          isentoManual: isentoMan,
-          status: "PENDENTE",
-          tier: __frete?.tier || null,
-          labelIsencao: isentoMan ? "(ISENTO manual)" : (__frete?.labelIsencao || "")
-        },
-        dataEntregaISO: entregaISO,
-        horaEntrega: hora,
-        anoMes: entregaISO ? entregaISO.slice(0,7) : "",
-        status: "ABERTO",
-        vendedor: "Leo",
-        obsGeral: (document.getElementById("obsGeral").value||"").toUpperCase(),
-        clienteFiscal
-      };
-
-      if (querSalvarNoBanco && typeof window.savePedidoIdempotente === "function"){
-        try{ await window.savePedidoIdempotente(payload); }catch(e){ console.warn("savePedido falhou:", e); }
-      }
-
-      const nomeCliente=cliente;
-      const [ano,mes,dia]=(entregaISO||"").split("-");
-      const nomeArquivo=`Pedido_${nomeCliente.replace(/\s+/g,'_').replace(/[^A-Z0-9_]/g,'')}_${dia||'DD'}-${mes||'MM'}-${ano||'AAAA'}.pdf`;
-
-      return { doc, nomeArquivo };
-    }
-
-    // ===== Ações com trava anti-duplo clique =====
-    async function gerarPDF(apenasSalvar=false){
-      if (window.__busy) return;
-      window.__busy = true;
-      try{
-        if (!camposObrigatoriosPreenchidos()) { alert("Preencha Cliente, Endereço, Data, Horário e ao menos 1 item com quantidade e preço."); return; }
-        forcarUppercase(document.getElementById("cliente"));
-        forcarUppercase(document.getElementById("endereco"));
-        forcarUppercase(document.getElementById("ie"));
-        normalizeCNPJ(document.getElementById("cnpj"));
-        normalizeCEP(document.getElementById("cep"));
-        normalizeTelefone(document.getElementById("contato"));
-
-        salvarCamposAntesRender();
-
-        // garante frete pronto e evita chamada dentro do PDF
-        await ensureFreteBeforePDF();
-
-        const { doc, nomeArquivo } = await montarPDF(/*querSalvarNoBanco*/apenasSalvar);
-        if (apenasSalvar) doc.save(nomeArquivo);
-        else window.open(doc.output('bloburl'), '_blank');
-      } finally {
-        window.__busy = false;
-      }
-    }
-    window.gerarPDF = gerarPDF;
-
-    async function compartilharPDF(){
-      if (window.__busy) return;
-      window.__busy = true;
-      try{
-        if (!camposObrigatoriosPreenchidos()) { alert("Preencha Cliente, Endereço, Data, Horário e ao menos 1 item com quantidade e preço."); return; }
-        salvarCamposAntesRender();
-
-        // garante frete pronto
-        await ensureFreteBeforePDF();
-
-        const { doc, nomeArquivo } = await montarPDF(/*querSalvarNoBanco*/true);
-        if (navigator.canShare && window.Blob){
-          const blob = await doc.output("blob");
-          const file = new File([blob], nomeArquivo, { type: "application/pdf" });
-          if (navigator.canShare({ files:[file] })) await navigator.share({ files:[file], title:"Pedido Serra Nobre", text:"Segue pedido em PDF" });
-          else {
-            const url = URL.createObjectURL(blob); window.open(url, "_blank"); setTimeout(()=>URL.revokeObjectURL(url), 20000);
-          }
-        } else {
-          const blob = await doc.output("blob"); const url = URL.createObjectURL(blob);
-          window.open(url, "_blank"); setTimeout(()=>URL.revokeObjectURL(url), 20000);
-        }
       } finally {
         window.__busy = false;
       }
