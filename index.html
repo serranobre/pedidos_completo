@@ -615,7 +615,7 @@
     const LOGO_PATH = 'Serra-Nobre_3.png';
     const LOGO_KEY  = 'logoBase64';
     function blobToDataURL(blob){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(blob);});}
-    function logoVersionParam(){const d=new Date();return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;}
+    function logoVersionParam(){const d=new Date();return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${d.getDate().toString().padStart(2,'0')}`;}
     async function fetchRepoLogoAsBase64(){const resp=await fetch(`${LOGO_PATH}?v=${logoVersionParam()}`,{cache:'reload'});if(!resp.ok)throw new Error('Logo não carregou');return blobToDataURL(await resp.blob());}
     async function ensureRepoLogoCached(){let b64=localStorage.getItem(LOGO_KEY);if(!b64){try{b64=await fetchRepoLogoAsBase64();localStorage.setItem(LOGO_KEY,b64);}catch(_){b64="";}}return b64;}
     async function getLogoBase64(){return localStorage.getItem(LOGO_KEY) || await ensureRepoLogoCached();}
@@ -644,12 +644,12 @@
       if (d.length<=10){
         el.value = d.replace(/^(\d{0,2})(\d{0,4})(\d{0,4}).*$/, (_,a,b,c)=> (a?`(${a}`:'')+(a&&a.length===2?`) `:'')+(b||'')+(c?'-'+c:''));
       } else {
-        el.value = d.replace(/^(\d{2})(\d{5})(\d{0,4}).*$/, '($1) $2-$3');
+        el.value = d.replace(/^(\d{2})(\d{5})(\d{0,4}).*$/, "($1) $2-$3");
       }
     }
     function normalizeTelefone(el){ el.value = digitsOnly(el.value).slice(0,11); }
 
-    // ===== Formatação para PDF =====
+    // ===== Formatação p/ PDF =====
     function fmtCNPJ(d){ d = String(d||'').replace(/\D/g,'').slice(0,14);
       return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2}).*$/, "$1.$2.$3/$4-$5"); }
     function fmtCEP(d){ d = String(d||'').replace(/\D/g,'').slice(0,8);
@@ -734,6 +734,75 @@
       }
     }
     window.atualizarFreteUI = atualizarFreteUI;
+
+    // >>>>>>>>>>> FUNÇÕES QUE ESTAVAM FALTANDO <<<<<<<<<<
+
+    // 1) Preenche endereço/contatos/isencão ao sair do campo Cliente
+    async function preencherEnderecoEIsencaoCliente(){
+      const nome = (document.getElementById("cliente").value||"").trim().toUpperCase();
+      if (!nome) return;
+      try{
+        const info = await (window.buscarClienteInfo ? window.buscarClienteInfo(nome) : null);
+        if (!info) return;
+
+        const endEl = document.getElementById("endereco");
+        if (endEl && !endEl.value.trim() && info.endereco) endEl.value = String(info.endereco).toUpperCase();
+
+        const cnpjEl = document.getElementById("cnpj");
+        if (cnpjEl && !cnpjEl.value.trim() && info.cnpj) cnpjEl.value = info.cnpj;
+
+        const ieEl = document.getElementById("ie");
+        if (ieEl && !ieEl.value.trim() && info.ie) ieEl.value = String(info.ie).toUpperCase();
+
+        const cepEl = document.getElementById("cep");
+        if (cepEl && !cepEl.value.trim() && info.cep) cepEl.value = info.cep;
+
+        const contatoEl = document.getElementById("contato");
+        if (contatoEl && !contatoEl.value.trim() && info.contato) contatoEl.value = info.contato;
+
+        const chk = document.getElementById("isentarFrete");
+        if (chk) chk.checked = !!info.isentoFrete;
+
+        // Sugestão de frete anterior
+        __freteSugestao = (typeof info.lastFrete === "number" && isFinite(info.lastFrete)) ? info.lastFrete : null;
+
+        await atualizarFreteUI();
+      }catch(_){}
+    }
+    window.preencherEnderecoEIsencaoCliente = preencherEnderecoEIsencaoCliente;
+
+    // 2) Preenche último preço praticado para o item (se o campo estiver vazio)
+    async function preencherUltimoPreco(i){
+      try{
+        const nomeCli = (document.getElementById("cliente").value||"").trim().toUpperCase();
+        if (!nomeCli) return;
+        const prodEl = document.querySelectorAll(".produto")[i];
+        const precoEl = document.querySelectorAll(".preco")[i];
+        if (!prodEl || !precoEl) return;
+
+        const produto = (prodEl.value||"").trim();
+        if (!produto) return;
+
+        const jaTemPreco = parseFloat(precoEl.value);
+        if (isFinite(jaTemPreco) && jaTemPreco>0) return;
+
+        const ult = await (window.buscarUltimoPreco ? window.buscarUltimoPreco(nomeCli, produto) : null);
+        if (ult && isFinite(ult) && (!precoEl.value || Number(precoEl.value) === 0)){
+          precoEl.value = Number(ult).toFixed(2);
+          calcularItem(i);
+        }
+      }catch(_){}
+    }
+    window.preencherUltimoPreco = preencherUltimoPreco;
+
+    // 3) Regras simples para decidir se atualiza cadastro do cliente no salvar
+    function demandaAtualizarCadastroCliente(){
+      const nome = (document.getElementById("cliente").value||"").trim();
+      const end  = (document.getElementById("endereco").value||"").trim();
+      // Atualiza quando tiver nome + algum dado útil (endereço ou flag de isenção alterada)
+      return !!(nome && (end || document.getElementById('isentarFrete')));
+    }
+    // >>>>>>>>>>> FIM DAS FUNÇÕES FALTANTES <<<<<<<<<<
 
     // Pré-calcula frete SEM debounce para não travar o PDF
     async function ensureFreteBeforePDF(){
@@ -921,106 +990,19 @@
     function diaDaSemanaExtenso(s){ if(!s) return ""; const d=new Date(s+"T00:00:00"); return d.toLocaleDateString('pt-BR',{weekday:'long'}).toUpperCase(); }
     function splitToWidth(doc,t,w){ return doc.splitTextToSize(t||"", w); }
 
-    function drawLabeledBox(doc, x, y, w, title, value, opts={}){
-      const { titleSize=8, valueSize=8, pad=3, maxLines=4 } = opts;
-      doc.setFont("helvetica","bold"); doc.setFontSize(titleSize);
-      doc.setFont("helvetica","normal"); doc.setFontSize(valueSize);
-      const lines = splitToWidth(doc, String(value||""), w-2);
-      const use = lines.slice(0, maxLines);
-      const rowH = Math.max(10, pad*2 + use.length*5 + 4);
+    // Caixa de chave/valor (rótulo à esquerda, valor após 1 espaço), com padding
+    function drawKeyValueBox(doc, x, y, w, label, value, opts={}){
+      const { rowH=10, pad=3, titleSize=7, valueSize=9 } = opts;
       doc.setDrawColor(0); doc.setLineWidth(0.2);
       doc.rect(x, y, w, rowH, "S");
-      doc.setFont("helvetica","bold"); doc.setFontSize(titleSize);
-      doc.text(title, x+w/2, y+4.2, {align:"center"});
-      doc.setFont("helvetica","normal"); doc.setFontSize(valueSize);
-      const usable = rowH - 8;
-      const block = (use.length-1)*5;
-      const y0 = y + 7 + (usable - block)/2;
-      use.forEach((ln,i)=>doc.text(ln, x+w/2, y0 + i*5, {align:"center"}));
-      return rowH;
-    }
-
-    function drawInlineKeyValues(doc, x, y, w, opts){
-      const {
-        leftLabel, leftValue, rightLabel, rightValue,
-        rowH=10, pad=3, titleSize=7, valueSize=9, gap=10
-      } = opts;
-      doc.setDrawColor(0); doc.setLineWidth(0.2);
-      doc.rect(x, y, w, rowH, "S");
-
-      doc.setFont("helvetica","bold"); doc.setFontSize(titleSize);
       const yBase = y + rowH/2 + 0.5;
-      const xLeft = x + pad;
-      const leftLabelText = (leftLabel||"").toUpperCase() + ": ";
-      const leftLabelW = doc.getTextWidth(leftLabelText);
-      doc.text(leftLabelText, xLeft, yBase);
-
-      doc.setFont("helvetica","normal"); doc.setFontSize(valueSize);
-      doc.text(String(leftValue||"").toUpperCase(), xLeft + leftLabelW, yBase);
-
-      const xRight = x + w/2 + gap;
       doc.setFont("helvetica","bold"); doc.setFontSize(titleSize);
-      const rightLabelText = (rightLabel||"").toUpperCase() + ": ";
-      const rightLabelW = doc.getTextWidth(rightLabelText);
-      doc.text(rightLabelText, xRight, yBase);
-
+      const ltxt = (label||"").toUpperCase() + ": ";
+      const lW = doc.getTextWidth(ltxt);
+      doc.text(ltxt, x+pad, yBase);
       doc.setFont("helvetica","normal"); doc.setFontSize(valueSize);
-      doc.text(String(rightValue||"").toUpperCase(), xRight + rightLabelW, yBase);
-
+      doc.text(String(value||"").toUpperCase(), x+pad+lW, yBase);
       return rowH;
-    }
-
-    async function preencherEnderecoEIsencaoCliente(){
-      const n=(document.getElementById("cliente").value||"").trim().toUpperCase();
-      __freteSugestao = null;
-      if(!n) return;
-      try{
-        const info = (typeof window.buscarClienteInfo==="function") ? await window.buscarClienteInfo(n) : null;
-        if(info){
-          if(info.endereco){ const el=document.getElementById("endereco"); el.value=String(info.endereco||"").toUpperCase(); }
-          const chk = document.getElementById("isentarFrete");
-          if (chk) chk.checked = !!info.isentoFrete;
-
-          if (info.cnpj) document.getElementById("cnpj").value = info.cnpj;
-          if (info.ie)   document.getElementById("ie").value = info.ie;
-          if (info.cep)  document.getElementById("cep").value = info.cep;
-          if (info.contato) document.getElementById("contato").value = info.contato;
-
-          maskCNPJ(document.getElementById("cnpj"));
-          maskCEP(document.getElementById("cep"));
-          maskTelefone(document.getElementById("contato"));
-
-          if (!chk.checked && typeof info.lastFrete === 'number' && info.lastFrete > 0){
-            __freteSugestao = info.lastFrete;
-            const elF = document.getElementById("freteValor");
-            if (elF) elF.textContent = `R$ ${info.lastFrete.toFixed(2)} (último)`;
-          }
-        }
-      }catch(_){}
-      atualizarFreteUI();
-    }
-    window.preencherEnderecoEIsencaoCliente = preencherEnderecoEIsencaoCliente;
-
-    async function preencherUltimoPreco(index){
-      const nome=(document.getElementById("cliente").value||"").trim().toUpperCase();
-      const el=document.querySelectorAll(".produto")[index];
-      if(!el) return; const prod=el.value.trim();
-      if(!nome||!prod||typeof window.buscarUltimoPreco!=="function") return;
-      const preco=await window.buscarUltimoPreco(nome, prod);
-      if(preco!==null){
-        const input=document.querySelectorAll(".preco")[index];
-        if(!input) return;
-        input.value=preco; itens[index].preco=parseFloat(preco)||0; calcularItem(index);
-        atualizarFreteUI();
-      }
-    }
-    window.preencherUltimoPreco = preencherUltimoPreco;
-
-    function demandaAtualizarCadastroCliente(){
-      const nome = document.getElementById("cliente").value.trim();
-      const end  = document.getElementById("endereco").value.trim();
-      if (!nome || !end) return false;
-      return true;
     }
 
     async function montarPDF(querSalvarNoBanco){
@@ -1036,7 +1018,6 @@
         const b64=await getLogoBase64();
         if(b64){
           doc.addImage(b64, guessImageFormatFromDataURL(b64), 20, y, 32, 12, '', 'FAST');
-          // Nome do usuário (fonte 8) no canto esquerdo, mesma linha do logo
           if (window.__usuario?.nome){
             doc.setFont("helvetica","normal"); doc.setFontSize(8);
             doc.text(String(window.__usuario.nome).toUpperCase(), 2, y+3);
@@ -1054,37 +1035,49 @@
 
       // CLIENTE
       ensureSpace(14);
-      y += drawLabeledBox(doc, margemX, y, larguraCaixa,
-        "CLIENTE", (document.getElementById("cliente").value||"").toUpperCase(),
-        { titleSize:8, valueSize:8, maxLines:3 }) + 1;
+      y += (function(){
+        return drawKeyValueBox(
+          doc, margemX, y, larguraCaixa,
+          "CLIENTE",
+          (document.getElementById("cliente").value||""),
+          { rowH:12, titleSize:8, valueSize:8 }
+        );
+      })() + 1;
 
-      // CNPJ + I.E.
+      // CNPJ e I.E. em DUAS CAIXAS separadas com 1 mm de gap
+      const gap1 = 1;
+      const boxW = (larguraCaixa - gap1)/2;
       const vCNPJ = fmtCNPJ(document.getElementById("cnpj").value);
       const vIE   = (document.getElementById("ie").value||"").toUpperCase();
       ensureSpace(10);
-      y += drawInlineKeyValues(doc, margemX, y, larguraCaixa, {
-        leftLabel: "CNPJ", leftValue: vCNPJ,
-        rightLabel: "I.E.", rightValue: vIE,
-        rowH:10, titleSize:7, valueSize:9
-      }) + 1;
+      drawKeyValueBox(doc, margemX, y, boxW, "CNPJ", vCNPJ, {rowH:10, titleSize:7, valueSize:9});
+      drawKeyValueBox(doc, margemX + boxW + gap1, y, boxW, "I.E.", vIE, {rowH:10, titleSize:7, valueSize:9});
+      y += 11;
 
       // ENDEREÇO
       ensureSpace(14);
-      y += drawLabeledBox(doc, margemX, y, larguraCaixa,
-        "ENDEREÇO", (document.getElementById("endereco").value||"").toUpperCase(),
-        { titleSize:8, valueSize:8, maxLines:4 }) + 1;
+      y += (function(){
+        const lines = splitToWidth(doc, (document.getElementById("endereco").value||"").toUpperCase(), larguraCaixa-2);
+        const rowH = Math.max(10, 3*2 + lines.length*5 + 4);
+        doc.setDrawColor(0); doc.setLineWidth(0.2);
+        doc.rect(margemX, y, larguraCaixa, rowH, "S");
+        doc.setFont("helvetica","bold"); doc.setFontSize(8);
+        doc.text("ENDEREÇO", margemX+3, y+5);
+        doc.setFont("helvetica","normal"); doc.setFontSize(8);
+        const base = y + 9;
+        lines.forEach((ln,i)=> doc.text(ln, margemX+3, base + i*5));
+        return rowH;
+      })() + 1;
 
-      // CONTATO + CEP
+      // CONTATO e CEP em DUAS CAIXAS separadas com 1 mm de gap
       const vTel = fmtTel(document.getElementById("contato").value);
       const vCEP = fmtCEP(document.getElementById("cep").value);
       ensureSpace(10);
-      y += drawInlineKeyValues(doc, margemX, y, larguraCaixa, {
-        leftLabel: "CONTATO", leftValue: vTel,
-        rightLabel: "CEP", rightValue: vCEP,
-        rowH:10, titleSize:7, valueSize:9
-      }) + 1;
+      drawKeyValueBox(doc, margemX, y, boxW, "CONTATO", vTel, {rowH:10, titleSize:7, valueSize:9});
+      drawKeyValueBox(doc, margemX + boxW + gap1, y, boxW, "CEP", vCEP, {rowH:10, titleSize:7, valueSize:9});
+      y += 11;
 
-      // DIA/ HORA
+      // DIA / DATA / HORA
       const diaSemana = diaDaSemanaExtenso(document.getElementById("entrega").value);
       ensureSpace(12);
       doc.rect(margemX,y,larguraCaixa,10,"S");
@@ -1094,39 +1087,17 @@
       y+=11;
 
       doc.setFont("helvetica","bold"); doc.setFontSize(7);
-      doc.rect(margemX,y,larguraCaixa/2,10,"S");
-      doc.rect(margemX+larguraCaixa/2,y,larguraCaixa/2,10,"S");
-      doc.text("DATA ENTREGA", margemX+larguraCaixa/4, y+4, {align:"center"});
-      doc.text("HORÁRIO ENTREGA", margemX+3*larguraCaixa/4, y+4, {align:"center"});
+      const halfW = (larguraCaixa - 1)/2;
+      doc.rect(margemX,y,halfW,10,"S");
+      doc.rect(margemX+halfW+1,y,halfW,10,"S");
+      doc.text("DATA ENTREGA", margemX+halfW/2, y+4, {align:"center"});
+      doc.text("HORÁRIO ENTREGA", margemX+halfW+1+halfW/2, y+4, {align:"center"});
       doc.setFont("helvetica","normal"); doc.setFontSize(9);
-      doc.text(formatarData(document.getElementById("entrega").value), margemX+larguraCaixa/4, y+8, {align:"center"});
-      doc.text(document.getElementById("horaEntrega").value, margemX+3*larguraCaixa/4, y+8, {align:"center"});
+      doc.text(formatarData(document.getElementById("entrega").value), margemX+halfW/2, y+8, {align:"center"});
+      doc.text(document.getElementById("horaEntrega").value, margemX+halfW+1+halfW/2, y+8, {align:"center"});
       y+=12;
 
-      // ENTREGA (2/3) + FRETE (1/3)
-      ensureSpace(12);
-      doc.setLineWidth(1.1);
-      const entregaW = Math.round(larguraCaixa * (2/3));
-      const freteW   = larguraCaixa - entregaW;
-
-      doc.rect(margemX, y, entregaW, 10, "S");
-      doc.setFont("helvetica","bold"); doc.setFontSize(10);
-      const tipoEntrega=document.querySelector('input[name="tipoEntrega"]:checked').value;
-      doc.text(tipoEntrega, margemX + entregaW/2, y+6.5, {align:"center"});
-
-      doc.rect(margemX + entregaW, y, freteW, 10, "S");
-      doc.text("FRETE", margemX + entregaW + freteW/2, y+4, {align:"center"});
-      doc.setFont("helvetica","normal"); doc.setFontSize(9);
-      const fretePreview = (()=>{
-        const f = __frete || {valorBase:0,isento:false};
-        const isIsentoManual = !!document.getElementById('isentarFrete')?.checked;
-        return (isIsentoManual || f.isento) ? "ISENTO DE FRETE" : ("R$ " + Number(f.valorBase||0).toFixed(2));
-      })();
-      doc.text(fretePreview, margemX + entregaW + freteW/2, y+8.2, {align:"center"});
-      doc.setLineWidth(0.2);
-      y+=12;
-
-      // Cabeçalho da tabela
+      // ======= TABELA DE ITENS =======
       ensureSpace(14);
       doc.setFont("helvetica","bold"); doc.setFontSize(7);
       doc.rect(margemX,y,W_PROD,10,"S");
@@ -1147,7 +1118,7 @@
       for (let i=0;i<itens.length;i++){
         const it = itens[i];
         const prod = it.produto || "";
-        const qtdStr  = (it.quantidade || 0).toString();
+               const qtdStr  = (it.quantidade || 0).toString();
         const tipo = it.tipo || "KG";
         const precoNum = parseFloat(it.preco) || 0;
 
@@ -1206,18 +1177,58 @@
         if (i < itens.length - 1) y += 2;
       }
 
-      // Total final mostrado no PDF
+      // ===== SOMA PRODUTOS (2/3 da página) =====
+      const w2tercos = Math.round(larguraCaixa * (2/3));
+      ensureSpace(11);
+      drawKeyValueBox(
+        doc, margemX, y, w2tercos,
+        "SOMA PRODUTOS",
+        "R$ " + subtotal.toFixed(2),
+        { rowH:10, titleSize:7, valueSize:9 }
+      );
+      y += 11;
+
+      // ===== ENTREGA/RETIRADA (2/3) + FRETE (1/3) com GAP de 2 mm =====
+      const gap2 = 2;
+      const entregaW = Math.round(larguraCaixa * (2/3));
+      const freteW   = larguraCaixa - entregaW - gap2;
+      ensureSpace(12);
+      doc.setLineWidth(1.1);
+
+      // ENTREGA/RETIRADA
+      doc.rect(margemX, y, entregaW, 10, "S");
+      doc.setFont("helvetica","bold"); doc.setFontSize(10);
+      const tipoEntrega=document.querySelector('input[name="tipoEntrega"]:checked').value;
+      doc.text(tipoEntrega, margemX + entregaW/2, y+6.5, {align:"center"});
+
+      // FRETE (com 2mm de espaço à esquerda)
+      const freteX = margemX + entregaW + gap2;
+      doc.rect(freteX, y, freteW, 10, "S");
+      doc.text("FRETE", freteX + freteW/2, y+4, {align:"center"});
+      doc.setFont("helvetica","normal"); doc.setFontSize(9);
+      const fretePreview = (()=>{
+        const f = __frete || {valorBase:0,isento:false};
+        const isIsentoManual = !!document.getElementById('isentarFrete')?.checked;
+        return (isIsentoManual || f.isento) ? "ISENTO" : ("R$ " + Number(f.valorBase||0).toFixed(2));
+      })();
+      doc.text(fretePreview, freteX + freteW/2, y+8.2, {align:"center"});
+      doc.setLineWidth(0.2);
+      y+=12;
+
+      // ===== TOTAL DO PEDIDO (uma linha) =====
       const isentoMan = !!document.getElementById('isentarFrete')?.checked;
       const frete = __frete || { valorBase:0, valorCobravel:0, isento:false };
       const freteCobravelParaTotal = isentoMan ? 0 : Number(frete.valorCobravel||0);
       const totalGeral = subtotal + freteCobravelParaTotal;
 
-      doc.setFont("helvetica","bold"); doc.setLineWidth(1.1);
-      doc.rect(margemX,y,larguraCaixa,12,"S");
-      doc.text("TOTAL DO PEDIDO", margemX+larguraCaixa/2, y+4.5, {align:"center"});
-      doc.setFontSize(10);
-      doc.text("R$ " + totalGeral.toFixed(2), margemX+larguraCaixa/2, y+9, {align:"center"});
-      y += 15;
+      ensureSpace(11);
+      const rowHtotal = 10;
+      doc.rect(margemX, y, larguraCaixa, rowHtotal, "S");
+      doc.setFont("helvetica","bold"); doc.setFontSize(9);
+      // label à esquerda, valor à direita
+      doc.text("TOTAL DO PEDIDO:", margemX+3, y + rowHtotal/2 + 0.5);
+      doc.text("R$ " + totalGeral.toFixed(2), margemX + larguraCaixa - 3, y + rowHtotal/2 + 0.5, {align:"right"});
+      y += rowHtotal + 2;
 
       const obsG=(document.getElementById("obsGeral").value||"").trim();
       if (obsG){
@@ -1261,7 +1272,6 @@
       const entregaISO= document.getElementById("entrega").value;
       const hora      = document.getElementById("horaEntrega").value;
       const tipoEnt   = document.querySelector('input[name="tipoEntrega"]:checked').value;
-      // isentoMan já declarado acima
 
       const clienteFiscal = {
         cnpj: digitsOnly(document.getElementById("cnpj").value),
