@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Relatórios — Serra Nobre V3.2.4</title>
+  <title>Relatórios — Serra Nobre V3.2.5</title>
   <link rel="manifest" href="manifest.json" />
   <style>
     :root{ --teal:#0f766e; --teal-600:#0ea5a6; --ink:#0f172a; --muted:#64748b; --bg:#f1f5f9; --line:#e2e8f0; --danger:#c0392b; --ok:#0b5; }
@@ -68,7 +68,7 @@
 <body>
   <header>
     <a href="index.html">← Voltar</a>
-    <h1>Relatórios — Serra Nobre V3.2.4</h1>
+    <h1>Relatórios — Serra Nobre V3.2.5</h1>
     <div style="margin-left:auto"></div>
   </header>
 
@@ -327,29 +327,38 @@
     </div>
 
     <table class="mini-table" id="tbl_${id}" style="margin-top:8px">
-      <thead>
-        <tr><th>#</th><th style="width:34%">Produto</th><th>Tipo</th><th>Qtd/Peso</th><th>R$ Unit</th><th>R$ Total</th><th>Obs</th></tr>
-      </thead>
-      <tbody>
-        ${
-          itens.map((it,ix)=>(`
-<tr data-ix="${ix}">
-  <td>${ix+1}</td>
-  <td class="wrap">${it.produto||""}</td>
-  <td>
-    <select class="i_tipo">
-      <option value="KG" ${it.tipo==="KG"?"selected":""}>KG</option>
-      <option value="UN" ${it.tipo==="UN"?"selected":""}>UN</option>
-    </select>
-  </td>
-  <td><input type="number" step="0.01" class="i_qtd"  value="${Number(it.quantidade||0)}"/></td>
-  <td><input type="number" step="0.01" class="i_unit" value="${Number(it.precoUnit ?? it.preco || 0)}"/></td>
-  <td><input type="number" step="0.01" class="i_total" value="${Number(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))))}"/></td>
-  <td><input type="text" class="i_obs" value="${(it.obs||"").toString().replace(/"/g,'&quot;')}"/></td>
-</tr>`)).join("")
-        }
-      </tbody>
-    </table>
+  <thead>
+    <tr>
+      <th>#</th>
+      <th style="width:34%">Produto</th>
+      <th>Tipo</th>
+      <th>Qtd/Peso</th>
+      <th>R$ Unit</th>
+      <th>R$ Total</th>
+      <th>Obs</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${
+      (Array.isArray(itens) ? itens : []).map((it, ix) => `
+        <tr data-ix="${ix}">
+          <td>${ix + 1}</td>
+          <td class="wrap">${it.produto || ""}</td>
+          <td>
+            <select class="i_tipo">
+              <option value="KG" ${it.tipo === "KG" ? "selected" : ""}>KG</option>
+              <option value="UN" ${it.tipo === "UN" ? "selected" : ""}>UN</option>
+            </select>
+          </td>
+          <td><input type="number" step="0.01" class="i_qtd"  value="${Number(it.quantidade || 0)}" /></td>
+          <td><input type="number" step="0.01" class="i_unit" value="${Number(it.precoUnit ?? it.preco || 0)}" /></td>
+          <td><input type="number" step="0.01" class="i_total" value="${Number(it.total ?? ((Number(it.quantidade) || 0) * (Number(it.precoUnit || it.preco || 0))))}" /></td>
+          <td><input type="text" class="i_obs" value="${(it.obs || "").toString().replace(/"/g, '&quot;')}" /></td>
+        </tr>
+      `).join("")
+    }
+  </tbody>
+</table>
 
     <div class="flex-end">
       <button class="btn ghost" id="btnRecalc_${id}">Recalcular total</button>
