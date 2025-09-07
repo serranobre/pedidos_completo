@@ -1,754 +1,1428 @@
-    thead th:nth-child(7){width:130px}  /* Tipo */
-    thead th:nth-child(8){width:120px}  /* Pagamento */
-    thead th:nth-child(9){width:120px}  /* Cupom */
-    tbody td{ border-bottom:1px solid #f1f5f9; padding:10px; font-size:14px; vertical-align:top; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-    tbody td.wrap{ white-space:normal }
-    tfoot td{ background:#f8fafc; font-weight:600; padding:10px; border-top:1px solid var(--line) }
-    .muted{ color:var(--muted); font-size:12px }
-    .cell-client{ color:#0f766e; cursor:pointer; text-decoration:underline }
-    .details-row td{ background:#fbfeff }
-    .mini-table{ width:100%; border-collapse:collapse; margin-top:6px }
-    .mini-table th, .mini-table td{ border:1px solid #e2e8f0; padding:6px; font-size:12px }
-    .mini-table th{ background:#f8fafc; text-align:left }
-    .mini-table input[type="number"], .mini-table input[type="text"]{ width:100%; padding:6px; font-size:12px }
-    .mini-table select{ width:100%; padding:6px; font-size:12px }
-    .flex-end{ display:flex; justify-content:flex-end; gap:8px; margin-top:8px; flex-wrap:wrap }
-    .totals-line{ display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin-top:10px }
-    .totals-line .pill{ background:#eef7f7; padding:6px 10px; border-radius:999px; font-size:12px }
-    .col-tipo select{ width:100% }
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <!-- favicons -->
+  <link rel="icon" type="image/png" href="favicon-96x96.png" sizes="96x96" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="shortcut icon" href="favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-title" content="Serra Nobre" />
+  <link rel="manifest" href="manifest.json" />
+  <title>PEDIDOS V3.2.5</title>
+  <style>
+    :root{
+      --teal:#0ea5a6; --ink:#0f172a; --muted:#666; --bg:#f4f4f4; --line:#e2e8f0;
+      --ok:#3d7311; --accent:#005580; --warn:#b06912; --danger:#c0392b; --primary:#008000;
+    }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background: var(--bg); color:var(--ink) }
+    h1 { text-align: right; margin: 6px 0 10px; font-size: 30px; }
+    .logo-header { width: 360px; display: block; }
+    .topbar {
+      display:flex; align-items:center; justify-content:space-between;
+      gap:12px; margin-bottom:8px;
+    }
+    .user-area { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+    .user-chip { padding:6px 10px; border:1px dashed #94a3b8; border-radius:999px; background:#f8fafc; font-size:12px; color:#0f172a; }
+    .login-inline { display:flex; align-items:center; gap:6px; }
+    .login-inline input { padding:6px 8px; border:1px solid var(--line); border-radius:6px; width:140px; }
+    .login-inline button { padding:6px 10px; background:var(--teal); color:#fff; border:none; border-radius:6px; cursor:pointer; }
+    #btnSair{ padding:6px 10px; background:#475569; color:#fff; border:none; border-radius:6px; cursor:pointer; }
+    #btnSair:hover{ filter:brightness(.95) }
 
-    /* Modal Cupom */
-    .modal-backdrop{ position:fixed; inset:0; background:rgba(15,23,42,.4); display:none; align-items:center; justify-content:center; padding:16px; z-index:50 }
-    .modal{ background:#fff; border-radius:12px; max-width:420px; width:100%; padding:16px; box-shadow:0 8px 24px rgba(0,0,0,.18) }
-    .modal h3{ margin:0 0 6px; font-size:18px }
-    .modal p{ margin:0 0 10px; color:#475569; font-size:14px }
-    .modal .actions{ justify-content:flex-end; margin-top:12px }
-    @media (max-width:1220px){ .filters{grid-template-columns:repeat(4,minmax(0,1fr))} }
-    @media (max-width:680px){ .filters{grid-template-columns:repeat(2,minmax(0,1fr))} }
+    .offline-banner{
+      display:none; text-align:center; margin:8px 0;
+      background:#fee2e2; color:#991b1b; border:1px solid #fecaca; border-radius:8px; padding:6px 10px; font-weight:700;
+    }
+
+    input, select, textarea { width: 100%; padding: 8px; margin: 5px 0; box-sizing: border-box; border:1px solid var(--line); border-radius:6px; }
+    .item { border: 1px solid var(--line); padding: 10px; background: #fff; margin-bottom: 10px; border-radius:8px; }
+    .total { font-weight: bold; font-size: 1.2em; }
+    button { width: 100%; padding: 10px; background: var(--primary); color: white; border: none; font-size: 1em; margin-top: 5px; border-radius: 6px; cursor:pointer; }
+    .remove { background: var(--danger); }
+    .pdf-btn { background: var(--accent); margin-top: 10px; }
+    .pdf-btn.salvar { background: var(--ok); }
+    .pdf-btn.compartilhar { background: var(--warn); }
+    .tipo-select { width: auto; margin-right: 10px; }
+    label { font-weight: bold; }
+    .field-group { margin-bottom: 12px; }
+    .switch-box { display: flex; gap: 20px; justify-content: left; align-items: center; margin-bottom: 12px; }
+    #pagamentoOutro { margin-top: 6px; }
+    .top-actions { display:flex; gap:8px; margin:6px 0 10px; }
+    .top-actions a { background:var(--teal); color:#fff; text-decoration:none; padding:8px 10px; border-radius:8px; font-weight:600; }
+    .muted{ color:var(--muted); font-size:0.9em }
+    #freteValor { font-weight: bold; }
+    .frete-row { display:flex; align-items:center; gap:10px; flex-wrap: wrap; }
+    .frete-row .inline { display:flex; align-items:center; gap:6px; }
+    .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px }
+    .inline-help{ font-size:12px; color:#475569 }
+    .peso-info { font-size:12px; color:#475569; margin:.25rem 0 .5rem }
+
+    /* Bloqueio de UI enquanto sem login */
+    .app-disabled *:where(input,select,textarea,button,.pdf-btn,a){ pointer-events:none; opacity:.6 }
+    .app-disabled .login-inline, .app-disabled #userChip { pointer-events:auto; opacity:1 }
+
+    @media (max-width: 900px) { .logo-header{ width:240px } }
+    @media (max-width: 740px) { .grid-2{ grid-template-columns: 1fr } .logo-header{ width:180px } }
+    @media (max-width: 450px) {
+      h1 { font-size: 1.1em; }
+      .logo-header { width: 110px; }
+      .item { padding: 6px; }
+      button, .pdf-btn { padding: 7px; font-size: 0.96em; }
+      input, select, textarea { padding: 6px; }
+      .field-group { margin-bottom: 8px; }
+      .top-actions a { padding:6px 8px; font-size:0.9em; }
+      .login-inline input{ width:110px }
+    }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.19.3/dist/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
-  <header>
-    <a href="index.html">← Voltar</a>
-    <h1>Relatórios — Serra Nobre V3.2.5</h1>
-    <div style="margin-left:auto"></div>
-  </header>
-
-  <main id="app">
-    <section class="card">
-      <div class="filters">
-        <div><label>Data entrega — de</label><input type="date" id="fDataIni"></div>
-        <div><label>Data entrega — até</label><input type="date" id="fDataFim"></div>
-        <div><label>Horário — de</label><input type="time" id="fHoraIni"></div>
-        <div><label>Horário — até</label><input type="time" id="fHoraFim"></div>
-        <div><label>Cliente (contém)</label><input type="text" id="fCliente" placeholder="ex.: mercado"></div>
-        <div>
-          <label>Tipo (Entrega/Retirada)</label>
-          <select id="fTipo">
-            <option value="">Todos</option>
-            <option value="ENTREGA">ENTREGA</option>
-            <option value="RETIRADA">RETIRADA</option>
-          </select>
-        </div>
-        <div>
-          <label>Produto (contém)</label>
-          <input type="text" id="fProduto" placeholder="ex.: costela, maminha">
-        </div>
-        <div>
-          <label>Formato</label>
-          <select id="fModo">
-            <option value="reduzido">Reduzido</option>
-            <option value="detalhado">Detalhado</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="actions">
-        <button class="btn" id="btnBuscar" disabled>Buscar</button>
-        <button class="btn ghost" id="btnLimpar" disabled>Limpar</button>
-        <button class="btn warning" id="btnXLSX" title="Exportar resultados para XLSX" disabled>Exportar XLSX</button>
-        <button class="btn gray" id="btnPDF" title="Gerar PDF" disabled>Gerar PDF</button>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Data</th>
-              <th>Hora</th>
-              <th>Nº Pedido</th>
-              <th>Cliente (clique para editar)</th>
-              <th>Itens</th>
-              <th>Total (R$)</th>
-              <th>Tipo</th>
-              <th>Pagamento</th>
-              <th>Nº CUPOM</th>
-            </tr>
-          </thead>
-          <tbody id="tbody"></tbody>
-          <tfoot>
-            <tr>
-              <td colspan="4" id="ftCount">0 pedidos</td>
-              <td></td>
-              <td id="ftTotal">R$ 0,00</td>
-              <td colspan="3"></td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </section>
-  </main>
-
-  <!-- Modal: Nº Cupom -->
-  <div class="modal-backdrop" id="cupomBackdrop">
-    <div class="modal">
-      <h3>Informar Nº do Cupom / NF</h3>
-      <p>Para salvar as alterações, informe o número do cupom fiscal (ou NF) vinculado ao pedido.</p>
-      <input id="cupomInput" type="text" placeholder="Ex.: 123456" />
-      <div class="actions">
-        <button class="btn ghost" id="cupomCancel">Cancelar</button>
-        <button class="btn" id="cupomOk">Confirmar</button>
+  <!-- TOPO: Logo à esquerda + usuário à direita -->
+  <div class="topbar">
+    <img src="Serra-Nobre_3.png" alt="Logo" class="logo-header" onerror="this.style.display='none'">
+    <div class="user-area">
+      <span id="userChip" class="user-chip">Desconectado</span>
+      <button id="btnSair" style="display:none">Sair</button>
+      <div id="loginInline" class="login-inline" title="Digite a senha do operador (Jayson 0987, Karen 4321, Serra Nobre 0003, Leo 1210)">
+        <input id="senhaOperador" type="password" inputmode="numeric" placeholder="Senha do operador"/>
+        <button id="btnEntrarOperador" type="button">Entrar</button>
       </div>
     </div>
   </div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
-    import {
-      getFirestore, collection, query, where, getDocs, orderBy, limit,
-      updateDoc, doc, serverTimestamp
-    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+  <div id="offlineBanner" class="offline-banner">OFFLINE — pedidos serão gerados normalmente, mas não serão salvos.</div>
+  <h1>PEDIDOS V3.2.5</h1>
 
-    // == Firebase ==
-    const firebaseConfig = {
-      apiKey: "AIzaSyB3zBW_WhVfNpX5uoJCq-6WysE5XKYKZt4",
-      authDomain: "serranobrepedidos.firebaseapp.com",
-      projectId: "serranobrepedidos",
-      storageBucket: "serranobrepedidos.firebasestorage.app",
-      messagingSenderId: "948939268023",
-      appId: "1:948939268023:web:3f1f6c18f2c047c82b1232"
-    };
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db   = getFirestore(app);
-
-    // == helpers ==
-    const $ = (id)=>document.getElementById(id);
-    const toBR = (iso)=> { if(!iso) return ""; const [y,m,d] = String(iso).split("-"); return `${d}/${m}/${y}`; };
-    const money = (n)=> (Number(n||0)).toFixed(2).replace(".",",");
-    const up = (s)=> String(s||"").toUpperCase();
-    const shortPedido = (id)=> id ? ("#"+String(id).slice(-6).toUpperCase()) : "";
-
-    // == Auth gate ==
-    async function ensureAnonAuth(){
-      return new Promise((resolve)=>{
-        const off = onAuthStateChanged(auth, async (u)=>{
-          if (u){ off(); resolve(); return; }
-          try{ await signInAnonymously(auth); }catch(_){}
-        }, async ()=>{
-          try{ await signInAnonymously(auth); }catch(_){}
-          resolve();
-        });
-      });
-    }
-
-    // == Render de itens ==
-    function renderMiniTableReadOnly(itens){
-      if (!Array.isArray(itens) || !itens.length) return '<div class="muted">Sem itens.</div>';
-      const lines = itens.map((it,idx)=>(`
-        <tr>
-          <td>${idx+1}</td>
-          <td>${it.produto||""}</td>
-          <td>${it.tipo||""}</td>
-          <td>${Number(it.quantidade||0)}</td>
-          <td>R$ ${money(it.precoUnit ?? it.preco)}</td>
-          <td>R$ ${money(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))))}</td>
-        </tr>`)).join("");
-      return `
-        <table class="mini-table">
-          <thead><tr>
-            <th>#</th><th>Produto</th><th>Tipo</th><th>Qtd/Peso</th><th>R$ Unit</th><th>R$ Total</th>
-          </tr></thead>
-          <tbody>${lines}</tbody>
-        </table>`;
-    }
-
-    // == Deduplicação visual ==
-    function signatureOfRow(r){
-      const itens = Array.isArray(r.itens) ? r.itens : [];
-      const itensSig = itens.map(i => [
-        up(i.produto||""), i.tipo||"", Number(i.quantidade||0).toFixed(3),
-        Number(i.precoUnit ?? i.preco ?? 0).toFixed(2),
-        Number(i.total ?? ((Number(i.quantidade)||0)*(Number(i.precoUnit||i.preco||0)))).toFixed(2)
-      ].join(":")).join("|");
-      return [
-        r.dataEntregaISO||"", r.horaEntrega||"", up(r.cliente||""),
-        Number(r.totalPedido||0).toFixed(2),
-        itens.length, itensSig
-      ].join("||");
-    }
-    function dedupeRows(rows){
-      const out=[], seen=new Set();
-      for (const r of rows){
-        const sig = r.idempotencyKey || signatureOfRow(r);
-        if (seen.has(sig)) continue;
-        seen.add(sig); out.push(r);
-      }
-      return out;
-    }
-
-    // == Tabela principal ==
-    function renderRows(docs){
-      const tbody = $("tbody");
-      const modo = $("fModo").value || "reduzido";
-
-      if (!docs.length){
-        tbody.innerHTML = '<tr><td colspan="9">Sem resultados.</td></tr>';
-        $("ftCount").textContent = "0 pedido(s)";
-        $("ftTotal").textContent = "R$ 0,00";
-        ["btnXLSX","btnPDF"].forEach(id=>$(id).disabled=true);
-        return;
-      }
-
-      let total = 0;
-      const html = [];
-
-      for (const x of docs){
-        const itens = Array.isArray(x.itens) ? x.itens : [];
-        const itensCount = itens.length;
-        const tot = Number(x.totalPedido||0); total += tot;
-        const tipoTxt = ((x?.entrega?.tipo || "").toUpperCase()==="RETIRADA") ? "RETIRADA" : "ENTREGA";
-
-        html.push(`
-<tr data-rowid="${x.id}">
-  <td>${toBR(x.dataEntregaISO)||""}</td>
-  <td>${x.horaEntrega||""}</td>
-  <td title="${x.id}">${shortPedido(x.id)}</td>
-  <td class="cell-client" data-id="${x.id}" title="Clique para editar">${x.cliente||""}</td>
-  <td>${itensCount}</td>
-  <td>R$ ${money(tot)}</td>
-  <td>${tipoTxt}</td>
-  <td>${x.pagamento||""}</td>
-  <td>${x.cupomNumero ? String(x.cupomNumero) : ""}</td>
-</tr>`);
-
-        if (modo === "detalhado"){
-          html.push(`
-<tr class="details-row" data-parent="${x.id}">
-  <td colspan="9" class="wrap">
-    ${renderMiniTableReadOnly(itens)}
-    <div class="totals-line">
-      <span class="pill">Frete: R$ ${money(x?.entrega?.valorCobravel||0)}</span>
-      <span class="pill"><strong>Total pedido:</strong> R$ ${money(tot)}</span>
-      <span class="pill">Pedido: <strong title="${x.id}">${shortPedido(x.id)}</strong></span>
+  <main id="appMain">
+    <div class="top-actions">
+      <a href="relatorios.html" title="Abrir Relatórios">Relatórios</a>
     </div>
-  </td>
-</tr>`);
-        }
-      }
 
-      tbody.innerHTML = html.join("");
-      $("ftCount").textContent = `${docs.length} pedido(s)`;
-      $("ftTotal").textContent = `R$ ${money(total)}`; /* AJUSTE #1: formatação BR */
-      ["btnXLSX","btnPDF"].forEach(id=>$(id).disabled=false);
+    <div class="field-group">
+      <label for="cliente">Cliente:</label>
+      <input list="listaClientes" type="text" id="cliente" autocomplete="off" required
+             onfocus="popularClientesMaisUsados()"
+             onblur="forcarUppercase(this); preencherEnderecoEIsencaoCliente(); carregarSugestoesProdutosDoCliente();" />
+      <datalist id="listaClientes"></datalist>
+    </div>
 
-      tbody.querySelectorAll(".cell-client").forEach(td=>{
-        td.addEventListener("click", ()=> openEditor(td.dataset.id));
-      });
-    }
-
-    // == Editor ==
-    function openEditor(id){
-      const tbody = $("tbody");
-      tbody.querySelectorAll(`tr[data-editfor="${id}"]`).forEach(tr=>tr.remove());
-      const rowData = (window.__rows||[]).find(r=>r.id===id);
-      if (!rowData) return;
-
-      const itens = Array.isArray(rowData.itens) ? rowData.itens : [];
-      const tipoAtual = (rowData?.entrega?.tipo || "ENTREGA").toUpperCase();
-      const cupomAtual = rowData.cupomNumero || "";
-
-      const editorHTML = `
-<tr class="details-row" data-editfor="${id}">
-  <td colspan="9" class="wrap">
-    <div style="display:grid; grid-template-columns: 220px 1fr; gap:10px; align-items:center">
+    <div class="field-group grid-2">
       <div>
-        <label>Tipo de entrega</label>
-        <select id="edit_tipo_${id}">
-          <option value="ENTREGA" ${tipoAtual==="ENTREGA"?"selected":""}>ENTREGA</option>
-          <option value="RETIRADA" ${tipoAtual==="RETIRADA"?"selected":""}>RETIRADA</option>
-        </select>
+        <label for="cnpj">CNPJ:</label>
+        <input type="text" id="cnpj" inputmode="numeric" placeholder="00.000.000/0000-00"
+               maxlength="18"
+               oninput="maskCNPJ(this)"
+               onblur="normalizeCNPJ(this)"/>
+        <small class="inline-help">Serão salvos apenas dígitos. Validação leve.</small>
       </div>
-      <div class="totals-line">
-        <span class="pill">Cupom atual: <strong>${cupomAtual || "(não informado)"}</strong></span>
-        <span class="pill">Frete: R$ ${money(rowData?.entrega?.valorCobravel||0)}</span>
-        <span class="pill"><strong>Total atual:</strong> R$ ${money(rowData.totalPedido||0)}</span>
-        <span class="pill">Pedido: <strong title="${rowData.id}">${shortPedido(rowData.id)}</strong></span>
+      <div>
+        <label for="ie">Inscrição Estadual:</label>
+        <input type="text" id="ie" placeholder="Ex.: ISENTO ou número"
+               onblur="forcarUppercase(this)"/>
+        <small class="inline-help">Aceita “ISENTO”.</small>
       </div>
     </div>
 
-    <table class="mini-table" id="tbl_${id}" style="margin-top:8px">
-  <thead>
-    <tr>
-      <th>#</th>
-      <th style="width:34%">Produto</th>
-      <th>Tipo</th>
-      <th>Qtd/Peso</th>
-      <th>R$ Unit</th>
-      <th>R$ Total</th>
-      <th>Obs</th>
-    </tr>
-  </thead>
-  <tbody>
-    ${
-      (Array.isArray(itens) ? itens : []).map((it, ix) => `
-        <tr data-ix="${ix}">
-          <td>${ix + 1}</td>
-          <td class="wrap">${it.produto || ""}</td>
-          <td>
-            <select class="i_tipo">
-              <option value="KG" ${it.tipo === "KG" ? "selected" : ""}>KG</option>
-              <option value="UN" ${it.tipo === "UN" ? "selected" : ""}>UN</option>
-            </select>
-          </td>
-          <td><input type="number" step="0.01" class="i_qtd"  value="${Number(it.quantidade || 0)}" /></td>
-          <td><input type="number" step="0.01" class="i_unit" value="${Number(it.precoUnit ?? it.preco || 0)}" /></td>
-          <td><input type="number" step="0.01" class="i_total" value="${Number(it.total ?? ((Number(it.quantidade) || 0) * (Number(it.precoUnit || it.preco || 0))))}" /></td>
-          <td><input type="text" class="i_obs" value="${(it.obs || "").toString().replace(/"/g, '&quot;')}" /></td>
-        </tr>
-      `).join("")
-    }
-  </tbody>
-</table>
-
-    <div class="flex-end">
-      <button class="btn ghost" id="btnRecalc_${id}">Recalcular total</button>
-      <button class="btn red"   id="btnCupom_${id}">Alterar Nº Cupom</button>
-      <button class="btn gray"  id="btnSave_${id}">Salvar alterações</button>
+    <!-- ENDEREÇO abaixo de CNPJ/I.E. -->
+    <div class="field-group">
+      <label for="endereco">Endereço:</label>
+      <input type="text" id="endereco" autocomplete="off" required
+             onblur="forcarUppercase(this); atualizarFreteUI()"/>
+      <small class="muted" id="hint-endereco">
+        Se for outra cidade, inclua <b>o nome da cidade</b> no fim do endereço.
+        Sem cidade, será considerado <b>Porto Alegre - RS</b>.
+      </small>
     </div>
-  </td>
-</tr>`;
 
-      const anchor = tbody.querySelector(`tr[data-rowid="${id}"]`);
-      if (anchor) anchor.insertAdjacentHTML("afterend", editorHTML);
+    <!-- CONTATO à esquerda | CEP à direita -->
+    <div class="field-group grid-2">
+      <div>
+        <label for="contato">Contato (tel/WhatsApp):</label>
+        <input type="text" id="contato" inputmode="numeric" placeholder="(00) 00000-0000"
+               maxlength="16"
+               oninput="maskTelefone(this)"
+               onblur="normalizeTelefone(this)"/>
+      </div>
+      <div>
+        <label for="cep">CEP:</label>
+        <input type="text" id="cep" inputmode="numeric" placeholder="00000-000"
+               maxlength="9"
+               oninput="maskCEP(this)"
+               onblur="normalizeCEP(this); atualizarFreteUI()"/>
+      </div>
+    </div>
 
-      const tbl = document.getElementById(`tbl_${id}`);
-      const recalc = ()=> recalcTotalsFromEditor(id);
-      tbl.querySelectorAll("input,select").forEach(el=>{
-        el.addEventListener("input", recalc);
-        el.addEventListener("change", recalc);
-      });
-      /* AJUSTE #2: preservar edição manual do campo total do item */
-      tbl.querySelectorAll(".i_total").forEach(el=>{
-        el.addEventListener("input", ()=>{ el.dataset.userEdit = "1"; });
-      });
+    <div class="field-group">
+      <label for="entrega">Data de Entrega:</label>
+      <input type="date" id="entrega" required/>
+    </div>
 
-      $("btnRecalc_"+id).onclick = recalc;
-      $("btnSave_"+id).onclick   = ()=> saveEditor(id);
-      $("btnCupom_"+id).onclick  = ()=> askCupom((val)=>{
-        const row = (window.__rows||[]).find(r=>r.id===id);
-        if (row){ row.cupomNumero = val; }
-        const host = document.querySelector(`tr[data-editfor="${id}"]`);
-        if(host){
-          const pill = host.querySelectorAll(".totals-line .pill")[0];
-          if (pill) pill.innerHTML = `Cupom atual: <strong>${val || "(não informado)"}</strong>`;
-        }
-      }, cupomAtual);
-    }
+    <div class="field-group">
+      <label for="horaEntrega">Horário de Entrega:</label>
+      <input type="time" id="horaEntrega" required/>
+    </div>
 
-    function recalcTotalsFromEditor(id){
-      const rowData = (window.__rows||[]).find(r=>r.id===id);
-      if(!rowData) return;
-      const tbl = document.getElementById(`tbl_${id}`); if(!tbl) return;
+    <div class="field-group switch-box">
+      <label>Entrega/Retirada:</label>
+      <label><input type="radio" name="tipoEntrega" value="ENTREGA" checked> Entrega</label>
+      <label><input type="radio" name="tipoEntrega" value="RETIRADA"> Retirada</label>
+    </div>
 
-      let subtotal = 0;
-      tbl.querySelectorAll("tbody tr").forEach(tr=>{
-        const qtd  = parseFloat(tr.querySelector(".i_qtd")?.value || "0");
-        const unit = parseFloat(tr.querySelector(".i_unit")?.value || "0");
-        const totEl = tr.querySelector(".i_total");
-        const auto  = (qtd*unit);
-        if (!totEl.dataset.userEdit) totEl.value = auto.toFixed(2);
-        const totVal = parseFloat(totEl.value || "0");
-        subtotal += (isFinite(totVal) ? totVal : 0);
-      });
+    <div class="field-group">
+      <label>Valor do Frete:</label>
+      <div class="frete-row">
+        <div id="freteValor" class="muted">—</div>
+        <label class="inline">
+          <input type="checkbox" id="isentarFrete" onchange="onToggleIsencaoManual()"/>
+          Isentar frete
+        </label>
+      </div>
+    </div>
 
-      const frete = Number(rowData?.entrega?.valorCobravel || 0);
-      const total = subtotal + frete;
+    <div id="itens"></div>
+    <button onclick="adicionarItem()">Adicionar Item</button>
 
-      const host = document.querySelector(`tr[data-editfor="${id}"]`);
-      if(host){
-        const pill = host.querySelectorAll(".totals-line .pill")[2];
-        if (pill) pill.innerHTML = `<strong>Total atual:</strong> R$ ${money(total)}`;
+    <hr/>
+    <label for="pagamento">Forma de Pagamento:</label>
+    <select id="pagamento">
+      <option value="PIX">PIX</option>
+      <option value="DINHEIRO">DINHEIRO</option>
+      <option value="CARTÃO (LEVAR MAQUINA)">CARTÃO (LEVAR MAQUINA)</option>
+      <option value="OUTRO">OUTRO</option>
+    </select>
+    <input type="text" id="pagamentoOutro" placeholder="Digite outra forma de pagamento" style="display:none"/>
+
+    <hr/>
+    <label for="obsGeral">Observação geral do pedido:</label>
+    <textarea id="obsGeral"></textarea>
+    <hr/>
+
+    <button class="pdf-btn"            onclick="gerarPDF(false)">Gerar PDF</button>
+    <button class="pdf-btn salvar"     onclick="gerarPDF(true)">Salvar PDF</button>
+    <button class="pdf-btn compartilhar" onclick="compartilharPDF()">Compartilhar PDF</button>
+
+    <div id="resumo"></div>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <!-- Firebase (module): App + Firestore + Auth -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+  import {
+    getFirestore, collection, addDoc, getDocs, query, where, orderBy, limit,
+    updateDoc, increment, doc, setDoc, serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyB3zBW_WhVfNpX5uoJCq-6WysE5XKYKZt4",
+    authDomain: "serranobrepedidos.firebaseapp.com",
+    projectId: "serranobrepedidos",
+    storageBucket: "serranobrepedidos.firebasestorage.app",
+    messagingSenderId: "948939268023",
+    appId: "1:948939268023:web:3f1f6c18f2c047c82b1232"
+  };
+
+  const app = initializeApp(firebaseConfig);
+
+  const auth = getAuth(app);
+  const authReady = new Promise((resolve) => {
+    onAuthStateChanged(auth, (user) => {
+      if (user) resolve(user);
+      else signInAnonymously(auth).catch((e) => console.error("Anon auth:", e));
+    });
+  });
+
+  const db = getFirestore(app);
+  window.firebaseReady = authReady;
+
+  // ---------- Normalizadores ----------
+  function up(v){ return String(v||"").toUpperCase().trim(); }
+  function digits(v){ return String(v||"").replace(/\D/g,""); }
+  function removeAcentos(str){
+    return String(str||"").normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  }
+
+  // ---- Clientes helpers (tolerante) ----
+  async function getClienteDocByNome(nomeUpper) {
+    await authReady;
+    const nomeSemAcento = removeAcentos(nomeUpper);
+
+    try{
+      const q1 = query(collection(db, "clientes"), where("nome", "==", nomeUpper), limit(1));
+      const s1 = await getDocs(q1);
+      if (!s1.empty) return { id: s1.docs[0].id, ref: s1.docs[0].ref, data: s1.docs[0].data() };
+    }catch(_){}
+
+    try{
+      const q2 = query(collection(db, "clientes"), where("nomeUpper", "==", nomeUpper), limit(1));
+      const s2 = await getDocs(q2);
+      if (!s2.empty) return { id: s2.docs[0].id, ref: s2.docs[0].ref, data: s2.docs[0].data() };
+    }catch(_){}
+
+    try{
+      const start = nomeUpper, end = nomeUpper + '\uf8ff';
+      const q3 = query(
+        collection(db, "clientes"),
+        orderBy("nome"),
+        where("nome", ">=", start),
+        where("nome", "<=", end),
+        limit(5)
+      );
+      const s3 = await getDocs(q3);
+      if (!s3.empty){
+        const hit = s3.docs.find(d=>{
+          const n = (d.data()?.nome || "").toString().toUpperCase();
+          return removeAcentos(n) === nomeSemAcento;
+        }) || s3.docs[0];
+        return { id: hit.id, ref: hit.ref, data: hit.data() };
       }
-      return { subtotal, total };
+    }catch(_){}
+
+    try{
+      const start = nomeUpper, end = nomeUpper + '\uf8ff';
+      const q4 = query(
+        collection(db, "clientes"),
+        orderBy("nomeUpper"),
+        where("nomeUpper", ">=", start),
+        where("nomeUpper", "<=", end),
+        limit(5)
+      );
+      const s4 = await getDocs(q4);
+      if (!s4.empty){
+        const hit = s4.docs[0];
+        return { id: hit.id, ref: hit.ref, data: hit.data() };
+      }
+    }catch(_){}
+
+    return null;
+  }
+
+  // Salva/atualiza cliente (só online)
+  async function salvarCliente(nome, endereco, isentoFrete=false, extras={}) {
+    if (!navigator.onLine) return;
+    await authReady;
+    const nomeNorm = up(nome);
+    const enderecoNorm = up(endereco);
+    if (!nomeNorm) return;
+
+    const cnpj   = digits(extras.cnpj);
+    const ie     = up(extras.ie);
+    const cep    = digits(extras.cep);
+    const contato= digits(extras.contato);
+
+    const exist = await getClienteDocByNome(nomeNorm);
+    if (exist) {
+      const atual = exist.data || {};
+      const campos = { atualizadoEm: serverTimestamp(), nomeUpper: nomeNorm };
+      if ((atual.endereco || "") !== enderecoNorm) campos.endereco = enderecoNorm;
+      if (typeof isentoFrete === "boolean" && (atual.isentoFrete !== isentoFrete)) campos.isentoFrete = isentoFrete;
+
+      if (cnpj)   campos.cnpj = cnpj;
+      if (ie)     campos.ie = ie;
+      if (cep)    campos.cep = cep;
+      if (contato)campos.contato = contato;
+
+      await updateDoc(exist.ref, campos);
+    } else {
+      await addDoc(collection(db, "clientes"), {
+        nome: nomeNorm,
+        nomeUpper: nomeNorm,
+        endereco: enderecoNorm,
+        isentoFrete: !!isentoFrete,
+        cnpj: cnpj || "",
+        ie: ie || "",
+        cep: cep || "",
+        contato: contato || "",
+        compras: 0,
+        criadoEm: serverTimestamp()
+      });
+    }
+  }
+
+  async function buscarClienteInfo(nomeCliente) {
+    await authReady;
+    const nome = up(nomeCliente);
+    if (!nome) return null;
+    const found = await getClienteDocByNome(nome);
+    if (!found) return null;
+    const d = found.data || {};
+    return {
+      endereco: (d.endereco || d.end || ""),
+      isentoFrete: !!(d.isentoFrete || d.isento_frete),
+      cnpj: d.cnpj || "",
+      ie: d.ie || d.inscricao_estadual || "",
+      cep: d.cep || "",
+      contato: d.contato || d.telefone || "",
+      lastFrete: typeof d.lastFrete === "number" ? d.lastFrete : (d.lastFrete ? Number(d.lastFrete) : null)
+    };
+  }
+
+  async function clientesMaisUsados(limitQtd = 50) {
+    await authReady;
+    const lista = [];
+    try{
+      const qs = await getDocs(query(collection(db, "clientes"), orderBy("compras","desc"), limit(limitQtd)));
+      qs.forEach(d => {
+        const x = d.data() || {};
+        const nome = (x.nome || x.nomeUpper || "").toString().trim();
+        if (nome) lista.push({ nome, compras: x.compras || 0 });
+      });
+    }catch(_){
+      const qs2 = await getDocs(query(collection(db, "clientes"), orderBy("nome"), limit(limitQtd)));
+      qs2.forEach(d => {
+        const x = d.data() || {};
+        const nome = (x.nome || x.nomeUpper || "").toString().trim();
+        if (nome) lista.push({ nome, compras: x.compras || 0 });
+      });
+    }
+    lista.sort((a,b)=> b.compras - a.compras || a.nome.localeCompare(b.nome));
+    return lista.map(x => x.nome);
+  }
+
+  async function buscarUltimoPreco(clienteNome, produtoNome) {
+    await authReady;
+    const nomeCli  = up(clienteNome);
+    const nomeProd = String(produtoNome || "").trim();
+    if (!nomeCli || !nomeProd) return null;
+
+    const q = query(
+      collection(db, "historico_precos"),
+      where("cliente", "==", nomeCli),
+      where("produto", "==", nomeProd),
+      orderBy("data", "desc"),
+      limit(1)
+    );
+    const qs = await getDocs(q);
+    if (qs.empty) return null;
+    const dados = qs.docs[0].data();
+    return typeof dados.preco === "number" ? dados.preco : parseFloat(dados.preco);
+  }
+
+  async function produtosDoCliente(nomeCliente) {
+    await authReady;
+    const nome = up(nomeCliente);
+    if (!nome) return [];
+    const set = new Set();
+    const q = query(
+      collection(db, "historico_precos"),
+      where("cliente", "==", nome),
+      orderBy("data", "desc"),
+      limit(1000)
+    );
+    const qs = await getDocs(q);
+    qs.forEach(d => { const p = (d.data().produto || "").trim(); if (p) set.add(p); });
+    return [...set].sort((a,b)=>a.localeCompare(b));
+  }
+
+  async function registrarPrecoCliente(clienteNome, produtoNome, preco) {
+    if (!navigator.onLine) return;
+    await authReady;
+    const nomeCli  = up(clienteNome);
+    const nomeProd = String(produtoNome || "").trim();
+    const valor    = parseFloat(preco);
+    if (!nomeCli || !nomeProd || isNaN(valor)) return;
+
+    await addDoc(collection(db, "historico_precos"), {
+      cliente: nomeCli, produto: nomeProd, preco: valor, data: serverTimestamp()
+    });
+
+    const found = await getClienteDocByNome(nomeCli);
+    if (found) await updateDoc(found.ref, { compras: increment(1), atualizadoEm: serverTimestamp() });
+  }
+
+  // ======= SAVE com Idempotência (apenas online) =======
+  function normalizeEnderecoForKey(str){ return up(str).replace(/\s+/g,' ').trim(); }
+  function buildItemsSignature(items){
+    if (!Array.isArray(items)) return '';
+    return items.map(i=>[
+      (i.produto||'').trim().replace(/\|/g,'/'),
+      (i.tipo||''),
+      Number(i.quantidade||0).toFixed(3),
+      Number(i.precoUnit||i.preco||0).toFixed(2),
+      Number(i.total||0).toFixed(2)
+    ].join(':')).join(';');
+  }
+
+  async function savePedidoIdempotente(payload){
+    if (!navigator.onLine) return null;
+    await authReady;
+
+    const key = [
+      payload.dataEntregaISO||"",
+      payload.horaEntrega||"",
+      up(payload.cliente||""),
+      (payload.entrega?.tipo||""),
+      normalizeEnderecoForKey(payload.entrega?.endereco||""),
+      String(payload.subtotal?.toFixed ? payload.subtotal.toFixed(2) : Number(payload.subtotal||0).toFixed(2)),
+      String(Array.isArray(payload.itens) ? payload.itens.length : 0),
+      buildItemsSignature(payload.itens),
+      (payload.clienteFiscal?.cnpj||""),
+      (payload.clienteFiscal?.ie||""),
+      (payload.clienteFiscal?.cep||""),
+      (payload.clienteFiscal?.contato||"")
+    ].join("|");
+
+    const qKey = query(collection(db,"pedidos"), where("idempotencyKey","==", key), limit(1));
+    const snap = await getDocs(qKey);
+    if (!snap.empty){
+      return snap.docs[0].id;
     }
 
-    // == Modal do cupom ==
-    function askCupom(callback, valorInicial=""){
-      const bd = $("cupomBackdrop");
-      const inp = $("cupomInput");
-      const ok = $("cupomOk");
-      const cancel = $("cupomCancel");
-      inp.value = valorInicial || "";
-      bd.style.display = "flex";
-      inp.focus(); inp.select();
+    const id = `${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+    await setDoc(doc(collection(db, "pedidos"), id), {
+      ...payload,
+      idempotencyKey: key,
+      dataEntregaDia: payload.dataEntregaISO ? Number(payload.dataEntregaISO.replaceAll('-','')) : null,
+      createdAt: serverTimestamp()
+    });
+    return id;
+  }
 
-      const close = ()=> { bd.style.display = "none"; ok.onclick=null; cancel.onclick=null; };
-      cancel.onclick = ()=> { close(); };
-      ok.onclick = ()=> {
-        const v = inp.value.trim();
-        if(!v){ alert("Informe o número do cupom/NF para continuar."); return; }
-        close();
-        try{ callback && callback(v); }catch(_){}
+  // Atualiza lastFrete no cliente
+  async function updateLastFreteCliente(nomeCliente, lastFreteNumber){
+    if (!navigator.onLine) return;
+    await authReady;
+    const nome = up(nomeCliente);
+    if (!nome) return;
+    const found = await getClienteDocByNome(nome);
+    if (found){
+      await updateDoc(found.ref, {
+        lastFrete: Number(lastFreteNumber)||0,
+        atualizadoEm: serverTimestamp()
+      });
+    }
+  }
+
+  // Expor p/ script não-module
+  window.salvarCliente = salvarCliente;
+  window.buscarClienteInfo = buscarClienteInfo;
+  window.buscarUltimoPreco = buscarUltimoPreco;
+  window.registrarPrecoCliente = registrarPrecoCliente;
+  window.updateLastFreteCliente = updateLastFreteCliente;
+
+  window.carregarSugestoesProdutosDoCliente = async function(){
+    await authReady;
+    const nome = document.getElementById("cliente").value.trim().toUpperCase();
+    const listaProdutos = document.getElementById("listaProdutos");
+    if (!listaProdutos) return;
+    const nomes = await produtosDoCliente(nome);
+    listaProdutos.innerHTML = nomes.map(p => `<option value="${p}"></option>`).join("");
+  };
+  window.popularClientesMaisUsados = async function(){
+    await authReady;
+    const lista = await clientesMaisUsados();
+    document.getElementById("listaClientes").innerHTML =
+      lista.map(n => `<option value="${n}"></option>`).join("");
+  };
+  window.savePedidoIdempotente = savePedidoIdempotente;
+</script>
+
+  <!-- App + PDF -->
+  <script>
+    // Versão app (para barra de update do SW)
+    window.__APP_VERSION = '3.2.5';
+
+    // ===============================
+    // (1) LOGIN POR SENHA (OFUSCADO)
+    // ===============================
+    const PASS_SALT = 'SNv1#2025';
+    const PASS_DB = {
+      // Leo: 1210
+      'e6b031cac259253ba3bd6e03c61c9569675481887b4e305e0c937958a60ce3b9': { nome:'Leo', role:'master' },
+      // Serra Nobre: 0003
+      '26ebfd86e6beb9540717aa713360947072c8ddad18524d514e04db38bb68cd72': { nome:'Serra Nobre', role:'user' },
+      // Jayson: 0987
+      '5fc5633d563f6e42641a7c402445dd09360a097bb07806d53b3dafa66551911b': { nome:'Jayson', role:'user' },
+      // Karen: 4321
+      '82d2feda5359f9fdde40e0d981133dd9e794eb017de2b46766405d036d9d070a': { nome:'Karen', role:'user' }
+    };
+
+    async function sha256Hex(str){
+      const enc = new TextEncoder().encode(str);
+      const buf = await crypto.subtle.digest('SHA-256', enc);
+      return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    }
+    async function autenticarOperadorPorSenha(pass){
+      const hash = await sha256Hex(`${PASS_SALT}:${pass}`);
+      return PASS_DB[hash] || null;
+    }
+
+    function setFormEnabled(enabled){
+      const app = document.getElementById('appMain');
+      if (!enabled){ app.classList.add('app-disabled'); }
+      else { app.classList.remove('app-disabled'); }
+    }
+
+    function setUsuario(usuario){
+      window.__usuario = usuario || null; // {nome, role}
+      const chip = document.getElementById('userChip');
+      const login = document.getElementById('loginInline');
+      const btnSair = document.getElementById('btnSair');
+
+      if (usuario){
+        chip.textContent = usuario.nome; // sem "(role)"
+        login.style.display = 'none';
+        btnSair.style.display = '';
+        setFormEnabled(true);
+      } else {
+        chip.textContent = 'Desconectado';
+        login.style.display = '';
+        btnSair.style.display = 'none';
+        setFormEnabled(false);
+      }
+    }
+
+    (function bootstrapUsuario(){
+      try{
+        const raw = localStorage.getItem('sn_usuario_v1');
+        if (raw){
+          const u = JSON.parse(raw);
+          if (u && u.nome) { setUsuario(u); return; }
+        }
+      }catch(_){}
+      setUsuario(null); // força login ao abrir
+    })();
+
+    document.getElementById('btnEntrarOperador').addEventListener('click', async ()=>{
+      const pass = (document.getElementById('senhaOperador').value||'').trim();
+      const u = await autenticarOperadorPorSenha(pass);
+      if(!u){ alert('Senha inválida'); return; }
+      localStorage.setItem('sn_usuario_v1', JSON.stringify(u));
+      setUsuario(u);
+      document.getElementById('senhaOperador').value = '';
+    });
+
+    document.getElementById('btnSair').addEventListener('click', ()=>{
+      localStorage.removeItem('sn_usuario_v1');
+      setUsuario(null);
+    });
+
+    let itens = [{ produto: "", tipo: "KG", quantidade: 0, preco: 0, total: 0, obs: "" }];
+
+    /* Offline banner */
+    function updateOfflineBanner(){
+      const el = document.getElementById('offlineBanner');
+      if (!el) return;
+      el.style.display = navigator.onLine ? 'none' : 'block';
+    }
+    window.addEventListener('online', updateOfflineBanner);
+    window.addEventListener('offline', updateOfflineBanner);
+
+    /* Logo cache */
+    const LOGO_PATH = 'Serra-Nobre_3.png';
+    const LOGO_KEY  = 'logoBase64';
+    function blobToDataURL(blob){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(blob);});}
+    function logoVersionParam(){const d=new Date();return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${d.getDate().toString().padStart(2,'0')}`;}
+    async function fetchRepoLogoAsBase64(){const resp=await fetch(`${LOGO_PATH}?v=${logoVersionParam()}`,{cache:'reload'});if(!resp.ok)throw new Error('Logo não carregou');return blobToDataURL(await resp.blob());}
+    async function ensureRepoLogoCached(){let b64=localStorage.getItem(LOGO_KEY);if(!b64){try{b64=await fetchRepoLogoAsBase64();localStorage.setItem(LOGO_KEY,b64);}catch(_){b64="";}}return b64;}
+    async function getLogoBase64(){return localStorage.getItem(LOGO_KEY) || await ensureRepoLogoCached();}
+    function guessImageFormatFromDataURL(u){return u.startsWith('data:image/jpeg')||u.startsWith('data:image/jpg')?'JPEG':'PNG';}
+
+    // ===== Helpers de formatação/normalização =====
+    function forcarUppercase(el){ if(!el || !el.value) return; el.value = el.value.toUpperCase(); }
+    function digitsOnly(v){ return String(v||"").replace(/\D/g,""); }
+    function maskCNPJ(el){
+      const d = digitsOnly(el.value).slice(0,14);
+      let out = d;
+      if (d.length>2) out = d.slice(0,2)+'.'+d.slice(2);
+      if (d.length>5) out = out.slice(0,6)+'.'+d.slice(5);
+      if (d.length>8) out = out.slice(0,10)+'/'+d.slice(8);
+      if (d.length>12) out = out.slice(0,15)+'-'+d.slice(12);
+      el.value = out;
+    }
+    function normalizeCNPJ(el){ el.value = digitsOnly(el.value).slice(0,14); }
+    function maskCEP(el){
+      const d = digitsOnly(el.value).slice(0,8);
+      el.value = d.length>5 ? d.slice(0,5)+'-'+d.slice(5) : d;
+    }
+    function normalizeCEP(el){ el.value = digitsOnly(el.value).slice(0,8); }
+    function maskTelefone(el){
+      const d = digitsOnly(el.value).slice(0,11);
+      if (d.length<=10){
+        el.value = d.replace(/^(\d{0,2})(\d{0,4})(\d{0,4}).*$/, (_,a,b,c)=> (a?`(${a}`:'')+(a&&a.length===2?`) `:'')+(b||'')+(c?'-'+c:''));
+      } else {
+        el.value = d.replace(/^(\d{2})(\d{5})(\d{0,4}).*$/, "($1) $2-$3");
+      }
+    }
+    function normalizeTelefone(el){ el.value = digitsOnly(el.value).slice(0,11); }
+
+    // ===== Formatação p/ PDF =====
+    function fmtCNPJ(d){ d = String(d||'').replace(/\D/g,'').slice(0,14);
+      return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2}).*$/, "$1.$2.$3/$4-$5"); }
+    function fmtCEP(d){ d = String(d||'').replace(/\D/g,'').slice(0,8);
+      return d.replace(/^(\d{5})(\d{3}).*$/, "$1-$2"); }
+    function fmtTel(d){ d = String(d||'').replace(/\D/g,'').slice(0,11);
+      return (d.length<=10)
+        ? d.replace(/^(\d{2})(\d{4})(\d{0,4}).*$/, "($1) $2-$3")
+        : d.replace(/^(\d{2})(\d{5})(\d{0,4}).*$/, "($1) $2-$3"); }
+
+    // ===== Frete =====
+    function appendPOA(str){
+      const t = String(str||"").trim();
+      if (!t) return t;
+      if (/porto\s*alegre/i.test(t)) return t;
+      const TEM_CIDADE = /,\s*([A-Za-zÀ-ÿ'.\-\s]{2,})(?:\s*-\s*[A-Za-z]{2})?(?:\s*,\s*Brasil)?\s*$/i;
+      if (TEM_CIDADE.test(t)) return t;
+      return `${t}, Porto Alegre - RS`;
+    }
+
+    const ABS_FRETE_BASE = "https://serranobre-iota.vercel.app";
+
+    function debounce(fn, ms){ let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args), ms); }; }
+
+    async function calcularFrete(enderecoTexto, totalItens){
+      if (!navigator.onLine){
+        return { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"(offline)", km:null, min:null, tier:null, _offline:true };
+      }
+      const isentoManual = !!document.getElementById('isentarFrete')?.checked;
+      const payload = { enderecoTexto, totalItens, clienteIsento: isentoManual };
+
+      const ctrl = new AbortController();
+      const timer = setTimeout(()=>ctrl.abort('timeout'), 8000);
+
+      try{
+        const r = await fetch("/api/calcular-entrega", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify(payload),
+          signal: ctrl.signal
+        });
+        clearTimeout(timer);
+        if(!r.ok) throw new Error("HTTP "+r.status);
+        return await r.json();
+      }catch(e1){
+        try{
+          const r2 = await fetch(`${ABS_FRETE_BASE}/api/calcular-entrega`, {
+            method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload)
+          });
+          if(!r2.ok) throw new Error("HTTP "+r2.status);
+          return await r2.json();
+        }catch(e2){
+          return { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"(falha no cálculo)", km:null, min:null, tier:null, _err:true };
+        }
+      }
+    }
+
+    let __frete = null;
+    let __freteSugestao = null;
+    const _atualizarFreteUIDebounced = debounce(_atualizarFreteUI, 350);
+    async function atualizarFreteUI(){ _atualizarFreteUIDebounced(); }
+    async function _atualizarFreteUI(){
+      try{
+        let end = document.getElementById("endereco").value.trim().toUpperCase();
+        if(!end){
+          document.getElementById("freteValor").textContent = (__freteSugestao!=null ? `R$ ${Number(__freteSugestao).toFixed(2)} (último)` : "—");
+          __frete=null; return;
+        }
+        end = appendPOA(end);
+        const subtotal = itens.reduce((s,i)=> s + (Number(i.total)||0), 0);
+        if (__freteSugestao!=null && !document.getElementById('isentarFrete').checked){
+          document.getElementById("freteValor").textContent = `R$ ${Number(__freteSugestao).toFixed(2)} (último)`;
+        }
+        const r = await calcularFrete(end, subtotal);
+        const isManual = !!document.getElementById('isentarFrete')?.checked;
+        const rotuloExtra = isManual ? "(ISENTO manual)" : (r?.labelIsencao || (r?._err?"(falha no cálculo)":""));
+        document.getElementById("freteValor").textContent =
+          r?.valorBase==null ? "—" : `R$ ${Number(r.valorBase||0).toFixed(2)} ${rotuloExtra}`;
+        __frete = r || { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"" };
+      }catch(e){
+        document.getElementById("freteValor").textContent = (__freteSugestao!=null ? `R$ ${Number(__freteSugestao).toFixed(2)} (último)` : "—");
+        __frete = { valorBase:0, valorCobravel:0, isento:false, labelIsencao:"" };
+      }
+    }
+    window.atualizarFreteUI = atualizarFreteUI;
+
+    // >>>>>>>>>>> FUNÇÕES QUE ESTAVAM FALTANDO <<<<<<<<<<
+
+    // 1) Preenche endereço/contatos/isencão ao sair do campo Cliente
+    async function preencherEnderecoEIsencaoCliente(){
+      const nome = (document.getElementById("cliente").value||"").trim().toUpperCase();
+      if (!nome) return;
+      try{
+        const info = await (window.buscarClienteInfo ? window.buscarClienteInfo(nome) : null);
+        if (!info) return;
+
+        const endEl = document.getElementById("endereco");
+        if (endEl && !endEl.value.trim() && info.endereco) endEl.value = String(info.endereco).toUpperCase();
+
+        const cnpjEl = document.getElementById("cnpj");
+        if (cnpjEl && !cnpjEl.value.trim() && info.cnpj) cnpjEl.value = info.cnpj;
+
+        const ieEl = document.getElementById("ie");
+        if (ieEl && !ieEl.value.trim() && info.ie) ieEl.value = String(info.ie).toUpperCase();
+
+        const cepEl = document.getElementById("cep");
+        if (cepEl && !cepEl.value.trim() && info.cep) cepEl.value = info.cep;
+
+        const contatoEl = document.getElementById("contato");
+        if (contatoEl && !contatoEl.value.trim() && info.contato) contatoEl.value = info.contato;
+
+        const chk = document.getElementById("isentarFrete");
+        if (chk) chk.checked = !!info.isentoFrete;
+
+        // Sugestão de frete anterior
+        __freteSugestao = (typeof info.lastFrete === "number" && isFinite(info.lastFrete)) ? info.lastFrete : null;
+
+        await atualizarFreteUI();
+      }catch(_){}
+    }
+    window.preencherEnderecoEIsencaoCliente = preencherEnderecoEIsencaoCliente;
+
+    // 2) Preenche último preço praticado para o item (se o campo estiver vazio)
+    async function preencherUltimoPreco(i){
+      try{
+        const nomeCli = (document.getElementById("cliente").value||"").trim().toUpperCase();
+        if (!nomeCli) return;
+        const prodEl = document.querySelectorAll(".produto")[i];
+        const precoEl = document.querySelectorAll(".preco")[i];
+        if (!prodEl || !precoEl) return;
+
+        const produto = (prodEl.value||"").trim();
+        if (!produto) return;
+
+        const jaTemPreco = parseFloat(precoEl.value);
+        if (isFinite(jaTemPreco) && jaTemPreco>0) return;
+
+        const ult = await (window.buscarUltimoPreco ? window.buscarUltimoPreco(nomeCli, produto) : null);
+        if (ult && isFinite(ult) && (!precoEl.value || Number(precoEl.value) === 0)){
+          precoEl.value = Number(ult).toFixed(2);
+          calcularItem(i);
+        }
+      }catch(_){}
+    }
+    window.preencherUltimoPreco = preencherUltimoPreco;
+
+    // 3) Regras simples para decidir se atualiza cadastro do cliente no salvar
+    function demandaAtualizarCadastroCliente(){
+      const nome = (document.getElementById("cliente").value||"").trim();
+      const end  = (document.getElementById("endereco").value||"").trim();
+      // Atualiza quando tiver nome + algum dado útil (endereço ou flag de isenção alterada)
+      return !!(nome && (end || document.getElementById('isentarFrete')));
+    }
+    // >>>>>>>>>>> FIM DAS FUNÇÕES FALTANTES <<<<<<<<<<
+
+    // Pré-calcula frete SEM debounce para não travar o PDF
+    async function ensureFreteBeforePDF(){
+      try{
+        let end = document.getElementById("endereco").value.trim().toUpperCase();
+        if(!end){
+          __frete = { valorBase:(__freteSugestao||0), valorCobravel:(__freteSugestao||0), isento:false, labelIsencao:(navigator.onLine?"":"(offline)") };
+          document.getElementById("freteValor").textContent =
+            (__freteSugestao!=null ? `R$ ${Number(__freteSugestao).toFixed(2)} (último)` : "—");
+          return;
+        }
+        end = appendPOA(end);
+        const subtotal = itens.reduce((s,i)=> s + (Number(i.total)||0), 0);
+        __frete = await calcularFrete(end, subtotal);
+        const isManual = !!document.getElementById('isentarFrete')?.checked;
+        const rotuloExtra = isManual ? "(ISENTO manual)" : (__frete?.labelIsencao || (__frete?._err?"(falha no cálculo)":""));
+        document.getElementById("freteValor").textContent =
+          __frete?.valorBase==null ? "—" : `R$ ${Number(__frete.valorBase||0).toFixed(2)} ${rotuloExtra}`;
+      }catch(_){
+        __frete = { valorBase:(__freteSugestao||0), valorCobravel:(__freteSugestao||0), isento:false, labelIsencao:(navigator.onLine?"":"(offline)") };
+      }
+    }
+
+    function getClienteExtrasFromForm(){
+      return {
+        cnpj: document.getElementById("cnpj").value,
+        ie: document.getElementById("ie").value,
+        cep: document.getElementById("cep").value,
+        contato: document.getElementById("contato").value
       };
     }
 
-    async function saveEditor(id){
-      const rowData = (window.__rows||[]).find(r=>r.id===id);
-      if(!rowData) return;
-
-      if (!rowData.cupomNumero){
-        return askCupom(async (v)=>{
-          rowData.cupomNumero = v;
-          await persistEditor(id);
-        });
-      }
-      await persistEditor(id);
+    async function onToggleIsencaoManual(){
+      await atualizarFreteUI();
+      const nome = document.getElementById("cliente").value.trim().toUpperCase();
+      if (!nome) return;
+      const end = document.getElementById("endereco").value.trim().toUpperCase();
+      const isento = !!document.getElementById('isentarFrete').checked;
+      try {
+        if (typeof window.salvarCliente === "function")
+          await window.salvarCliente(nome, end, isento, getClienteExtrasFromForm());
+      } catch(_){}
     }
+    window.onToggleIsencaoManual = onToggleIsencaoManual;
 
-    async function persistEditor(id){
-      const rowData = (window.__rows||[]).find(r=>r.id===id);
-      const tbl = document.getElementById(`tbl_${id}`);
-      const tipoSel = document.getElementById(`edit_tipo_${id}`);
-      if(!rowData || !tbl) return;
-
-      const novosItens = [];
-      tbl.querySelectorAll("tbody tr").forEach(tr=>{
-        const ix   = Number(tr.getAttribute("data-ix"));
-        const base = (rowData.itens||[])[ix] || {};
-        const tipo = (tr.querySelector(".i_tipo")?.value || base.tipo || "KG").toUpperCase();
-        const qtd  = parseFloat(tr.querySelector(".i_qtd")?.value  || "0") || 0;
-        const unit = parseFloat(tr.querySelector(".i_unit")?.value || "0") || 0;
-        const tot  = parseFloat(tr.querySelector(".i_total")?.value || (qtd*unit) || "0") || 0;
-        const obs  = (tr.querySelector(".i_obs")?.value || "").toString();
-
-        novosItens.push({
-          produto: base.produto || "",
-          tipo, quantidade:Number(qtd),
-          precoUnit:Number(unit), total:Number(tot),
-          obs
-        });
+    document.addEventListener('DOMContentLoaded', async () => {
+      updateOfflineBanner();
+      await ensureRepoLogoCached();
+      renderItens();
+      document.getElementById('pagamento').addEventListener('change', function(){
+        document.getElementById('pagamentoOutro').style.display = (this.value === 'OUTRO') ? '' : 'none';
       });
-
-      const subtotal = novosItens.reduce((s,i)=> s + Number(i.total||0), 0);
-      const frete    = Number(rowData?.entrega?.valorCobravel || 0);
-      const totalPedido = Number((subtotal + frete).toFixed(2));
-      const novoTipo    = (tipoSel?.value || "ENTREGA").toUpperCase();
-
-      try{
-        await updateDoc(doc(db, "pedidos", id), {
-          itens: novosItens,
-          subtotal: Number(subtotal.toFixed(2)),
-          totalPedido,
-          "entrega.tipo": novoTipo,
-          cupomNumero: rowData.cupomNumero,
-          updatedAt: serverTimestamp()
-        });
-
-        rowData.itens = novosItens;
-        rowData.subtotal = Number(subtotal.toFixed(2));
-        rowData.totalPedido = totalPedido;
-        rowData.entrega = rowData.entrega || {};
-        rowData.entrega.tipo = novoTipo;
-
-        renderRows(window.__rows || []);
-        alert("Pedido atualizado com sucesso.");
-      }catch(e){
-        console.error(e);
-        alert("Falha ao salvar no banco.");
-      }
-    }
-
-    // == Busca ==
-    const FETCH_LIMIT = 2000;
-    async function buscar(){
-      try{
-        const di = $("fDataIni").value;
-        const df = $("fDataFim").value;
-        const hi = $("fHoraIni").value;
-        const hf = $("fHoraFim").value;
-        const cliente = up(($("fCliente").value||"").trim());
-        const tipoSel = up(($("fTipo").value||"").trim());
-        const produtoTerm = up(($("fProduto").value||"").trim());
-
-        let qRef = collection(db, "pedidos");
-        const conds = [];
-        if (di) conds.push(where("dataEntregaISO", ">=", di));
-        if (df) conds.push(where("dataEntregaISO", "<=", df));
-        if (conds.length) qRef = query(qRef, ...conds, orderBy("dataEntregaISO","desc"), limit(FETCH_LIMIT));
-        else              qRef = query(qRef, orderBy("dataEntregaISO","desc"), limit(FETCH_LIMIT));
-
-        let snap = await getDocs(qRef);
-        let list = [];
-        snap.forEach(d => list.push({ id:d.id, ...d.data() }));
-
-        if (!list.length && !di && !df){
-          try{
-            const q2 = query(collection(db,"pedidos"), orderBy("createdAt","desc"), limit(FETCH_LIMIT));
-            const s2 = await getDocs(q2);
-            s2.forEach(d => list.push({ id:d.id, ...d.data() }));
-          }catch(_){}
-        }
-
-        const filtered = list.filter(x=>{
-          if (hi && (x.horaEntrega || "") < hi) return false;
-          if (hf && (x.horaEntrega || "") > hf) return false;
-          if (cliente && !(x.cliente||"").toUpperCase().includes(cliente)) return false;
-          if (tipoSel && ((x.entrega?.tipo||"").toUpperCase() !== tipoSel)) return false;
-          if (produtoTerm){
-            const itensArr = Array.isArray(x.itens) ? x.itens : [];
-            const hit = itensArr.some(it => (it?.produto ? String(it.produto).toUpperCase().includes(produtoTerm) : false));
-            if (!hit) return false;
-          }
-          return true;
-        });
-
-        const out = dedupeRows(filtered);
-
-        window.__rows = out;
-        renderRows(out);
-      }catch(e){
-        console.error("Erro ao buscar:", e);
-        alert("Não foi possível buscar pedidos.");
-      }
-    }
-
-    // == XLSX ==
-    async function exportarXLSX(){
-      const rows = Array.isArray(window.__rows) ? JSON.parse(JSON.stringify(window.__rows)) : [];
-      if (!rows.length){ alert("Faça uma busca primeiro."); return; }
-      const modo = ($("fModo")?.value || "reduzido");
-      const XLSXlib = window.XLSX;
-      if (!XLSXlib){ alert("Biblioteca XLSX não carregou."); return; }
-
-      let aoa = [];
-      if (modo === "reduzido"){
-        aoa = [["Nº Pedido","Cliente","Total (R$)","Data","Hora","Tipo","Pagamento","Nº Cupom"]];
-        for (const r of rows){
-          aoa.push([ shortPedido(r.id), r.cliente||"", Number(r.totalPedido||0).toFixed(2),
-            toBR(r.dataEntregaISO||""), r.horaEntrega||"", (r.entrega?.tipo||""), r.pagamento||"", r.cupomNumero||"" ]);
-        }
-      } else {
-        aoa = [["Data","Hora","Nº Pedido","Cliente","Itens","Total (R$)","Tipo","Pagamento","Nº Cupom","—","Produto","Tipo Item","Qtd","R$ Unit","R$ Total","Obs"]];
-        for (const r of rows){
-          const itens = Array.isArray(r.itens) ? r.itens : [];
-          aoa.push([ toBR(r.dataEntregaISO||""), r.horaEntrega||"", shortPedido(r.id), r.cliente||"", itens.length,
-            (Number(r.totalPedido||0)).toFixed(2), (r.entrega?.tipo||""), r.pagamento||"", r.cupomNumero||"", "" ]);
-          for (const it of itens){
-            const totalItem = Number(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0))));
-            aoa.push(["","","","","","","","","", it.produto||"", it.tipo||"", Number(it.quantidade||0),
-              Number(it.precoUnit||it.preco||0), Number(totalItem||0), (it.obs||"") ]);
-          }
-        }
-      }
-
-      const ws = XLSXlib.utils.aoa_to_sheet(aoa);
-      const wb = XLSXlib.utils.book_new();
-      XLSXlib.utils.book_append_sheet(wb, ws, modo==="reduzido" ? "Relatório" : "Relatório Detalhado");
-
-      const maxCols = Math.max(...aoa.map(r => r.length));
-      ws['!cols'] = Array.from({length:maxCols}, (_,i)=>{
-        const largura = Math.max(...aoa.map(r => (r[i] ? String(r[i]).length : 0))) + 2;
-        return { wch: Math.min(Math.max(largura, 8), 40) };
-      });
-
-      const filename = `relatorio_serranobre_${modo}_${new Date().toISOString().slice(0,10)}.xlsx`;
-      XLSXlib.writeFile(wb, filename, { compression:true });
-    }
-
-    // == PDF ==
-    function exportarPDF(){
-      const rows = window.__rows || [];
-      if (!rows.length){ alert("Faça uma busca primeiro."); return; }
-      const modo = ($("fModo")?.value || "reduzido");
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
-
-      doc.setFont("helvetica","bold"); doc.setFontSize(14);
-      doc.text("Relatório de Pedidos — Serra Nobre", 10, 12);
-      doc.setFontSize(10); doc.setFont("helvetica","normal");
-      const di = $("fDataIni").value, df=$("fDataFim").value;
-      const periodo = (di || df) ? `Período: ${toBR(di)||"..."} a ${toBR(df)||"..."}` : "Período: (todos — mais recentes primeiro)";
-      doc.text(periodo, 10, 18);
-
-      if (modo === "reduzido"){
-        const headers = ["Nº Pedido","Cliente","Total (R$)","Data","Hora","Tipo","Pagto.","Nº Cupom"];
-        const colX = [10, 35, 145, 185, 205, 225, 250, 270];
-        let y = 26;
-        doc.setFont("helvetica","bold");
-        headers.forEach((h,i)=>doc.text(h, colX[i], y));
-        doc.setLineWidth(0.2); doc.line(10, y+2, 285, y+2);
-        doc.setFont("helvetica","normal");
-        y += 6;
-        const addHeader = ()=>{
-          doc.setFont("helvetica","bold"); doc.setFontSize(10);
-          headers.forEach((h,i)=>doc.text(h, colX[i], 12));
-          doc.line(10, 14, 285, 14);
-          doc.setFont("helvetica","normal"); y = 20;
-        };
-        for (const r of rows){
-          if (y > 190){ doc.addPage("a4","landscape"); addHeader(); }
-          const clienteBreak = doc.splitTextToSize(String(r.cliente||""), colX[2]-colX[1]-2);
-          doc.text(shortPedido(r.id), colX[0], y);
-          doc.text(clienteBreak, colX[1], y);
-          doc.text(Number(r.totalPedido||0).toFixed(2), colX[2], y);
-          doc.text(toBR(r.dataEntregaISO||""), colX[3], y);
-          doc.text(r.horaEntrega||"", colX[4], y);
-          doc.text((r.entrega?.tipo||""), colX[5], y);
-          doc.text(r.pagamento||"", colX[6], y);
-          doc.text(String(r.cupomNumero||""), colX[7], y);
-          y += Math.max(7, clienteBreak.length*5);
-          doc.setDrawColor(230); doc.line(10, y-2, 285, y-2); doc.setDrawColor(0);
-        }
-        doc.setFont("helvetica","bold");
-        doc.text(`Total de pedidos: ${rows.length}`, 10, y+8);
-        doc.text(`Soma (R$): ${Number(rows.reduce((s,r)=>s+Number(r.totalPedido||0),0)).toFixed(2)}`, 80, y+8);
-      } else {
-        const headers = ["Data","Hora","Nº Pedido","Cliente","Itens","Total (R$)","Tipo","Pagto.","Cupom"];
-        const colX = [10, 30, 50, 75, 165, 185, 210, 235, 260];
-        let y = 26;
-        doc.setFont("helvetica","bold");
-        headers.forEach((h,i)=>doc.text(h, colX[i], y));
-        doc.setLineWidth(0.2); doc.line(10, y+2, 285, y+2);
-        doc.setFont("helvetica","normal");
-        y += 6;
-        const addHeader = ()=>{
-          doc.setFont("helvetica","bold"); doc.setFontSize(10);
-          headers.forEach((h,i)=>doc.text(h, colX[i], 12));
-          doc.line(10, 14, 285, 14);
-          doc.setFont("helvetica","normal"); y = 20;
-        };
-        for (const r of rows){
-          if (y > 190){ doc.addPage("a4","landscape"); addHeader(); }
-          const itens = Array.isArray(r.itens) ? r.itens : [];
-
-          doc.text(toBR(r.dataEntregaISO||""), colX[0], y);
-          doc.text(r.horaEntrega||"", colX[1], y);
-          doc.text(shortPedido(r.id), colX[2], y);
-          const clienteBreak = doc.splitTextToSize(String(r.cliente||""), colX[4]-colX[3]-2);
-          doc.text(clienteBreak, colX[3], y);
-          doc.text(String(itens.length), colX[4], y);
-          doc.text(Number(r.totalPedido||0).toFixed(2), colX[5], y);
-          doc.text((r.entrega?.tipo||""), colX[6], y);
-          doc.text(r.pagamento||"", colX[7], y);
-          doc.text(String(r.cupomNumero||""), colX[8], y);
-
-          y += Math.max(7, clienteBreak.length*5);
-          doc.setDrawColor(230); doc.line(10, y-2, 285, y-2); doc.setDrawColor(0);
-
-          if (itens.length){
-            const startX = 75;
-            const wCols = [90, 25, 25, 25, 25, 40]; // + Obs
-            doc.setFont("helvetica","bold"); doc.setFontSize(9);
-            const hdr = ["Produto","Tipo","Qtd/Peso","R$ Unit","R$ Total","Obs"];
-            let yy = y+2; let xx = startX;
-            for (let i=0;i<hdr.length;i++){ doc.text(hdr[i], xx+2, yy); xx += wCols[i]; }
-            yy += 4; doc.setFont("helvetica","normal");
-
-            for (const it of itens){
-              const linha = [
-                (it.produto||""), (it.tipo||""), String(Number(it.quantidade||0)),
-                money(it.precoUnit ?? it.preco),
-                money(it.total ?? ((Number(it.quantidade)||0)*(Number(it.precoUnit||it.preco||0)))),
-                String(it.obs||"")
-              ];
-              xx = startX;
-              const wrapProd = doc.splitTextToSize(linha[0], wCols[0]-4);
-              const wrapObs  = doc.splitTextToSize(linha[5], wCols[5]-4);
-              const linesH = Math.max(5, Math.max(wrapProd.length, wrapObs.length)*5);
-              doc.text(wrapProd, xx+2, yy); xx += wCols[0];
-              doc.text(linha[1], xx+2, yy); xx += wCols[1];
-              doc.text(linha[2], xx+2, yy); xx += wCols[2];
-              doc.text(linha[3], xx+2, yy); xx += wCols[3];
-              doc.text(linha[4], xx+2, yy); xx += wCols[4];
-              doc.text(wrapObs,  xx+2, yy);
-              yy += linesH;
-            }
-            y = yy + 2;
-            doc.setDrawColor(230); doc.line(10, y-2, 285, y-2); doc.setDrawColor(0);
-          }
-        }
-        doc.setFont("helvetica","bold");
-        doc.text(`Total de pedidos: ${rows.length}`, 10, y+8);
-        doc.text(`Soma (R$): ${Number(rows.reduce((s,r)=>s+Number(r.totalPedido||0),0)).toFixed(2)}`, 80, y+8);
-      }
-
-      doc.save(`relatorio_serranobre_${new Date().toISOString().slice(0,10)}.pdf`);
-    }
-
-    // == eventos ==
-    $("btnBuscar").onclick = buscar;
-    $("btnLimpar").onclick = ()=>{
-      ["fDataIni","fDataFim","fHoraIni","fHoraFim","fCliente","fProduto"].forEach(id=>$(id).value="");
-      $("fTipo").value = "";
-      $("tbody").innerHTML = "";
-      $("ftCount").textContent = "0 pedidos";
-      $("ftTotal").textContent = "R$ 0,00";
-      window.__rows = [];
-      ["btnXLSX","btnPDF"].forEach(id=>$(id).disabled=true);
-    };
-    $("btnXLSX").onclick = exportarXLSX;
-    $("btnPDF").onclick  = exportarPDF;
-
-    /* AJUSTE #3: Enter nos filtros = Buscar */
-    ["fDataIni","fDataFim","fHoraIni","fHoraFim","fCliente","fProduto"].forEach(id=>{
-      const el = document.getElementById(id);
-      el.addEventListener("keydown", e=>{ if(e.key==="Enter") $("btnBuscar").click(); });
     });
 
-    // == start ==
-    await ensureAnonAuth();
-    ["btnBuscar","btnLimpar","btnXLSX","btnPDF"].forEach(id=>$(id).disabled=false);
+    // ===== Itens =====
+    function criarSelectProduto(i){
+      return `<input list="listaProdutos" class="produto" data-index="${i}"
+               placeholder="Digite ou selecione"
+               value="${itens[i].produto || ''}"
+               onblur="preencherUltimoPreco(${i}); atualizarFreteUI();"/>`;
+    }
+    function criarTipoSelect(i){
+      return `<select class="tipo-select" data-index="${i}" onchange="atualizarTipo(${i}, this.value)">
+        <option value="KG" ${itens[i].tipo === 'KG' ? 'selected' : ''}>KG</option>
+        <option value="UN" ${itens[i].tipo === 'UN' ? 'selected' : ''}>UN</option>
+      </select>`;
+    }
 
-    // Modal (escape e clique fora)
-    (function initCupomModal(){
-      const bd = $("cupomBackdrop");
-      bd.addEventListener("click", (e)=>{ if (e.target===bd) bd.style.display="none"; });
-      document.addEventListener("keydown",(e)=>{ if (bd.style.display==="flex" && e.key==="Escape") bd.style.display="none"; });
-    })();
-  </script>
+    function renderItens(){
+      salvarCamposAntesRender();
+      const container = document.getElementById("itens");
+      container.innerHTML = "";
+      itens.forEach((item, i) => {
+        container.innerHTML += `
+        <div class="item">
+          <label>Produto:</label>
+          ${criarSelectProduto(i)}
+          <label>Tipo:</label>
+          ${criarTipoSelect(i)}
+          <label>Quantidade:</label>
+          <input type="number" step="0.01" class="quantidade" data-index="${i}" value="${item.quantidade || ''}" oninput="calcularItem(${i}); atualizarFreteUI();"/>
+          <label>Preço Unitário:</label>
+          <input type="number" step="0.01" class="preco" data-index="${i}" value="${item.preco || ''}" oninput="calcularItem(${i}); atualizarFreteUI();"/>
+          <div class="peso-info" id="pesoInfo_${i}"></div>
+          <label>Observação do item:</label>
+          <textarea class="obsItem" data-index="${i}" oninput="salvarCamposAntesRender()">${item.obs || ''}</textarea>
+          <p class="total">Total do Item: R$ <span id="totalItem_${i}">${Number(item.total || 0).toFixed(2)}</span></p>
+          <button class="remove" onclick="removerItem(${i}); atualizarFreteUI();">Remover Item</button>
+        </div>`;
+      });
+      if (!document.getElementById("listaProdutos")) {
+        const dl = document.createElement("datalist"); dl.id = "listaProdutos"; document.body.appendChild(dl);
+      }
+    }
 
-  <!-- SW: atualização rápida -->
-  <script>
+    function atualizarTipo(i,v){ itens[i].tipo=v; calcularItem(i); }
+    function salvarCamposAntesRender(){
+      document.querySelectorAll(".item").forEach((el, idx) => {
+        if (typeof itens[idx] === "undefined") return;
+        const prod  = el.querySelector(".produto")?.value || "";
+        const tipo  = el.querySelector(".tipo-select")?.value || "KG";
+        const qtd   = el.querySelector(".quantidade")?.value || 0;
+        const preco = el.querySelector(".preco")?.value || 0;
+        const obs   = el.querySelector(".obsItem")?.value || "";
+        const { total, pesoTotalKg } = calcTotalComPesoSeAplicavel({produto:prod, tipo, quantidade:qtd, preco});
+        itens[idx] = {
+          produto: prod, tipo: tipo,
+          quantidade: parseFloat(qtd) || 0,
+          preco: parseFloat(preco) || 0,
+          obs: obs,
+          total: Number(total || 0),
+          _pesoTotalKg: pesoTotalKg || 0
+        };
+      });
+      window.itens = itens;
+    }
+
+    function adicionarItem(){ salvarCamposAntesRender(); itens.push({ produto:"", tipo:"KG", quantidade:0, preco:0, total:0, obs:"" }); renderItens(); }
+    function removerItem(i){ salvarCamposAntesRender(); itens.splice(i,1); if(!itens.length) itens.push({ produto:"", tipo:"KG", quantidade:0, preco:0, total:0, obs:"" }); renderItens(); }
+
+    function parsePesoFromProduto(nome){
+      const s = String(nome||"").toLowerCase().replace(',', '.');
+      const re = /(\d+(?:\.\d+)?)[\s]*(kg|quilo|quilos|g|gr|grama|gramas)\b/g;
+      let m, last=null;
+      while ((m = re.exec(s)) !== null) last = m;
+      if(!last) return null;
+      const val = parseFloat(last[1]);
+      const unit = last[2];
+      if(!isFinite(val) || val<=0) return null;
+      if (unit === 'kg' || unit.startsWith('quilo')) return val;
+      return val / 1000;
+    }
+
+    function calcTotalComPesoSeAplicavel({produto, tipo, quantidade, preco}){
+      const q = parseFloat(quantidade)||0;
+      const p = parseFloat(preco)||0;
+      if (tipo === 'UN'){
+        const kgUn = parsePesoFromProduto(produto);
+        if (kgUn){
+          const pesoTotalKg = q * kgUn;
+          const total = pesoTotalKg * p;
+          return { total, pesoTotalKg };
+        }
+      }
+      return { total: (q*p), pesoTotalKg: 0 };
+    }
+
+    function calcularItem(i){
+      const prod = document.querySelectorAll(".produto")[i]?.value || "";
+      const tipo = document.querySelectorAll(".tipo-select")[i]?.value || "KG";
+      const q = document.querySelectorAll(".quantidade")[i]?.value || 0;
+      const p = document.querySelectorAll(".preco")[i]?.value || 0;
+
+      const { total, pesoTotalKg } = calcTotalComPesoSeAplicavel({produto:prod, tipo, quantidade:q, preco:p});
+      itens[i].produto = prod;
+      itens[i].quantidade = parseFloat(q)||0;
+      itens[i].preco = parseFloat(p)||0;
+      itens[i].tipo = tipo;
+      itens[i].total = Number(total||0);
+      itens[i]._pesoTotalKg = pesoTotalKg||0;
+
+      const tgt = document.getElementById(`totalItem_${i}`);
+      if(tgt) tgt.innerText = itens[i].total ? itens[i].total.toFixed(2) : "—";
+
+      const pi = document.getElementById(`pesoInfo_${i}`);
+      if (pi){
+        if (tipo==='UN' && (pesoTotalKg||0)>0){
+          pi.textContent = `Peso total estimado: ${pesoTotalKg.toFixed(3)} kg (preço por kg)`;
+        } else {
+          pi.textContent = "";
+        }
+      }
+    }
+
+    function camposObrigatoriosPreenchidos(){
+      return document.getElementById("cliente").value.trim()
+          && document.getElementById("endereco").value.trim()
+          && document.getElementById("entrega").value
+          && document.getElementById("horaEntrega").value
+          && itens.some(i=> (i.quantidade>0) && (i.preco>0));
+    }
+
+    // ===== Helpers PDF =====
+    function formatarData(s){ if(!s) return ""; const [a,m,d]=s.split("-"); return `${d}/${m}/${a.slice(-2)}`; }
+    function diaDaSemanaExtenso(s){ if(!s) return ""; const d=new Date(s+"T00:00:00"); return d.toLocaleDateString('pt-BR',{weekday:'long'}).toUpperCase(); }
+    function splitToWidth(doc,t,w){ return doc.splitTextToSize(t||"", w); }
+
+    // Caixa de chave/valor (rótulo à esquerda, valor após 1 espaço), com padding
+    function drawKeyValueBox(doc, x, y, w, label, value, opts={}){
+      const { rowH=10, pad=3, titleSize=7, valueSize=9 } = opts;
+      doc.setDrawColor(0); doc.setLineWidth(0.2);
+      doc.rect(x, y, w, rowH, "S");
+      const yBase = y + rowH/2 + 0.5;
+      doc.setFont("helvetica","bold"); doc.setFontSize(titleSize);
+      const ltxt = (label||"").toUpperCase() + ": ";
+      const lW = doc.getTextWidth(ltxt);
+      doc.text(ltxt, x+pad, yBase);
+      doc.setFont("helvetica","normal"); doc.setFontSize(valueSize);
+      doc.text(String(value||"").toUpperCase(), x+pad+lW, yBase);
+      return rowH;
+    }
+
+    async function montarPDF(querSalvarNoBanco){
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:[72,297] });
+
+      const margemX=2, larguraCaixa=68;
+      const W_PROD=23.5, W_QDE=13, W_UNIT=13, W_TOTAL=18.5;
+      const SAFE_BOTTOM = 287;
+      let y=10;
+
+      try{
+        const b64=await getLogoBase64();
+        if(b64){
+          doc.addImage(b64, guessImageFormatFromDataURL(b64), 20, y, 32, 12, '', 'FAST');
+          if (window.__usuario?.nome){
+            doc.setFont("helvetica","normal"); doc.setFontSize(8);
+            doc.text(String(window.__usuario.nome).toUpperCase(), 2, y+3);
+          }
+          y+=14;
+        } else { y+=2; }
+      }catch(_){ y+=2; }
+
+      function ensureSpace(h){
+        if (y + h > SAFE_BOTTOM){
+          doc.addPage([72,297],"portrait");
+          y = 10;
+        }
+      }
+
+      // CLIENTE
+      ensureSpace(14);
+      y += (function(){
+        return drawKeyValueBox(
+          doc, margemX, y, larguraCaixa,
+          "CLIENTE",
+          (document.getElementById("cliente").value||""),
+          { rowH:12, titleSize:8, valueSize:8 }
+        );
+      })() + 1;
+
+      // CNPJ e I.E. em DUAS CAIXAS separadas com 1 mm de gap
+      const gap1 = 1;
+      const boxW = (larguraCaixa - gap1)/2;
+      const vCNPJ = fmtCNPJ(document.getElementById("cnpj").value);
+      const vIE   = (document.getElementById("ie").value||"").toUpperCase();
+      ensureSpace(10);
+      drawKeyValueBox(doc, margemX, y, boxW, "CNPJ", vCNPJ, {rowH:10, titleSize:7, valueSize:9});
+      drawKeyValueBox(doc, margemX + boxW + gap1, y, boxW, "I.E.", vIE, {rowH:10, titleSize:7, valueSize:9});
+      y += 11;
+
+      // ENDEREÇO
+      ensureSpace(14);
+      y += (function(){
+        const lines = splitToWidth(doc, (document.getElementById("endereco").value||"").toUpperCase(), larguraCaixa-2);
+        const rowH = Math.max(10, 3*2 + lines.length*5 + 4);
+        doc.setDrawColor(0); doc.setLineWidth(0.2);
+        doc.rect(margemX, y, larguraCaixa, rowH, "S");
+        doc.setFont("helvetica","bold"); doc.setFontSize(8);
+        doc.text("ENDEREÇO", margemX+3, y+5);
+        doc.setFont("helvetica","normal"); doc.setFontSize(8);
+        const base = y + 9;
+        lines.forEach((ln,i)=> doc.text(ln, margemX+3, base + i*5));
+        return rowH;
+      })() + 1;
+
+      // CONTATO e CEP em DUAS CAIXAS separadas com 1 mm de gap
+      const vTel = fmtTel(document.getElementById("contato").value);
+      const vCEP = fmtCEP(document.getElementById("cep").value);
+      ensureSpace(10);
+      drawKeyValueBox(doc, margemX, y, boxW, "CONTATO", vTel, {rowH:10, titleSize:7, valueSize:9});
+      drawKeyValueBox(doc, margemX + boxW + gap1, y, boxW, "CEP", vCEP, {rowH:10, titleSize:7, valueSize:9});
+      y += 11;
+
+      // DIA / DATA / HORA
+      const diaSemana = diaDaSemanaExtenso(document.getElementById("entrega").value);
+      ensureSpace(12);
+      doc.rect(margemX,y,larguraCaixa,10,"S");
+      doc.setFont("helvetica","bold"); doc.setFontSize(9);
+      doc.text("DIA DA SEMANA:", margemX+3, y+6);
+      doc.text(diaSemana, margemX+larguraCaixa/2+12, y+6, {align:"center"});
+      y+=11;
+
+      doc.setFont("helvetica","bold"); doc.setFontSize(7);
+      const halfW = (larguraCaixa - 1)/2;
+      doc.rect(margemX,y,halfW,10,"S");
+      doc.rect(margemX+halfW+1,y,halfW,10,"S");
+      doc.text("DATA ENTREGA", margemX+halfW/2, y+4, {align:"center"});
+      doc.text("HORÁRIO ENTREGA", margemX+halfW+1+halfW/2, y+4, {align:"center"});
+      doc.setFont("helvetica","normal"); doc.setFontSize(9);
+      doc.text(formatarData(document.getElementById("entrega").value), margemX+halfW/2, y+8, {align:"center"});
+      doc.text(document.getElementById("horaEntrega").value, margemX+halfW+1+halfW/2, y+8, {align:"center"});
+      y+=12;
+
+      // ======= TABELA DE ITENS =======
+      ensureSpace(14);
+      doc.setFont("helvetica","bold"); doc.setFontSize(7);
+      doc.rect(margemX,y,W_PROD,10,"S");
+      doc.rect(margemX+W_PROD,y,W_QDE,10,"S");
+      doc.rect(margemX+W_PROD+W_QDE,y,W_UNIT,10,"S");
+      doc.rect(margemX+W_PROD+W_QDE+W_UNIT,y,W_TOTAL,10,"S");
+      doc.text("PRODUTO", margemX+W_PROD/2, y+6, {align:"center"});
+      doc.text("QDE", margemX+W_PROD+W_QDE/2, y+6, {align:"center"});
+      doc.text("R$ UNIT.", margemX+W_PROD+W_QDE+W_UNIT/2, y+6, {align:"center"});
+      const valorX=margemX+W_PROD+W_QDE+W_UNIT+W_TOTAL/2;
+      doc.text("VALOR", valorX, y+4, {align:"center"});
+      doc.text("PRODUTO", valorX, y+8.5, {align:"center"});
+      y+=12;
+
+      let subtotal = 0;
+      doc.setFont("helvetica","normal"); doc.setFontSize(9);
+
+      for (let i=0;i<itens.length;i++){
+        const it = itens[i];
+        const prod = it.produto || "";
+               const qtdStr  = (it.quantidade || 0).toString();
+        const tipo = it.tipo || "KG";
+        const precoNum = parseFloat(it.preco) || 0;
+
+        const kgUn = (tipo==='UN') ? parsePesoFromProduto(prod) : null;
+        const pesoTotalKg = (kgUn ? (it.quantidade||0)*kgUn : 0);
+        const totalNum = kgUn ? pesoTotalKg * precoNum : (it.quantidade||0) * precoNum;
+
+        const prodLines = splitToWidth(doc, prod, W_PROD-2).slice(0,3);
+        const rowH = Math.max(14, 6 + prodLines.length*5);
+
+        ensureSpace(rowH + (kgUn?6:0));
+
+        doc.rect(margemX,y,W_PROD,rowH,"S");
+        doc.rect(margemX+W_PROD,y,W_QDE,rowH,"S");
+        doc.rect(margemX+W_PROD+W_QDE,y,W_UNIT,rowH,"S");
+        doc.rect(margemX+W_PROD+W_QDE+W_UNIT,y,W_TOTAL,rowH,"S");
+
+        const center = (cx, lines)=> {
+          const block=(lines.length-1)*5; const base=y+(rowH - block)/2;
+          lines.forEach((ln,k)=>doc.text(ln, cx, base + k*5, {align:"center"}));
+        }
+        center(margemX+W_PROD/2, prodLines);
+        center(margemX+W_PROD+W_QDE/2, qtdStr ? [qtdStr, tipo] : [""]);
+        if (kgUn){
+          center(margemX+W_PROD+W_QDE+W_UNIT/2, precoNum ? ["R$/KG", precoNum.toFixed(2).replace(".", ",")] : ["—"]);
+        } else {
+          center(margemX+W_PROD+W_QDE+W_UNIT/2, precoNum ? ["R$", precoNum.toFixed(2).replace(".", ",")] : ["—"]);
+        }
+        center(margemX+W_PROD+W_QDE+W_UNIT+W_TOTAL/2, (precoNum && (it.quantidade||0)) ? ["R$", totalNum.toFixed(2).replace(".", ",")] : ["—"]);
+
+        y += rowH;
+
+        if (kgUn){
+          doc.setFontSize(7); doc.setFont("helvetica","italic");
+          doc.text(`(*) Peso total: ${pesoTotalKg.toFixed(3)} kg`, margemX+3, y+4);
+          doc.setFont("helvetica","normal"); doc.setFontSize(9);
+          y += 4;
+        }
+
+        const obs = (it.obs || "").trim();
+        if (obs){
+          const corpoLines = splitToWidth(doc, obs.toUpperCase(), larguraCaixa-6);
+          const obsH = 9 + corpoLines.length*5;
+          ensureSpace(obsH);
+          doc.rect(margemX,y,larguraCaixa,obsH,"S");
+          doc.setFont("helvetica","bold"); doc.setFontSize(9);
+          const titulo="OBSERVAÇÕES:"; const tx=margemX+3, ty=y+6;
+          doc.text(titulo, tx, ty);
+          doc.line(tx, ty+0.8, tx+doc.getTextWidth(titulo), ty+0.8);
+          doc.setFont("helvetica","normal");
+          let baseY=y+12; corpoLines.forEach((ln,ix)=>doc.text(ln, margemX+3, baseY+ix*5));
+          y += obsH;
+        }
+
+        subtotal += totalNum;
+        if (i < itens.length - 1) y += 2;
+      }
+
+      // ===== SOMA PRODUTOS (2/3 da página) =====
+      const w2tercos = Math.round(larguraCaixa * (2/3));
+      ensureSpace(11);
+      drawKeyValueBox(
+        doc, margemX, y, w2tercos,
+        "SOMA PRODUTOS",
+        "R$ " + subtotal.toFixed(2),
+        { rowH:10, titleSize:7, valueSize:9 }
+      );
+      y += 11;
+
+      // ===== ENTREGA/RETIRADA (2/3) + FRETE (1/3) com GAP de 2 mm =====
+      const gap2 = 2;
+      const entregaW = Math.round(larguraCaixa * (2/3));
+      const freteW   = larguraCaixa - entregaW - gap2;
+      ensureSpace(12);
+      doc.setLineWidth(1.1);
+
+      // ENTREGA/RETIRADA
+      doc.rect(margemX, y, entregaW, 10, "S");
+      doc.setFont("helvetica","bold"); doc.setFontSize(10);
+      const tipoEntrega=document.querySelector('input[name="tipoEntrega"]:checked').value;
+      doc.text(tipoEntrega, margemX + entregaW/2, y+6.5, {align:"center"});
+
+      // FRETE (com 2mm de espaço à esquerda)
+      const freteX = margemX + entregaW + gap2;
+      doc.rect(freteX, y, freteW, 10, "S");
+      doc.text("FRETE", freteX + freteW/2, y+4, {align:"center"});
+      doc.setFont("helvetica","normal"); doc.setFontSize(9);
+      const fretePreview = (()=>{
+        const f = __frete || {valorBase:0,isento:false};
+        const isIsentoManual = !!document.getElementById('isentarFrete')?.checked;
+        return (isIsentoManual || f.isento) ? "ISENTO" : ("R$ " + Number(f.valorBase||0).toFixed(2));
+      })();
+      doc.text(fretePreview, freteX + freteW/2, y+8.2, {align:"center"});
+      doc.setLineWidth(0.2);
+      y+=12;
+
+      // ===== TOTAL DO PEDIDO (uma linha) =====
+      const isentoMan = !!document.getElementById('isentarFrete')?.checked;
+      const frete = __frete || { valorBase:0, valorCobravel:0, isento:false };
+      const freteCobravelParaTotal = isentoMan ? 0 : Number(frete.valorCobravel||0);
+      const totalGeral = subtotal + freteCobravelParaTotal;
+
+      ensureSpace(11);
+      const rowHtotal = 10;
+      doc.rect(margemX, y, larguraCaixa, rowHtotal, "S");
+      doc.setFont("helvetica","bold"); doc.setFontSize(9);
+      // label à esquerda, valor à direita
+      doc.text("TOTAL DO PEDIDO:", margemX+3, y + rowHtotal/2 + 0.5);
+      doc.text("R$ " + totalGeral.toFixed(2), margemX + larguraCaixa - 3, y + rowHtotal/2 + 0.5, {align:"right"});
+      y += rowHtotal + 2;
+
+      const obsG=(document.getElementById("obsGeral").value||"").trim();
+      if (obsG){
+        const corpoLines=splitToWidth(doc, obsG.toUpperCase(), larguraCaixa-6);
+        const h=9+corpoLines.length*5;
+        ensureSpace(h+2);
+        doc.rect(margemX,y,larguraCaixa,h,"S");
+        doc.setFont("helvetica","bold"); doc.setFontSize(9);
+        const titulo="OBSERVAÇÃO DO PEDIDO:"; const tx=margemX+3, ty=y+6;
+        doc.text(titulo, tx, ty); doc.line(tx, ty+0.8, tx+doc.getTextWidth(titulo), ty+0.8);
+        doc.setFont("helvetica","normal");
+        let baseY=y+12; corpoLines.forEach((ln,ix)=>doc.text(ln, margemX+3, baseY+ix*5));
+        y += h + 3;
+      }
+
+      // Persistências só quando online e quando salvar/compartilhar
+      if (querSalvarNoBanco && navigator.onLine){
+        try{
+          if (demandaAtualizarCadastroCliente() && typeof window.salvarCliente === "function") {
+            await window.salvarCliente(
+              document.getElementById("cliente").value.trim().toUpperCase(),
+              document.getElementById("endereco").value.trim().toUpperCase(),
+              !!document.getElementById('isentarFrete')?.checked,
+              getClienteExtrasFromForm()
+            );
+          }
+          const nomeCli=document.getElementById("cliente").value.trim().toUpperCase();
+          if (typeof window.registrarPrecoCliente === "function") {
+            await Promise.all(
+              itens.filter(i=> (i?.produto||"").trim() && !isNaN(parseFloat(i?.preco)))
+                  .map(i=> window.registrarPrecoCliente(nomeCli, String(i.produto).trim(), parseFloat(i.preco)))
+            );
+          }
+        }catch(e){ console.error(e); }
+      }
+
+      // ===== Payload do pedido (salvamento) =====
+      const cliente   = document.getElementById("cliente").value.trim().toUpperCase();
+      const pagamento = document.getElementById("pagamento").value;
+      const endereco  = document.getElementById("endereco").value.trim().toUpperCase();
+      const entregaISO= document.getElementById("entrega").value;
+      const hora      = document.getElementById("horaEntrega").value;
+      const tipoEnt   = document.querySelector('input[name="tipoEntrega"]:checked').value;
+
+      const clienteFiscal = {
+        cnpj: digitsOnly(document.getElementById("cnpj").value),
+        ie: (document.getElementById("ie").value||"").toUpperCase(),
+        cep: digitsOnly(document.getElementById("cep").value),
+        contato: digitsOnly(document.getElementById("contato").value)
+      };
+
+      const subtotalPayload = Number(itens.reduce((s,i)=> s + Number(i.total||0), 0).toFixed(2));
+      const freteCobravel = isentoMan ? 0 : Number(__frete?.valorCobravel || 0);
+      const totalPedidoPayload = Number((subtotalPayload + freteCobravel).toFixed(2));
+
+      const payload = {
+        cliente,
+        pagamento,
+        itens: itens.map(i=>({ produto:i.produto, tipo:i.tipo, quantidade:i.quantidade, precoUnit:i.preco, total:i.total, obs:i.obs||"" })),
+        subtotal: subtotalPayload,
+        totalPedido: totalPedidoPayload,
+        entrega: {
+          tipo: tipoEnt,
+          endereco,
+          km: __frete?.km ?? null,
+          min: __frete?.min ?? null,
+          valorBase: __frete?.valorBase ?? 0,
+          valorCobravel: freteCobravel,
+          isento: !!__frete?.isento || isentoMan,
+          isentoManual: isentoMan,
+          status: "PENDENTE",
+          tier: __frete?.tier || null,
+          labelIsencao: isentoMan ? "(ISENTO manual)" : (__frete?.labelIsencao || "")
+        },
+        dataEntregaISO: entregaISO,
+        horaEntrega: hora,
+        anoMes: entregaISO ? entregaISO.slice(0,7) : "",
+        status: "ABERTO",
+        vendedor: (window.__usuario?.nome || "Operador"),
+        obsGeral: (document.getElementById("obsGeral").value||"").toUpperCase(),
+        clienteFiscal
+      };
+
+      if (querSalvarNoBanco && navigator.onLine && typeof window.savePedidoIdempotente === "function"){
+        try{
+          await window.savePedidoIdempotente(payload);
+          const lastFreteToSave = payload.entrega.isento ? 0 : Number(payload.entrega.valorCobravel||0);
+          if (typeof window.updateLastFreteCliente === "function"){
+            await window.updateLastFreteCliente(payload.cliente, lastFreteToSave);
+          }
+        }catch(e){ console.warn("savePedido falhou:", e); }
+      }
+
+      const nomeCliente=cliente;
+      const [ano,mes,dia]=(entregaISO||"").split("-");
+      const nomeArquivo=`Pedido_${nomeCliente.replace(/\s+/g,'_').replace(/[^A-Z0-9_]/g,'')}_${dia||'DD'}-${mes||'MM'}-${ano||'AAAA'}.pdf`;
+
+      return { doc, nomeArquivo };
+    }
+
+    // ===== Ações com trava + fallback de abertura =====
+    async function abrirPDFComFallback(doc, nomeArquivo, baixarSeBloquear=false){
+      try{
+        const url = doc.output('bloburl');
+        const win = window.open(url, '_blank');
+        if (win) return;
+        const blob = await doc.output('blob');
+        const a = document.createElement('a');
+        const objURL = URL.createObjectURL(blob);
+        a.href = objURL; a.download = nomeArquivo || 'pedido.pdf';
+        if (baixarSeBloquear){
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(()=>URL.revokeObjectURL(objURL), 20000);
+          return;
+        }
+        doc.save(nomeArquivo || 'pedido.pdf');
+      }catch(_){
+        doc.save(nomeArquivo || 'pedido.pdf');
+      }
+    }
+
+    async function gerarPDF(apenasSalvar=false){
+      if (!window.__usuario){ alert("Faça login para continuar."); return; }
+      if (window.__busy) return;
+      window.__busy = true;
+      try{
+        if (!camposObrigatoriosPreenchidos()) { alert("Preencha Cliente, Endereço, Data, Horário e ao menos 1 item com quantidade e preço."); return; }
+        forcarUppercase(document.getElementById("cliente"));
+        forcarUppercase(document.getElementById("endereco"));
+        forcarUppercase(document.getElementById("ie"));
+        normalizeCNPJ(document.getElementById("cnpj"));
+        normalizeCEP(document.getElementById("cep"));
+        normalizeTelefone(document.getElementById("contato"));
+
+        salvarCamposAntesRender();
+        await ensureFreteBeforePDF();
+
+        const { doc, nomeArquivo } = await montarPDF(/*querSalvarNoBanco*/apenasSalvar);
+        if (apenasSalvar){
+          doc.save(nomeArquivo);
+        } else {
+          await abrirPDFComFallback(doc, nomeArquivo, /*baixarSeBloquear*/true);
+        }
+      } finally {
+        window.__busy = false;
+      }
+    }
+    window.gerarPDF = gerarPDF;
+
+    async function compartilharPDF(){
+      if (!window.__usuario){ alert("Faça login para continuar."); return; }
+      if (window.__busy) return;
+      window.__busy = true;
+      try{
+        if (!camposObrigatoriosPreenchidos()) { alert("Preencha Cliente, Endereço, Data, Horário e ao menos 1 item com quantidade e preço."); return; }
+        salvarCamposAntesRender();
+        await ensureFreteBeforePDF();
+
+        const { doc, nomeArquivo } = await montarPDF(/*querSalvarNoBanco*/navigator.onLine);
+        const blob = await doc.output("blob");
+        if (navigator.canShare && window.File){
+          const file = new File([blob], nomeArquivo, { type: "application/pdf" });
+          if (navigator.canShare({ files:[file] })) { await navigator.share({ files:[file], title:"Pedido Serra Nobre", text:"Segue pedido em PDF" }); return; }
+        }
+        const url = URL.createObjectURL(blob);
+        window.open(url, "_blank");
+        setTimeout(()=>URL.revokeObjectURL(url), 20000);
+      } finally {
+        window.__busy = false;
+      }
+    }
+    window.compartilharPDF = compartilharPDF;
+
+    // ===== Service Worker (update rápido) =====
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', async () => {
         try {
           const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-          document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') reg.update();
-          });
+          document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update(); });
           setInterval(() => reg.update(), 10 * 60 * 1000);
           reg.addEventListener('updatefound', () => {
-            const nw = reg.installing;
-            if (!nw) return;
+            const nw = reg.installing; if (!nw) return;
             nw.addEventListener('statechange', () => {
-              if (nw.state === 'installed' && navigator.serviceWorker.controller) {
-                reg.waiting && reg.waiting.postMessage('SKIP_WAITING');
-              }
+              if (nw.state === 'installed' && navigator.serviceWorker.controller) reg.waiting && reg.waiting.postMessage('SKIP_WAITING');
             });
           });
           navigator.serviceWorker.addEventListener('controllerchange', () => {
-            if (!window.__reloadedBySW) {
-              window.__reloadedBySW = true;
-              location.reload();
-            }
+            if (!window.__reloadedBySW) { window.__reloadedBySW = true; location.reload(); }
           });
         } catch (e) {}
       });
     }
   </script>
+
+  <datalist id="listaProdutos"></datalist>
 </body>
 </html>
