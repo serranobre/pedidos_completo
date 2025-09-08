@@ -1,6 +1,6 @@
-/* Serra Nobre – Pedidos: Service Worker (v3.1.8) */
-const APP_VERSION = '3.2.6';
-const SW_VERSION  = `pedidos-v${APP_VERSION}-2025-09-03`;
+/* Serra Nobre – Pedidos/Relatórios: Service Worker (v3.2.7) */
+const APP_VERSION = '3.2.7';
+const SW_VERSION  = `pedidos-v${APP_VERSION}-2025-09-08`;
 const CACHE_NAME  = `sn-pedidos::${SW_VERSION}`;
 
 // Detecta base path (raiz ou subpasta) a partir do escopo do SW
@@ -13,7 +13,8 @@ const abs = (path) => new URL(path, SCOPE_URL).toString();
 // Lista de ativos centrais (usar caminhos relativos ao projeto)
 const CORE_ASSETS_REL = [
   'index.html',
-  'relatorios.html',          // ajuste/remova se não existir no deploy
+  // Se o relatórios for um arquivo solto:
+  'relatorios.html',          // remova/ajuste se não existir nesse caminho no deploy
   'manifest.json',
   'Serra-Nobre_3.png',
   'favicon.ico',
@@ -28,16 +29,14 @@ const CORE_ASSETS_REL = [
 
 // Converte para URLs absolutas respeitando subpasta
 const CORE_ASSETS = [
-  BASE_PATH, // raiz da app
-  ...CORE_ASSETS_REL.map(p => abs(p))
+  BASE_PATH, // raiz da app (útil como fallback)
+  ...CORE_ASSETS_REL.map((p) => abs(p))
 ];
 
 // Pré-cache
 async function cacheCoreAssets(cache) {
   const reqs = CORE_ASSETS.map((u) => new Request(u, { cache: 'reload' }));
-  const results = await Promise.allSettled(reqs.map((r) => cache.add(r)));
-  // Opcional: log silencioso de falhas individuais (não quebra install)
-  // results.forEach((res, i) => { if (res.status === 'rejected') console.debug('skip precache:', CORE_ASSETS[i]); });
+  await Promise.allSettled(reqs.map((r) => cache.add(r)));
 }
 
 // INSTALL → precache + ativação imediata
@@ -55,8 +54,8 @@ self.addEventListener('activate', (event) => {
     const keys = await caches.keys();
     await Promise.all(
       keys
-        .filter(k => k.startsWith('sn-pedidos::') && k !== CACHE_NAME)
-        .map(k => caches.delete(k))
+        .filter((k) => k.startsWith('sn-pedidos::') && k !== CACHE_NAME)
+        .map((k) => caches.delete(k))
     );
     await self.clients.claim();
 
@@ -74,6 +73,12 @@ self.addEventListener('message', (event) => {
   const type = (typeof data === 'string') ? data : (data && data.type);
   if (type === 'SKIP_WAITING') {
     self.skipWaiting();
+    return;
+  }
+  if (type === 'PING_AUTH') {
+    // No-op: apenas para evitar warnings no console. Auth é no cliente (Firebase).
+    event.source && event.source.postMessage({ type: 'PONG_AUTH', version: SW_VERSION });
+    return;
   }
 });
 
@@ -96,15 +101,16 @@ function isBypassCache(url) {
   const u = new URL(url);
   if (u.origin === self.location.origin && u.pathname.startsWith(BASE_PATH + 'api/')) return true;
   // Firestore / GCP / auth / storage etc.
-  const bypassHosts = [
+  const bypassHosts = new Set([
     'firestore.googleapis.com',
     'firebaseinstallations.googleapis.com',
     'identitytoolkit.googleapis.com',
     'securetoken.googleapis.com',
     'storage.googleapis.com',
-    'www.googleapis.com'
-  ];
-  return bypassHosts.includes(u.host);
+    // ❗ importante para teu projeto:
+    'serranobrepedidos.firebasestorage.app'
+  ]);
+  return bypassHosts.has(u.host);
 }
 
 // Estáticos same-origin
@@ -116,15 +122,14 @@ function isStaticSameOrigin(url) {
 
 // Fallback offline simples
 function offlineHTML() {
-  return new Response('<!doctype html><meta charset="utf-8"><title>Offline</title><h1>Offline</h1><p>Sem conexão e sem cache disponível.</p>', {
-    headers: { 'Content-Type': 'text/html; charset=utf-8' }
-  });
+  return new Response(
+    '<!doctype html><meta charset="utf-8"><title>Offline</title><h1>Offline</h1><p>Sem conexão e sem cache disponível.</p>',
+    { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+  );
 }
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
-  const url = new URL(req.url);
-
   if (req.method !== 'GET') return;
 
   // Bypass APIs/dinâmicos
@@ -143,7 +148,8 @@ self.addEventListener('fetch', (event) => {
         const cache = await caches.open(CACHE_NAME);
         // tenta match do próprio request; se não, cai para index.html do BASE_PATH
         const cached = await cache.match(req, { ignoreSearch: true }) ||
-                       await cache.match(abs('index.html'));
+                       await cache.match(abs('index.html')) ||
+                       await cache.match(BASE_PATH);
         return cached || offlineHTML();
       }
     })());
@@ -155,7 +161,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
       const cached = await cache.match(req, { ignoreSearch: true });
-      const fetchAndUpdate = fetch(req).then(resp => {
+      const fetchAndUpdate = fetch(req).then((resp) => {
         if (resp && resp.status === 200) cache.put(req, resp.clone());
         return resp;
       }).catch(() => null);
@@ -165,6 +171,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Demais GET same-origin → tentativa de rede com pequeno fallback de cache
+  const url = new URL(req.url);
   if (url.origin === self.location.origin) {
     event.respondWith((async () => {
       try {
