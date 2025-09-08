@@ -59,8 +59,8 @@
     .inline-help{ font-size:12px; color:#475569 }
     .peso-info { font-size:12px; color:#475569; margin:.25rem 0 .5rem }
 
-    /* Bloqueio de UI enquanto sem login */
-    .app-disabled *:where(input,select,textarea,button,.pdf-btn,a){ pointer-events:none; opacity:.6 }
+    /* Bloqueio de UI enquanto sem login (NÃO bloqueia links <a>) */
+    .app-disabled *:where(input,select,textarea,button,.pdf-btn){ pointer-events:none; opacity:.6 }
     .app-disabled .login-inline, .app-disabled #userChip { pointer-events:auto; opacity:1 }
 
     @media (max-width: 900px) { .logo-header{ width:240px } }
@@ -96,7 +96,7 @@
 
   <main id="appMain">
     <div class="top-actions">
-      <a href="relatorios.html" title="Abrir Relatórios">Relatórios</a>
+      <a href="/relatorios.html" title="Abrir Relatórios">Relatórios</a>
     </div>
 
     <div class="field-group">
@@ -642,7 +642,7 @@
     function maskTelefone(el){
       const d = digitsOnly(el.value).slice(0,11);
       if (d.length<=10){
-        el.value = d.replace(/^(\d{0,2})(\d{0,4})(\d{0,4}).*$/, (_,a,b,c)=> (a?`(${a}`:'')+(a&&a.length===2?`) `:'')+(b||'')+(c?'-'+c:''));
+        el.value = d.replace(/^(\d{0,2})(\d{0,4})(\d{0,4}).*$/, (_,a,b,c)=> (a?`(${a}`:'')+(a&&a.length===2?`) `:'')+(b||'')+(c?'-'+c:'')); 
       } else {
         el.value = d.replace(/^(\d{2})(\d{5})(\d{0,4}).*$/, "($1) $2-$3");
       }
@@ -921,7 +921,7 @@
     }
 
     function adicionarItem(){ salvarCamposAntesRender(); itens.push({ produto:"", tipo:"KG", quantidade:0, preco:0, total:0, obs:"" }); renderItens(); }
-    function removerItem(i){ salvarCamposAntesRender(); itens.splice(i,1); if(!itens.length) itens.push({ produto:"", tipo:"KG", quantidade:0, preco:0, total:0, obs:"" }); renderItens(); }
+    function removerItem(i){ salvarCamposAntesRender(); itens.splice(i,1); if(!itens.length) itens.push({ produto:"", tipo:"KG", quantidade:0, preco:0, obs:"", total:0 }); renderItens(); }
 
     function parsePesoFromProduto(nome){
       const s = String(nome||"").toLowerCase().replace(',', '.');
@@ -992,7 +992,7 @@
 
     // Caixa de chave/valor (rótulo à esquerda, valor após 1 espaço), com padding
     function drawKeyValueBox(doc, x, y, w, label, value, opts={}){
-      const { rowH=10, pad=3, titleSize=7, valueSize=9 } = opts;
+      const { rowH=10, pad=3, titleSize=7, valueSize=7 } = opts; // valueSize padrão 7
       doc.setDrawColor(0); doc.setLineWidth(0.2);
       doc.rect(x, y, w, rowH, "S");
       const yBase = y + rowH/2 + 0.5;
@@ -1044,15 +1044,15 @@
         );
       })() + 1;
 
-      // CNPJ e I.E. em DUAS CAIXAS separadas com 1 mm de gap
+      // CNPJ e I.E. (mesmas dimensões, maiores, fonte 7/7)
       const gap1 = 1;
       const boxW = (larguraCaixa - gap1)/2;
       const vCNPJ = fmtCNPJ(document.getElementById("cnpj").value);
       const vIE   = (document.getElementById("ie").value||"").toUpperCase();
-      ensureSpace(10);
-      drawKeyValueBox(doc, margemX, y, boxW, "CNPJ", vCNPJ, {rowH:10, titleSize:7, valueSize:9});
-      drawKeyValueBox(doc, margemX + boxW + gap1, y, boxW, "I.E.", vIE, {rowH:10, titleSize:7, valueSize:9});
-      y += 11;
+      ensureSpace(12);
+      drawKeyValueBox(doc, margemX, y, boxW, "CNPJ", vCNPJ, {rowH:12, titleSize:7, valueSize:7});
+      drawKeyValueBox(doc, margemX + boxW + gap1, y, boxW, "I.E.", vIE, {rowH:12, titleSize:7, valueSize:7});
+      y += 13;
 
       // ENDEREÇO
       ensureSpace(14);
@@ -1069,13 +1069,13 @@
         return rowH;
       })() + 1;
 
-      // CONTATO e CEP em DUAS CAIXAS separadas com 1 mm de gap
+      // CONTATO e CEP (mesmas dimensões, maiores, fonte 7/7)
       const vTel = fmtTel(document.getElementById("contato").value);
       const vCEP = fmtCEP(document.getElementById("cep").value);
-      ensureSpace(10);
-      drawKeyValueBox(doc, margemX, y, boxW, "CONTATO", vTel, {rowH:10, titleSize:7, valueSize:9});
-      drawKeyValueBox(doc, margemX + boxW + gap1, y, boxW, "CEP", vCEP, {rowH:10, titleSize:7, valueSize:9});
-      y += 11;
+      ensureSpace(12);
+      drawKeyValueBox(doc, margemX, y, boxW, "CONTATO", vTel, {rowH:12, titleSize:7, valueSize:7});
+      drawKeyValueBox(doc, margemX + boxW + gap1, y, boxW, "CEP", vCEP, {rowH:12, titleSize:7, valueSize:7});
+      y += 13;
 
       // DIA / DATA / HORA
       const diaSemana = diaDaSemanaExtenso(document.getElementById("entrega").value);
@@ -1118,7 +1118,7 @@
       for (let i=0;i<itens.length;i++){
         const it = itens[i];
         const prod = it.produto || "";
-               const qtdStr  = (it.quantidade || 0).toString();
+        const qtdStr  = (it.quantidade || 0).toString();
         const tipo = it.tipo || "KG";
         const precoNum = parseFloat(it.preco) || 0;
 
@@ -1177,14 +1177,15 @@
         if (i < itens.length - 1) y += 2;
       }
 
-      // ===== SOMA PRODUTOS (2/3 da página) =====
+      // ===== SOMA PRODUTOS (2/3 da página) — caixa à DIREITA, fonte 7/7 =====
       const w2tercos = Math.round(larguraCaixa * (2/3));
+      const somaX = margemX + larguraCaixa - w2tercos; // desloca para a direita
       ensureSpace(11);
       drawKeyValueBox(
-        doc, margemX, y, w2tercos,
+        doc, somaX, y, w2tercos,
         "SOMA PRODUTOS",
         "R$ " + subtotal.toFixed(2),
-        { rowH:10, titleSize:7, valueSize:9 }
+        { rowH:10, titleSize:7, valueSize:7 }
       );
       y += 11;
 
