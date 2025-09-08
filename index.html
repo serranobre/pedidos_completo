@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Serra Nobre" />
   <link rel="manifest" href="manifest.json" />
-  <title>PEDIDOS V3.2.6</title>
+  <title>PEDIDOS V3.2.7</title>
   <style>
     :root{
       --teal:#0ea5a6; --ink:#0f172a; --muted:#666; --bg:#f4f4f4; --line:#e2e8f0;
@@ -92,7 +92,7 @@
   </div>
 
   <div id="offlineBanner" class="offline-banner">OFFLINE — pedidos serão gerados normalmente, mas não serão salvos.</div>
-  <h1>PEDIDOS V3.2.6</h1>
+  <h1>PEDIDOS V3.2.7</h1>
 
   <main id="appMain">
     <div class="top-actions">
@@ -366,10 +366,10 @@
     try{
       const qs = await getDocs(query(collection(db, "clientes"), orderBy("compras","desc"), limit(limitQtd)));
       qs.forEach(d => {
-        const x = d.data() || {};
-        const nome = (x.nome || x.nomeUpper || "").toString().trim();
-        if (nome) lista.push({ nome, compras: x.compras || 0 });
-      });
+  const x = d.data() || {};
+  const theNome = (x.nome || x.nomeUpper || "").toString().trim();
+  if (theNome) lista.push({ nome: theNome, compras: x.compras || 0 });
+});
     }catch(_){
       const qs2 = await getDocs(query(collection(db, "clientes"), orderBy("nome"), limit(limitQtd)));
       qs2.forEach(d => {
@@ -468,7 +468,7 @@
     const qKey = query(collection(db,"pedidos"), where("idempotencyKey","==", key), limit(1));
     const snap = await getDocs(qKey);
     if (!snap.empty){
-      return snap.docs[0].id;
+      return { id: snap.docs[0].id, key };
     }
 
     const id = `${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
@@ -478,7 +478,7 @@
       dataEntregaDia: payload.dataEntregaISO ? Number(payload.dataEntregaISO.replaceAll('-','')) : null,
       createdAt: serverTimestamp()
     });
-    return id;
+    return { id, key };
   }
 
   // Atualiza lastFrete no cliente
@@ -523,7 +523,7 @@
   <!-- App + PDF -->
   <script>
     // Versão app (para barra de update do SW)
-    window.__APP_VERSION = '3.2.6';
+    window.__APP_VERSION = '3.2.7';
 
     // ===============================
     // (1) LOGIN POR SENHA (OFUSCADO)
@@ -799,7 +799,6 @@
     function demandaAtualizarCadastroCliente(){
       const nome = (document.getElementById("cliente").value||"").trim();
       const end  = (document.getElementById("endereco").value||"").trim();
-      // Atualiza quando tiver nome + algum dado útil (endereço ou flag de isenção alterada)
       return !!(nome && (end || document.getElementById('isentarFrete')));
     }
     // >>>>>>>>>>> FIM DAS FUNÇÕES FALTANTES <<<<<<<<<<
@@ -990,9 +989,30 @@
     function diaDaSemanaExtenso(s){ if(!s) return ""; const d=new Date(s+"T00:00:00"); return d.toLocaleDateString('pt-BR',{weekday:'long'}).toUpperCase(); }
     function splitToWidth(doc,t,w){ return doc.splitTextToSize(t||"", w); }
 
-    // Caixa de chave/valor (rótulo à esquerda, valor após 1 espaço), com padding
+    // Caixa centralizada (rótulo pequeno + valor) com padding e centralização V/H
+    function drawCenteredKeyValueBox(doc, x, y, w, label, value, opts={}){
+      const { rowH=12, pad=3, titleSize=7, valueSize=7 } = opts;
+      doc.setDrawColor(0); doc.setLineWidth(0.2);
+      doc.rect(x, y, w, rowH, "S");
+      const ltxt = (label||"").toUpperCase();
+      const vtxt = String(value||"").toUpperCase();
+      doc.setFont("helvetica","bold"); doc.setFontSize(titleSize);
+      const lW = doc.getTextWidth(ltxt);
+      doc.setFont("helvetica","normal"); doc.setFontSize(valueSize);
+      const vW = doc.getTextWidth(vtxt);
+
+      // duas linhas centralizadas
+      const baseY = y + rowH/2;
+      doc.setFont("helvetica","bold"); doc.setFontSize(titleSize);
+      doc.text(ltxt, x + w/2, baseY - 2.2, {align:"center"});
+      doc.setFont("helvetica","normal"); doc.setFontSize(valueSize);
+      doc.text(vtxt, x + w/2,  baseY + 3.2, {align:"center"});
+      return rowH;
+    }
+
+    // Caixa de título/valor padrão (esquerda)
     function drawKeyValueBox(doc, x, y, w, label, value, opts={}){
-      const { rowH=10, pad=3, titleSize=7, valueSize=7 } = opts; // valueSize padrão 7
+      const { rowH=10, pad=3, titleSize=7, valueSize=7 } = opts; 
       doc.setDrawColor(0); doc.setLineWidth(0.2);
       doc.rect(x, y, w, rowH, "S");
       const yBase = y + rowH/2 + 0.5;
@@ -1003,6 +1023,48 @@
       doc.setFont("helvetica","normal"); doc.setFontSize(valueSize);
       doc.text(String(value||"").toUpperCase(), x+pad+lW, yBase);
       return rowH;
+    }
+
+    // ===== Controle local para salvar apenas 1x por pedido
+    function buildLocalIdempotencyKey(payload){
+      const up = (v)=>String(v||"").toUpperCase().trim();
+      const normEnd = (s)=>up(s).replace(/\s+/g,' ').trim();
+      const itemsSig = (items)=>Array.isArray(items)?items.map(i=>[
+        (i.produto||'').trim().replace(/\|/g,'/'),
+        (i.tipo||''),
+        Number(i.quantidade||0).toFixed(3),
+        Number(i.precoUnit||i.preco||0).toFixed(2),
+        Number(i.total||0).toFixed(2)
+      ].join(':')).join(';'):'';
+      return [
+        payload.dataEntregaISO||"",
+        payload.horaEntrega||"",
+        up(payload.cliente||""),
+        (payload.entrega?.tipo||""),
+        normEnd(payload.entrega?.endereco||""),
+        String(payload.subtotal?.toFixed ? payload.subtotal.toFixed(2) : Number(payload.subtotal||0).toFixed(2)),
+        String(Array.isArray(payload.itens) ? payload.itens.length : 0),
+        itemsSig(payload.itens),
+        (payload.clienteFiscal?.cnpj||""),
+        (payload.clienteFiscal?.ie||""),
+        (payload.clienteFiscal?.cep||""),
+        (payload.clienteFiscal?.contato||"")
+      ].join("|");
+    }
+    function alreadySavedLocally(key){
+      try{
+        const raw = localStorage.getItem('sn_saved_keys_v1') || '{}';
+        const map = JSON.parse(raw);
+        return !!map[key];
+      }catch(_){ return false; }
+    }
+    function markSavedLocally(key){
+      try{
+        const raw = localStorage.getItem('sn_saved_keys_v1') || '{}';
+        const map = JSON.parse(raw);
+        map[key] = Date.now();
+        localStorage.setItem('sn_saved_keys_v1', JSON.stringify(map));
+      }catch(_){}
     }
 
     async function montarPDF(querSalvarNoBanco){
@@ -1044,21 +1106,25 @@
         );
       })() + 1;
 
-      // CNPJ e I.E. (mesmas dimensões, maiores, fonte 7/7)
+      // CNPJ (+7mm) e I.E. (-7mm)
       const gap1 = 1;
-      const boxW = (larguraCaixa - gap1)/2;
+      const halfW = (larguraCaixa - gap1)/2;
+      const cnpjW = halfW + 7;               // aumenta 7mm
+      const ieW   = Math.max(halfW - 7, 20); // reduz 7mm (limite de segurança)
       const vCNPJ = fmtCNPJ(document.getElementById("cnpj").value);
       const vIE   = (document.getElementById("ie").value||"").toUpperCase();
       ensureSpace(12);
-      drawKeyValueBox(doc, margemX, y, boxW, "CNPJ", vCNPJ, {rowH:12, titleSize:7, valueSize:7});
-      drawKeyValueBox(doc, margemX + boxW + gap1, y, boxW, "I.E.", vIE, {rowH:12, titleSize:7, valueSize:7});
+      drawCenteredKeyValueBox(doc, margemX, y, cnpjW, "CNPJ", vCNPJ, {rowH:12, titleSize:7, valueSize:7});
+      drawCenteredKeyValueBox(doc, margemX + cnpjW + gap1, y, ieW, "I.E.", vIE, {rowH:12, titleSize:7, valueSize:7});
       y += 13;
 
-      // ENDEREÇO
+      // ENDEREÇO (quebra automática dentro da borda)
       ensureSpace(14);
       y += (function(){
-        const lines = splitToWidth(doc, (document.getElementById("endereco").value||"").toUpperCase(), larguraCaixa-2);
-        const rowH = Math.max(10, 3*2 + lines.length*5 + 4);
+        const texto = (document.getElementById("endereco").value||"").toUpperCase();
+        const innerW = larguraCaixa - 6; // 3mm de padding de cada lado
+        const lines = splitToWidth(doc, texto, innerW);
+        const rowH = Math.max(12, 6 + lines.length*5 + 4);
         doc.setDrawColor(0); doc.setLineWidth(0.2);
         doc.rect(margemX, y, larguraCaixa, rowH, "S");
         doc.setFont("helvetica","bold"); doc.setFontSize(8);
@@ -1069,12 +1135,14 @@
         return rowH;
       })() + 1;
 
-      // CONTATO e CEP (mesmas dimensões, maiores, fonte 7/7)
+      // CONTATO (+7mm) e CEP (-7mm)
       const vTel = fmtTel(document.getElementById("contato").value);
       const vCEP = fmtCEP(document.getElementById("cep").value);
+      const contatoW = halfW + 7;
+      const cepW     = Math.max(halfW - 7, 20);
       ensureSpace(12);
-      drawKeyValueBox(doc, margemX, y, boxW, "CONTATO", vTel, {rowH:12, titleSize:7, valueSize:7});
-      drawKeyValueBox(doc, margemX + boxW + gap1, y, boxW, "CEP", vCEP, {rowH:12, titleSize:7, valueSize:7});
+      drawCenteredKeyValueBox(doc, margemX, y, contatoW, "CONTATO", vTel, {rowH:12, titleSize:7, valueSize:7});
+      drawCenteredKeyValueBox(doc, margemX + contatoW + gap1, y, cepW, "CEP", vCEP, {rowH:12, titleSize:7, valueSize:7});
       y += 13;
 
       // DIA / DATA / HORA
@@ -1087,14 +1155,14 @@
       y+=11;
 
       doc.setFont("helvetica","bold"); doc.setFontSize(7);
-      const halfW = (larguraCaixa - 1)/2;
-      doc.rect(margemX,y,halfW,10,"S");
-      doc.rect(margemX+halfW+1,y,halfW,10,"S");
-      doc.text("DATA ENTREGA", margemX+halfW/2, y+4, {align:"center"});
-      doc.text("HORÁRIO ENTREGA", margemX+halfW+1+halfW/2, y+4, {align:"center"});
+      const halfW2 = (larguraCaixa - 1)/2;
+      doc.rect(margemX,y,halfW2,10,"S");
+      doc.rect(margemX+halfW2+1,y,halfW2,10,"S");
+      doc.text("DATA ENTREGA", margemX+halfW2/2, y+4, {align:"center"});
+      doc.text("HORÁRIO ENTREGA", margemX+halfW2+1+halfW2/2, y+4, {align:"center"});
       doc.setFont("helvetica","normal"); doc.setFontSize(9);
-      doc.text(formatarData(document.getElementById("entrega").value), margemX+halfW/2, y+8, {align:"center"});
-      doc.text(document.getElementById("horaEntrega").value, margemX+halfW+1+halfW/2, y+8, {align:"center"});
+      doc.text(formatarData(document.getElementById("entrega").value), margemX+halfW2/2, y+8, {align:"center"});
+      doc.text(document.getElementById("horaEntrega").value, margemX+halfW2+1+halfW2/2, y+8, {align:"center"});
       y+=12;
 
       // ======= TABELA DE ITENS =======
@@ -1155,7 +1223,7 @@
           doc.setFontSize(7); doc.setFont("helvetica","italic");
           doc.text(`(*) Peso total: ${pesoTotalKg.toFixed(3)} kg`, margemX+3, y+4);
           doc.setFont("helvetica","normal"); doc.setFontSize(9);
-          y += 4;
+          y += 5; // 4mm do texto + 1mm de margem extra (pedido)
         }
 
         const obs = (it.obs || "").trim();
@@ -1177,9 +1245,9 @@
         if (i < itens.length - 1) y += 2;
       }
 
-      // ===== SOMA PRODUTOS (2/3 da página) — caixa à DIREITA, fonte 7/7 =====
+      // ===== SOMA PRODUTOS (2/3 à direita)
       const w2tercos = Math.round(larguraCaixa * (2/3));
-      const somaX = margemX + larguraCaixa - w2tercos; // desloca para a direita
+      const somaX = margemX + larguraCaixa - w2tercos;
       ensureSpace(11);
       drawKeyValueBox(
         doc, somaX, y, w2tercos,
@@ -1187,7 +1255,7 @@
         "R$ " + subtotal.toFixed(2),
         { rowH:10, titleSize:7, valueSize:7 }
       );
-      y += 11;
+      y += 12; // +1mm extra entre SOMA e a faixa entrega/frete (pedido)
 
       // ===== ENTREGA/RETIRADA (2/3) + FRETE (1/3) com GAP de 2 mm =====
       const gap2 = 2;
@@ -1202,7 +1270,7 @@
       const tipoEntrega=document.querySelector('input[name="tipoEntrega"]:checked').value;
       doc.text(tipoEntrega, margemX + entregaW/2, y+6.5, {align:"center"});
 
-      // FRETE (com 2mm de espaço à esquerda)
+      // FRETE
       const freteX = margemX + entregaW + gap2;
       doc.rect(freteX, y, freteW, 10, "S");
       doc.text("FRETE", freteX + freteW/2, y+4, {align:"center"});
@@ -1216,7 +1284,7 @@
       doc.setLineWidth(0.2);
       y+=12;
 
-      // ===== TOTAL DO PEDIDO (uma linha) =====
+      // ===== TOTAL DO PEDIDO =====
       const isentoMan = !!document.getElementById('isentarFrete')?.checked;
       const frete = __frete || { valorBase:0, valorCobravel:0, isento:false };
       const freteCobravelParaTotal = isentoMan ? 0 : Number(frete.valorCobravel||0);
@@ -1226,7 +1294,6 @@
       const rowHtotal = 10;
       doc.rect(margemX, y, larguraCaixa, rowHtotal, "S");
       doc.setFont("helvetica","bold"); doc.setFontSize(9);
-      // label à esquerda, valor à direita
       doc.text("TOTAL DO PEDIDO:", margemX+3, y + rowHtotal/2 + 0.5);
       doc.text("R$ " + totalGeral.toFixed(2), margemX + larguraCaixa - 3, y + rowHtotal/2 + 0.5, {align:"right"});
       y += rowHtotal + 2;
@@ -1243,27 +1310,6 @@
         doc.setFont("helvetica","normal");
         let baseY=y+12; corpoLines.forEach((ln,ix)=>doc.text(ln, margemX+3, baseY+ix*5));
         y += h + 3;
-      }
-
-      // Persistências só quando online e quando salvar/compartilhar
-      if (querSalvarNoBanco && navigator.onLine){
-        try{
-          if (demandaAtualizarCadastroCliente() && typeof window.salvarCliente === "function") {
-            await window.salvarCliente(
-              document.getElementById("cliente").value.trim().toUpperCase(),
-              document.getElementById("endereco").value.trim().toUpperCase(),
-              !!document.getElementById('isentarFrete')?.checked,
-              getClienteExtrasFromForm()
-            );
-          }
-          const nomeCli=document.getElementById("cliente").value.trim().toUpperCase();
-          if (typeof window.registrarPrecoCliente === "function") {
-            await Promise.all(
-              itens.filter(i=> (i?.produto||"").trim() && !isNaN(parseFloat(i?.preco)))
-                  .map(i=> window.registrarPrecoCliente(nomeCli, String(i.produto).trim(), parseFloat(i.preco)))
-            );
-          }
-        }catch(e){ console.error(e); }
       }
 
       // ===== Payload do pedido (salvamento) =====
@@ -1313,12 +1359,17 @@
         clienteFiscal
       };
 
+      // Salva no banco apenas se solicitado e só 1x por idempotencyKey (local + servidor)
       if (querSalvarNoBanco && navigator.onLine && typeof window.savePedidoIdempotente === "function"){
         try{
-          await window.savePedidoIdempotente(payload);
-          const lastFreteToSave = payload.entrega.isento ? 0 : Number(payload.entrega.valorCobravel||0);
-          if (typeof window.updateLastFreteCliente === "function"){
-            await window.updateLastFreteCliente(payload.cliente, lastFreteToSave);
+          const localKey = buildLocalIdempotencyKey(payload);
+          if (!alreadySavedLocally(localKey)){
+            const res = await window.savePedidoIdempotente(payload); // servidor também garante idempotência
+            markSavedLocally(res?.key || localKey);
+            const lastFreteToSave = payload.entrega.isento ? 0 : Number(payload.entrega.valorCobravel||0);
+            if (typeof window.updateLastFreteCliente === "function"){
+              await window.updateLastFreteCliente(payload.cliente, lastFreteToSave);
+            }
           }
         }catch(e){ console.warn("savePedido falhou:", e); }
       }
@@ -1367,7 +1418,9 @@
         salvarCamposAntesRender();
         await ensureFreteBeforePDF();
 
-        const { doc, nomeArquivo } = await montarPDF(/*querSalvarNoBanco*/apenasSalvar);
+        // IMPORTANTE: "Gerar PDF" NUNCA salva; "Salvar PDF" salva UMA ÚNICA VEZ
+        const querSalvar = !!apenasSalvar; // true só quando clicado em "Salvar PDF"
+        const { doc, nomeArquivo } = await montarPDF(querSalvar);
         if (apenasSalvar){
           doc.save(nomeArquivo);
         } else {
@@ -1388,6 +1441,7 @@
         salvarCamposAntesRender();
         await ensureFreteBeforePDF();
 
+        // Compartilhar PDF também salva (uma única vez graças ao idempotency local+servidor)
         const { doc, nomeArquivo } = await montarPDF(/*querSalvarNoBanco*/navigator.onLine);
         const blob = await doc.output("blob");
         if (navigator.canShare && window.File){
