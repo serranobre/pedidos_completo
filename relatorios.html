@@ -4,7 +4,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Relatórios — Serra Nobre V3.2.7</title>
-  <!-- Manifest relativo para funcionar em raiz e subpasta -->
   <link rel="manifest" href="manifest.json" />
   <style>
     :root{
@@ -28,6 +27,7 @@
     .btn.warning{ background:#0b5; border-color:#0b5 }
     .btn.gray{ background:#475569; border-color:#475569 }
     .btn.danger{ background:var(--danger); border-color:var(--danger) }
+    .btn.icon{ padding:4px 8px; line-height:1; font-weight:700; }
     .table-wrap{ margin-top:14px; overflow:auto; border-radius:10px; border:1px solid var(--line) }
     table{ width:100%; min-width:1000px; border-collapse:collapse; background:#fff; table-layout: fixed }
     thead th{ position:sticky; top:0; background:#f8fafc; border-bottom:1px solid var(--line); text-align:left; font-size:12px; color:#334155; padding:10px }
@@ -36,9 +36,9 @@
     thead th:nth-child(3){width:260px}
     thead th:nth-child(4){width:70px}
     thead th:nth-child(5){width:120px}
-    thead th:nth-child(6){width:140px}
-    thead th:nth-child(7){width:130px}
-    thead th:nth-child(8){width:160px} /* Nº do Cupom */
+    thead th:nth-child(6){width:130px}
+    thead th:nth-child(7){width:160px} /* Pagamento */
+    thead th:nth-child(8){width:180px} /* Cupom + X */
     tbody td{ border-bottom:1px solid #f1f5f9; padding:10px; font-size:14px; vertical-align:top; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
     tbody td.wrap{ white-space:normal }
     tfoot td{ background:#f8fafc; font-weight:600; padding:10px; border-top:1px solid var(--line) }
@@ -80,7 +80,6 @@
     <div style="margin-left:auto"></div>
   </header>
 
-  <!-- APP -->
   <main id="app">
     <section class="card">
       <div class="filters">
@@ -124,7 +123,7 @@
               <th>Total (R$)</th>
               <th>Tipo</th>
               <th>Pagamento</th>
-              <th>Nº do Cupom</th>
+              <th>Nº do Cupom • Cancelar</th>
             </tr>
           </thead>
           <tbody id="tbody"></tbody>
@@ -144,76 +143,38 @@
   <!-- Modal de Edição -->
   <div class="modal-backdrop" id="modalBackdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-      <header>
-        <h2 id="modalTitle">Editar Pedido</h2>
-      </header>
+      <header><h2 id="modalTitle">Editar Pedido</h2></header>
 
       <div class="grid">
-        <div>
-          <label>ID do Pedido</label>
-          <input type="text" id="mId" readonly />
+        <div><label>ID do Pedido</label><input type="text" id="mId" readonly /></div>
+        <div><label>Cliente</label><input type="text" id="mCliente" /></div>
+        <div><label>Data Entrega (ISO)</label><input type="date" id="mDataEntregaISO" /></div>
+        <div><label>Hora Entrega</label><input type="time" id="mHoraEntrega" /></div>
+        <div><label>Tipo</label>
+          <select id="mTipo"><option value="ENTREGA">ENTREGA</option><option value="RETIRADA">RETIRADA</option></select>
         </div>
-        <div>
-          <label>Cliente</label>
-          <input type="text" id="mCliente" />
-        </div>
-        <div>
-          <label>Data Entrega (ISO)</label>
-          <input type="date" id="mDataEntregaISO" />
-        </div>
-        <div>
-          <label>Hora Entrega</label>
-          <input type="time" id="mHoraEntrega" />
-        </div>
-        <div>
-          <label>Tipo</label>
-          <select id="mTipo">
-            <option value="ENTREGA">ENTREGA</option>
-            <option value="RETIRADA">RETIRADA</option>
-          </select>
-        </div>
-        <div>
-          <label>Pagamento</label>
-          <input type="text" id="mPagamento" placeholder="ex.: PIX, DINHEIRO, CRÉDITO" />
-        </div>
-        <div class="span-2">
-          <label>Nº do Cupom Fiscal</label>
-          <input type="text" id="mCupomFiscal" placeholder="ex.: 123456-1/001" />
-        </div>
-        <div class="span-4">
-          <label>Observações</label>
-          <input type="text" id="mObs" placeholder="(opcional)" />
-        </div>
+        <div><label>Pagamento</label><input type="text" id="mPagamento" placeholder="ex.: PIX, DINHEIRO, CRÉDITO" /></div>
+        <div class="span-2"><label>Nº do Cupom Fiscal</label><input type="text" id="mCupomFiscal" placeholder="ex.: 123456-1/001" /></div>
+        <div class="span-4"><label>Observações</label><input type="text" id="mObs" placeholder="(opcional)" /></div>
       </div>
 
       <div class="muted">Itens do pedido</div>
       <table class="items-table" id="itemsTable">
-        <thead>
-          <tr>
-            <th style="width:36%">Descrição</th>
-            <th style="width:12%">Qtd</th>
-            <th style="width:12%">Un</th>
-            <th style="width:16%">Preço Unit. (R$)</th>
-            <th style="width:16%">Subtotal (R$)</th>
-            <th style="width:8%">Remover</th>
-          </tr>
-        </thead>
+        <thead><tr>
+          <th style="width:36%">Descrição</th>
+          <th style="width:12%">Qtd</th>
+          <th style="width:12%">Un</th>
+          <th style="width:16%">Preço Unit. (R$)</th>
+          <th style="width:16%">Subtotal (R$)</th>
+          <th style="width:8%">Remover</th>
+        </tr></thead>
         <tbody id="itemsBody"></tbody>
-        <tfoot>
-          <tr>
-            <td colspan="6">
-              <button class="btn ghost" id="btnAddItem" type="button">+ Adicionar item</button>
-            </td>
-          </tr>
-        </tfoot>
+        <tfoot><tr><td colspan="6"><button class="btn ghost" id="btnAddItem" type="button">+ Adicionar item</button></td></tr></tfoot>
       </table>
 
       <div class="grid">
         <div class="span-3"></div>
-        <div>
-          <label>Total do Pedido (R$)</label>
-          <input class="right" type="text" id="mTotal" readonly />
-        </div>
+        <div><label>Total do Pedido (R$)</label><input class="right" type="text" id="mTotal" readonly /></div>
       </div>
 
       <div class="actions">
@@ -229,7 +190,7 @@
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
     import {
       getFirestore, collection, query, where, getDocs, orderBy, limit,
-      updateDoc, doc, serverTimestamp, getDoc
+      updateDoc, deleteDoc, doc, serverTimestamp, getDoc
     } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -245,26 +206,20 @@
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    // ===== Auth anônima garantida (mantido)
     async function ensureAnonAuth(){
       return new Promise((resolve)=>{
         onAuthStateChanged(auth, async (u)=>{
-          try{
-            if (!u) await signInAnonymously(auth);
-          }catch(_){}
+          try{ if (!u) await signInAnonymously(auth); }catch(_){}
           resolve();
-        }, async ()=>{
-          try{ await signInAnonymously(auth); }catch(_){}
+        }, async ()=>{ try{ await signInAnonymously(auth); }catch(_){}
           resolve();
         });
       });
     }
 
-    // ===== Helpers
     const $ = (id)=>document.getElementById(id);
     const moneyBR = (n)=> (Number(n||0)).toFixed(2).replace(".", ",");
     function toBR(iso){ if(!iso) return ""; const [y,m,d] = iso.split("-"); return `${d}/${m}/${y}`; }
-
     function parseMoney(str){
       if (typeof str === "number") return str;
       const s = (str||"").toString().trim().replace(/\./g,"").replace(",",".");
@@ -272,27 +227,23 @@
       return isNaN(v) ? 0 : v;
     }
 
-    // ===== Estado
     window.__rows = [];
     let __currentDocId = null;
 
-    // ===== Renderização da tabela (com Cupom no lugar de "Ações") e dedup
+    // ===== Renderização (agora com "×" ao lado do cupom)
     function renderRows(docs){
       const tbody = $("tbody");
-      const seen  = new Set();           // deduplicação por ID
+      const seen  = new Set();
       const rows  = [];
       let total   = 0;
 
       for (const r of docs){
-        if (seen.has(r.id)) continue;    // evita duplicatas
+        if (seen.has(r.id)) continue;
         seen.add(r.id);
 
         const itens = Array.isArray(r.itens) ? r.itens : [];
-        const itensCount = itens.length;
-        const tot = Number(r.totalPedido||0);
-        total += tot;
-        const tipoAtual = (r?.entrega?.tipo || "").toUpperCase();
-        const tipoTxt = (tipoAtual==="RETIRADA" ? "RETIRADA" : "ENTREGA");
+        const tot = Number(r.totalPedido||0); total += tot;
+        const tipoTxt = ((r?.entrega?.tipo || "").toUpperCase()==="RETIRADA" ? "RETIRADA" : "ENTREGA");
         const cupom = r.cupomFiscal || "";
 
         rows.push(`
@@ -300,11 +251,14 @@
             <td>${toBR(r.dataEntregaISO)||""}</td>
             <td>${r.horaEntrega||""}</td>
             <td class="cell-client" data-id="${r.id}" title="Clique para editar">${(r.cliente||"")}</td>
-            <td>${itensCount}</td>
+            <td>${itens.length}</td>
             <td>R$ ${moneyBR(tot)}</td>
             <td>${tipoTxt}</td>
             <td>${r.pagamento||""}</td>
-            <td>${cupom}</td>
+            <td>
+              <span>${cupom}</span>
+              <button class="btn danger icon btn-cancel" data-id="${r.id}" title="Cancelar / excluir pedido">×</button>
+            </td>
           </tr>
         `);
       }
@@ -321,7 +275,7 @@
       $("ftTotal").textContent = `R$ ${moneyBR(total)}`;
     }
 
-    // ===== Busca (com filtros básicos; dedup acontece no render)
+    // ===== Busca
     async function buscar(){
       const di = $("fDataIni").value;
       const df = $("fDataFim").value;
@@ -335,7 +289,6 @@
         const conds = [];
         if (di) conds.push(where("dataEntregaISO", ">=", di));
         if (df) conds.push(where("dataEntregaISO", "<=", df));
-        // orderBy no mesmo campo evita índice composto
         qRef = query(ref, ...conds, orderBy("dataEntregaISO","desc"), limit(1000));
       } else {
         qRef = query(ref, orderBy("createdAt","desc"), limit(1000));
@@ -345,7 +298,6 @@
       const list = [];
       snap.forEach(d => list.push({ id:d.id, ...d.data() }));
 
-      // Filtros no cliente/tipo no cliente (evita necessidade de índice)
       const out = list.filter(x=>{
         if (cliente && !(x.cliente||"").toUpperCase().includes(cliente)) return false;
         if (tipoSel && ((x.entrega?.tipo||"").toUpperCase() !== tipoSel)) return false;
@@ -356,7 +308,7 @@
       renderRows(out);
     }
 
-    // ===== Modal de edição – helpers
+    // ===== Modal de edição
     function openModal(){ const m = $("modalBackdrop"); m.style.display="flex"; m.setAttribute("aria-hidden","false"); }
     function closeModal(){ const m = $("modalBackdrop"); m.style.display="none"; m.setAttribute("aria-hidden","true"); __currentDocId = null; $("itemsBody").innerHTML = ""; }
     function recalcTotal(){
@@ -390,16 +342,11 @@
 
     async function carregarPedidoEmModal(id){
       __currentDocId = id;
-      // Obter dados atualizados do Firestore
       const ref = doc(db, "pedidos", id);
       const snap = await getDoc(ref);
-      if (!snap.exists()){
-        alert("Pedido não encontrado.");
-        return;
-      }
+      if (!snap.exists()){ alert("Pedido não encontrado."); return; }
       const r = { id: snap.id, ...snap.data() };
 
-      // Preenche campos principais
       $("mId").value = r.id || "";
       $("mCliente").value = r.cliente || "";
       $("mDataEntregaISO").value = r.dataEntregaISO || "";
@@ -409,39 +356,24 @@
       $("mCupomFiscal").value = r.cupomFiscal || "";
       $("mObs").value = r.obs || r.observacoes || "";
 
-      // Itens
       $("itemsBody").innerHTML = "";
       const itens = Array.isArray(r.itens) ? r.itens : [];
-      if (itens.length){
-        itens.forEach(it => addItemRow(it));
-      } else {
-        addItemRow({});
-      }
+      if (itens.length){ itens.forEach(it => addItemRow(it)); } else { addItemRow({}); }
       recalcTotal();
-
       openModal();
     }
 
     async function salvarEdicao(){
       if (!__currentDocId){ closeModal(); return; }
-
-      // Montar itens a partir da tabela
       const itens = [];
       $("itemsBody").querySelectorAll("tr").forEach(tr=>{
         const desc = tr.querySelector(".it-desc").value.trim();
         const qtd  = parseMoney(tr.querySelector(".it-qtd").value);
         const un   = tr.querySelector(".it-un").value.trim() || "un";
         const pu   = parseMoney(tr.querySelector(".it-preco").value);
-        if (!desc && qtd<=0) return; // ignora linha vazia
-        itens.push({
-          descricao: desc,
-          qtd: qtd,
-          un: un,
-          precoUnit: pu,
-          subtotal: Number((qtd * pu).toFixed(2))
-        });
+        if (!desc && qtd<=0) return;
+        itens.push({ descricao: desc, qtd, un, precoUnit: pu, subtotal: Number((qtd*pu).toFixed(2)) });
       });
-
       const totalPedido = itens.reduce((acc, it)=> acc + (it.subtotal||0), 0);
 
       const payload = {
@@ -460,37 +392,153 @@
       try{
         await updateDoc(doc(db, "pedidos", __currentDocId), payload);
         closeModal();
-        // Atualiza linha em memória e re-renderiza (sem nova ida ao servidor)
         const idx = window.__rows.findIndex(x=>x.id===__currentDocId);
-        if (idx>=0){
-          window.__rows[idx] = { ...window.__rows[idx], ...payload };
-        }
+        if (idx>=0){ window.__rows[idx] = { ...window.__rows[idx], ...payload }; }
         renderRows(window.__rows);
         alert("Pedido atualizado com sucesso.");
       }catch(e){
-        console.error(e);
-        alert("Falha ao salvar. Verifique sua conexão e tente novamente.");
+        console.error(e); alert("Falha ao salvar. Verifique sua conexão e tente novamente.");
       }
+    }
+
+    // ===== Cancelar/Excluir pedido (botão “×” ao lado do cupom)
+    async function excluirPedido(id){
+      if (!id) return;
+      const ok = confirm("Gostaria de excluir o pedido?");
+      if (!ok) return;
+      try{
+        await deleteDoc(doc(db, "pedidos", id));
+        // remove da lista atual e re-renderiza
+        window.__rows = window.__rows.filter(x => x.id !== id);
+        renderRows(window.__rows);
+        alert("Pedido excluído.");
+      }catch(e){
+        console.error(e); alert("Não foi possível excluir. Verifique sua conexão.");
+      }
+    }
+
+    // ===== Exportar XLSX
+    function exportarXLSX(){
+      const modo = $("fModo").value || "reduzido";
+      const data = window.__rows.map(r=>{
+        const base = {
+          "Data": toBR(r.dataEntregaISO||""),
+          "Hora": r.horaEntrega||"",
+          "Cliente": r.cliente||"",
+          "Itens": Array.isArray(r.itens)? r.itens.length : 0,
+          "Total (R$)": Number(r.totalPedido||0),
+          "Tipo": (r?.entrega?.tipo||"").toUpperCase()==="RETIRADA" ? "RETIRADA" : "ENTREGA",
+          "Pagamento": r.pagamento||"",
+          "Cupom": r.cupomFiscal||"",
+          "ID": r.id
+        };
+        if (modo==="detalhado"){
+          const itensTxt = (Array.isArray(r.itens)? r.itens : [])
+            .map(i => `${i.produto||i.descricao||""} • ${i.quantidade||i.qtd||0} ${i.tipo||i.un||"un"} x ${i.precoUnit||i.preco||0}`).join(" | ");
+          return { ...base, "Itens (detalhe)": itensTxt };
+        }
+        return base;
+      });
+
+      if (!data.length){ alert("Nada para exportar."); return; }
+
+      const ws = XLSX.utils.json_to_sheet(data);
+      // formata a coluna Total (R$) como número
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Relatorio");
+      const nome = `Relatorio_${new Date().toISOString().slice(0,10)}.xlsx`;
+      XLSX.writeFile(wb, nome);
+    }
+
+    // ===== Gerar PDF (simples e legível)
+    async function exportarPDF(){
+      if (!window.__rows.length){ alert("Nada para gerar."); return; }
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
+
+      const modo = $("fModo").value || "reduzido";
+      const left=10, top=12, lineH=7, maxW = 277; // área útil em paisagem
+      let y = top;
+
+      doc.setFont("helvetica","bold"); doc.setFontSize(14);
+      doc.text("Relatórios — Serra Nobre", left, y); y += 6;
+      doc.setFontSize(9); doc.setFont("helvetica","normal");
+      doc.text(`Gerado em ${new Date().toLocaleString("pt-BR")}`, left, y); y += 6;
+
+      // cabeçalho
+      doc.setFont("helvetica","bold");
+      const headers = ["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagamento","Cupom"];
+      const colsW   = [20,16,70,14,26,24,40,55]; // total ≈ 265
+      let x = left;
+      headers.forEach((h,i)=>{ doc.text(h, x, y); x += colsW[i]; });
+      y += 3;
+      doc.setLineWidth(.2); doc.line(left, y, left+colsW.reduce((a,b)=>a+b,0), y); y += 4;
+      doc.setFont("helvetica","normal");
+
+      for (const r of window.__rows){
+        x = left;
+        const row = [
+          toBR(r.dataEntregaISO||""), r.horaEntrega||"", r.cliente||"",
+          (Array.isArray(r.itens)? r.itens.length : 0).toString(),
+          moneyBR(r.totalPedido||0),
+          ((r?.entrega?.tipo||"").toUpperCase()==="RETIRADA"?"RETIRADA":"ENTREGA"),
+          r.pagamento||"", r.cupomFiscal||""
+        ];
+
+        // quebra o cliente e o cupom se necessário
+        const clienteLines = doc.splitTextToSize(row[2], colsW[2]-2);
+        const cupomLines   = doc.splitTextToSize(row[7], colsW[7]-2);
+        const lines = Math.max(1, clienteLines.length, cupomLines.length);
+        const h = lines*lineH;
+
+        if (y + h > 200){ doc.addPage(); y = top; }
+
+        // desenha
+        const cells = [row[0], row[1], clienteLines, row[3], row[4], row[5], row[6], cupomLines];
+        for (let i=0;i<cells.length;i++){
+          const val = cells[i];
+          if (Array.isArray(val)){
+            val.forEach((ln,k)=> doc.text(ln, x, y + (k+1)*lineH - 2));
+          } else {
+            doc.text(String(val), x, y + lineH - 2);
+          }
+          x += colsW[i];
+        }
+        y += h;
+
+        if (modo==="detalhado" && Array.isArray(r.itens) && r.itens.length){
+          const itemsTxt = r.itens.map(it=>`• ${(it.produto||it.descricao||"")} — ${(it.quantidade||it.qtd||0)} ${(it.tipo||it.un||"")} x ${moneyBR(it.precoUnit||it.preco||0)} = ${moneyBR(it.total||it.subtotal||0)}`).join("\n");
+          const itemsLines = doc.splitTextToSize(itemsTxt, maxW);
+          itemsLines.forEach((ln)=>{ if (y>200){ doc.addPage(); y=top; } doc.text(ln, left+6, y); y += 5; });
+          y += 2;
+        }
+      }
+
+      // totalizador
+      const total = window.__rows.reduce((s,r)=> s + Number(r.totalPedido||0), 0);
+      doc.setFont("helvetica","bold"); doc.setFontSize(11);
+      if (y>190){ doc.addPage(); y=top; }
+      doc.text(`TOTAL: R$ ${moneyBR(total)}`, left, y+6);
+
+      doc.save(`Relatorio_${new Date().toISOString().slice(0,10)}.pdf`);
     }
 
     // ===== Eventos principais
     $("btnBuscar").onclick = buscar;
     $("btnLimpar").onclick = ()=>{
       ["fDataIni","fDataFim","fHoraIni","fHoraFim","fCliente"].forEach(id=>$(id).value="");
-      $("fTipo").value = "";
-      $("tbody").innerHTML = "";
-      $("ftCount").textContent = "0 pedidos";
-      $("ftTotal").textContent = "R$ 0,00";
-      window.__rows = [];
+      $("fTipo").value = ""; $("tbody").innerHTML = "";
+      $("ftCount").textContent = "0 pedidos"; $("ftTotal").textContent = "R$ 0,00"; window.__rows = [];
     };
+    $("btnXLSX").onclick = exportarXLSX;
+    $("btnPDF").onclick  = exportarPDF;
 
-    // Delegação de clique para abrir modal ao clicar no cliente
+    // clique para editar
     $("tbody").addEventListener("click", (ev)=>{
-      const td = ev.target.closest(".cell-client");
-      if (td){
-        const id = td.getAttribute("data-id");
-        if (id) carregarPedidoEmModal(id);
-      }
+      const tdEdit = ev.target.closest(".cell-client");
+      if (tdEdit){ const id = tdEdit.getAttribute("data-id"); if (id) carregarPedidoEmModal(id); return; }
+      const btnCancel = ev.target.closest(".btn-cancel");
+      if (btnCancel){ const id = btnCancel.getAttribute("data-id"); excluirPedido(id); }
     });
 
     // Modal actions
@@ -498,54 +546,32 @@
     $("btnAddItem").addEventListener("click", ()=> addItemRow({}));
     $("btnSalvar").addEventListener("click", salvarEdicao);
 
-    // ===== Inicialização com Auth garantida
+    // Init
     await ensureAnonAuth();
-
-    // Opcional: você pode disparar uma busca inicial, se desejar:
-    // buscar();
+    // buscar(); // opcional
   </script>
 
-  <!-- Registro do Service Worker (mantido com forçar atualização/skip waiting) -->
+  <!-- Service Worker -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', async () => {
         try {
-          // IMPORTANTE: caminho relativo para funcionar em raiz e subpasta
           const swURL = (document.currentScript && document.currentScript.src && document.currentScript.src.includes('/')) ? './sw.js' : '/sw.js';
           const reg = await navigator.serviceWorker.register(swURL, { scope: './' });
-
-          // Força update quando a aba voltar a foco
-          document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') reg.update();
-          });
-
-          // Atualização periódica
+          document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update(); });
           setInterval(() => reg.update(), 10 * 60 * 1000);
-
-          // Skip waiting automático
           reg.addEventListener('updatefound', () => {
             const newSW = reg.installing;
             if (!newSW) return;
             newSW.addEventListener('statechange', () => {
-              if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
-                reg.waiting?.postMessage('SKIP_WAITING');
-              }
+              if (newSW.state === 'installed' && navigator.serviceWorker.controller) reg.waiting?.postMessage('SKIP_WAITING');
             });
           });
-
-          // Recarrega após ativação do novo SW
           navigator.serviceWorker.addEventListener('controllerchange', () => {
-            if (!window.__reloadedBySW) {
-              window.__reloadedBySW = true;
-              location.reload();
-            }
+            if (!window.__reloadedBySW) { window.__reloadedBySW = true; location.reload(); }
           });
-
-          // "Ping" de autenticação via SW (mantém sessão ativa no fluxo de navegação)
-          navigator.serviceWorker.ready.then(r => {
-            try { r.active && r.active.postMessage({ type: 'PING_AUTH' }); } catch(e){}
-          });
-        } catch (e) { /* ignora erros de SW */ }
+          navigator.serviceWorker.ready.then(r => { try { r.active && r.active.postMessage({ type: 'PING_AUTH' }); } catch(e){} });
+        } catch (e) {}
       });
     }
   </script>
