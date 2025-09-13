@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Relatórios — Serra Nobre V3.2.7</title>
+  <title>Relatórios — Serra Nobre V3.2.8</title>
   <link rel="manifest" href="manifest.json" />
   <style>
     :root{
       --teal:#0f766e; --teal-600:#0ea5a6; --ink:#0f172a; --muted:#64748b; --bg:#f1f5f9; --line:#e2e8f0;
-      --danger:#dc2626;
+      --danger:#dc2626; --gray:#475569;
     }
     *{box-sizing:border-box}
     body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu; background:var(--bg); color:var(--ink) }
@@ -21,41 +21,45 @@
     label{ font-size:12px; color:#334155; display:block; margin-bottom:4px }
     input, select, button{ font:inherit }
     input, select{ width:100%; padding:8px; border:1px solid var(--line); border-radius:8px; outline:0; background:#fff }
+
     .actions{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap }
-    .btn{ border:1px solid var(--teal-600); background:var(--teal-600); color:#fff; padding:8px 12px; border-radius:8px; cursor:pointer }
+    .btn{ border:1px solid var(--teal-600); background:var(--teal-600); color:#fff; padding:8px 12px; border-radius:8px; cursor:pointer; display:inline-flex; align-items:center; gap:8px }
     .btn.ghost{ background:#fff; color:var(--teal-600) }
     .btn.warning{ background:#0b5; border-color:#0b5 }
-    .btn.gray{ background:#475569; border-color:#475569 }
+    .btn.gray{ background:var(--gray); border-color:var(--gray) }
     .btn.danger{ background:var(--danger); border-color:var(--danger) }
     .btn.icon{ padding:4px 8px; line-height:1; font-weight:700; }
+
+    /* Loading/spinner nos botões */
+    .btn[disabled]{ opacity:.75; cursor:default }
+    .spinner{ width:14px; height:14px; border:2px solid #ffffff80; border-top-color:#fff; border-radius:50%; animation:spin .8s linear infinite }
+    @keyframes spin{ to{ transform:rotate(360deg) } }
+
     .table-wrap{ margin-top:14px; overflow:auto; border-radius:10px; border:1px solid var(--line) }
-    table{ width:100%; min-width:1000px; border-collapse:collapse; background:#fff; table-layout: fixed }
+    table{ width:100%; min-width:1120px; border-collapse:collapse; background:#fff; table-layout: fixed }
     thead th{ position:sticky; top:0; background:#f8fafc; border-bottom:1px solid var(--line); text-align:left; font-size:12px; color:#334155; padding:10px }
     thead th:nth-child(1){width:110px}
     thead th:nth-child(2){width:90px}
     thead th:nth-child(3){width:260px}
     thead th:nth-child(4){width:70px}
     thead th:nth-child(5){width:120px}
-    thead th:nth-child(6){width:130px}
-    thead th:nth-child(7){width:160px} /* Pagamento */
-    thead th:nth-child(8){width:180px} /* Cupom + X */
+    thead th:nth-child(6){width:120px}
+    thead th:nth-child(7){width:150px} /* Pagamento */
+    thead th:nth-child(8){width:150px} /* Cupom */
+    thead th:nth-child(9){width:100px} /* Cancelar */
     tbody td{ border-bottom:1px solid #f1f5f9; padding:10px; font-size:14px; vertical-align:top; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
     tbody td.wrap{ white-space:normal }
     tfoot td{ background:#f8fafc; font-weight:600; padding:10px; border-top:1px solid var(--line) }
     .muted{ color:var(--muted); font-size:12px }
     .cell-client{ color:#0f766e; cursor:pointer; text-decoration:underline }
-    .totals-line{ display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin-top:6px }
-    .totals-line .pill{ background:#eef7f7; padding:6px 10px; border-radius:999px; font-size:12px }
+    .right{ text-align:right }
+
     @media (max-width: 980px){ .filters{grid-template-columns:repeat(3,minmax(0,1fr))} }
     @media (max-width: 560px){ .filters{grid-template-columns:repeat(2,minmax(0,1fr))} }
 
-    /* ===== Modal de Edição ===== */
-    .modal-backdrop{
-      position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; padding:16px; z-index:9999;
-    }
-    .modal{
-      width:min(100%, 980px); max-height:90vh; overflow:auto; background:#fff; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.25); padding:16px;
-    }
+    /* ===== Modal ===== */
+    .modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; padding:16px; z-index:9999 }
+    .modal{ width:min(100%, 980px); max-height:90vh; overflow:auto; background:#fff; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.25); padding:16px; }
     .modal header{ background:transparent; color:var(--ink); padding:0; margin-bottom:10px }
     .modal h2{ margin:0; font-size:18px }
     .modal .grid{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:10px }
@@ -65,7 +69,6 @@
     .items-table{ width:100%; border-collapse:collapse; margin-top:8px; }
     .items-table th,.items-table td{ border:1px solid var(--line); padding:8px; font-size:13px; text-align:left }
     .modal .actions{ justify-content:flex-end }
-    .right{ text-align:right }
   </style>
 
   <!-- SheetJS p/ XLSX -->
@@ -76,7 +79,7 @@
 <body>
   <header>
     <a href="index.html">← Voltar</a>
-    <h1>Relatórios — Serra Nobre V3.2.7</h1>
+    <h1>Relatórios — Serra Nobre V3.2.8</h1>
     <div style="margin-left:auto"></div>
   </header>
 
@@ -108,8 +111,8 @@
       <div class="actions">
         <button class="btn" id="btnBuscar">Buscar</button>
         <button class="btn ghost" id="btnLimpar">Limpar</button>
-        <button class="btn warning" id="btnXLSX" title="Exportar resultados para XLSX">Exportar XLSX</button>
-        <button class="btn gray" id="btnPDF" title="Gerar PDF">Gerar PDF</button>
+        <button class="btn warning" id="btnXLSX" title="Exportar resultados para XLSX"><span class="lbl">Exportar XLSX</span></button>
+        <button class="btn gray" id="btnPDF" title="Gerar PDF"><span class="lbl">Gerar PDF</span></button>
       </div>
 
       <div class="table-wrap">
@@ -123,16 +126,16 @@
               <th>Total (R$)</th>
               <th>Tipo</th>
               <th>Pagamento</th>
-              <th>Nº do Cupom • Cancelar</th>
+              <th>Nº do Cupom</th>
+              <th>Cancelar</th>
             </tr>
           </thead>
           <tbody id="tbody"></tbody>
           <tfoot>
             <tr>
-              <td colspan="3" id="ftCount">0 pedidos</td>
-              <td></td>
+              <td colspan="4" id="ftCount">0 pedidos</td>
               <td id="ftTotal">R$ 0,00</td>
-              <td colspan="3"></td>
+              <td colspan="4"></td>
             </tr>
           </tfoot>
         </table>
@@ -206,13 +209,16 @@
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
+    // ===== Auth anônima + utilitário para garantir auth antes de operações sensíveis
+    let __authReady = false;
     async function ensureAnonAuth(){
-      return new Promise((resolve)=>{
+      if (__authReady) return;
+      await new Promise((resolve)=>{
         onAuthStateChanged(auth, async (u)=>{
           try{ if (!u) await signInAnonymously(auth); }catch(_){}
-          resolve();
+          __authReady = true; resolve();
         }, async ()=>{ try{ await signInAnonymously(auth); }catch(_){}
-          resolve();
+          __authReady = true; resolve();
         });
       });
     }
@@ -227,10 +233,28 @@
       return isNaN(v) ? 0 : v;
     }
 
+    // util: mostra spinner no botão
+    function setLoading(btn, isLoading, labelWhenIdle){
+      if (!btn) return;
+      const lbl = btn.querySelector(".lbl");
+      if (isLoading){
+        btn.setAttribute("disabled","true");
+        if (lbl) lbl.textContent = "Gerando…";
+        const sp = document.createElement("span"); sp.className = "spinner"; sp.setAttribute("data-spin","1");
+        btn.prepend(sp);
+      }else{
+        btn.removeAttribute("disabled");
+        const sp = btn.querySelector(".spinner[data-spin]");
+        if (sp) sp.remove();
+        if (lbl) lbl.textContent = labelWhenIdle || lbl.textContent;
+      }
+    }
+    const nextFrame = () => new Promise(r => setTimeout(r, 0));
+
     window.__rows = [];
     let __currentDocId = null;
 
-    // ===== Renderização (agora com "×" ao lado do cupom)
+    // ===== Renderização (cupom e cancelar em colunas separadas; cupom vazio => "–")
     function renderRows(docs){
       const tbody = $("tbody");
       const seen  = new Set();
@@ -244,7 +268,7 @@
         const itens = Array.isArray(r.itens) ? r.itens : [];
         const tot = Number(r.totalPedido||0); total += tot;
         const tipoTxt = ((r?.entrega?.tipo || "").toUpperCase()==="RETIRADA" ? "RETIRADA" : "ENTREGA");
-        const cupom = r.cupomFiscal || "";
+        const cupom = (r.cupomFiscal && String(r.cupomFiscal).trim()) ? r.cupomFiscal : "-";
 
         rows.push(`
           <tr data-rowid="${r.id}">
@@ -255,16 +279,14 @@
             <td>R$ ${moneyBR(tot)}</td>
             <td>${tipoTxt}</td>
             <td>${r.pagamento||""}</td>
-            <td>
-              <span>${cupom}</span>
-              <button class="btn danger icon btn-cancel" data-id="${r.id}" title="Cancelar / excluir pedido">×</button>
-            </td>
+            <td>${cupom}</td>
+            <td><button class="btn danger icon btn-cancel" data-id="${r.id}" title="Cancelar / excluir pedido">×</button></td>
           </tr>
         `);
       }
 
       if (!rows.length){
-        tbody.innerHTML = `<tr><td colspan="8">Sem resultados.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9">Sem resultados.</td></tr>`;
         $("ftCount").textContent = "0 pedidos";
         $("ftTotal").textContent = "R$ 0,00";
         return;
@@ -275,8 +297,9 @@
       $("ftTotal").textContent = `R$ ${moneyBR(total)}`;
     }
 
-    // ===== Busca
+    // ===== Busca (mesma lógica anterior)
     async function buscar(){
+      await ensureAnonAuth();
       const di = $("fDataIni").value;
       const df = $("fDataFim").value;
       const cliente = $("fCliente").value.trim().toUpperCase();
@@ -341,6 +364,7 @@
     }
 
     async function carregarPedidoEmModal(id){
+      await ensureAnonAuth();
       __currentDocId = id;
       const ref = doc(db, "pedidos", id);
       const snap = await getDoc(ref);
@@ -364,6 +388,7 @@
     }
 
     async function salvarEdicao(){
+      await ensureAnonAuth();
       if (!__currentDocId){ closeModal(); return; }
       const itens = [];
       $("itemsBody").querySelectorAll("tr").forEach(tr=>{
@@ -397,133 +422,145 @@
         renderRows(window.__rows);
         alert("Pedido atualizado com sucesso.");
       }catch(e){
-        console.error(e); alert("Falha ao salvar. Verifique sua conexão e tente novamente.");
+        console.error(e);
+        alert("Falha ao salvar. Verifique sua conexão e permissões e tente novamente.");
       }
     }
 
-    // ===== Cancelar/Excluir pedido (botão “×” ao lado do cupom)
+    // ===== Cancelar/Excluir pedido (confirm)
     async function excluirPedido(id){
+      await ensureAnonAuth();
       if (!id) return;
       const ok = confirm("Gostaria de excluir o pedido?");
       if (!ok) return;
       try{
         await deleteDoc(doc(db, "pedidos", id));
-        // remove da lista atual e re-renderiza
         window.__rows = window.__rows.filter(x => x.id !== id);
         renderRows(window.__rows);
         alert("Pedido excluído.");
       }catch(e){
-        console.error(e); alert("Não foi possível excluir. Verifique sua conexão.");
+        console.error(e); alert("Não foi possível excluir. Verifique sua conexão/permissões.");
       }
     }
 
-    // ===== Exportar XLSX
-    function exportarXLSX(){
-      const modo = $("fModo").value || "reduzido";
-      const data = window.__rows.map(r=>{
-        const base = {
-          "Data": toBR(r.dataEntregaISO||""),
-          "Hora": r.horaEntrega||"",
-          "Cliente": r.cliente||"",
-          "Itens": Array.isArray(r.itens)? r.itens.length : 0,
-          "Total (R$)": Number(r.totalPedido||0),
-          "Tipo": (r?.entrega?.tipo||"").toUpperCase()==="RETIRADA" ? "RETIRADA" : "ENTREGA",
-          "Pagamento": r.pagamento||"",
-          "Cupom": r.cupomFiscal||"",
-          "ID": r.id
-        };
-        if (modo==="detalhado"){
-          const itensTxt = (Array.isArray(r.itens)? r.itens : [])
-            .map(i => `${i.produto||i.descricao||""} • ${i.quantidade||i.qtd||0} ${i.tipo||i.un||"un"} x ${i.precoUnit||i.preco||0}`).join(" | ");
-          return { ...base, "Itens (detalhe)": itensTxt };
-        }
-        return base;
-      });
+    // ===== Exportar XLSX (com spinner e nextFrame)
+    async function exportarXLSX(){
+      if (!window.__rows.length){ alert("Nada para exportar."); return; }
+      const btn = $("btnXLSX");
+      setLoading(btn, true, "Exportar XLSX");
+      try{
+        const modo = $("fModo").value || "reduzido";
+        const data = window.__rows.map(r=>{
+          const base = {
+            "Data": toBR(r.dataEntregaISO||""),
+            "Hora": r.horaEntrega||"",
+            "Cliente": r.cliente||"",
+            "Itens": Array.isArray(r.itens)? r.itens.length : 0,
+            "Total (R$)": Number(r.totalPedido||0),
+            "Tipo": (r?.entrega?.tipo||"").toUpperCase()==="RETIRADA" ? "RETIRADA" : "ENTREGA",
+            "Pagamento": r.pagamento||"",
+            "Cupom": (r.cupomFiscal && String(r.cupomFiscal).trim()) ? r.cupomFiscal : "-",
+            "ID": r.id
+          };
+          if (modo==="detalhado"){
+            const itensTxt = (Array.isArray(r.itens)? r.itens : [])
+              .map(i => `${i.produto||i.descricao||""} • ${i.quantidade||i.qtd||0} ${i.tipo||i.un||"un"} x ${i.precoUnit||i.preco||0}`).join(" | ");
+            return { ...base, "Itens (detalhe)": itensTxt };
+          }
+          return base;
+        });
 
-      if (!data.length){ alert("Nada para exportar."); return; }
+        if (!data.length){ alert("Nada para exportar."); return; }
 
-      const ws = XLSX.utils.json_to_sheet(data);
-      // formata a coluna Total (R$) como número
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Relatorio");
-      const nome = `Relatorio_${new Date().toISOString().slice(0,10)}.xlsx`;
-      XLSX.writeFile(wb, nome);
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Relatorio");
+
+        await nextFrame(); // garante que o spinner apareça antes da tarefa pesada
+        const nome = `Relatorio_${new Date().toISOString().slice(0,10)}.xlsx`;
+        XLSX.writeFile(wb, nome);
+      } finally {
+        setLoading(btn, false, "Exportar XLSX");
+      }
     }
 
-    // ===== Gerar PDF (simples e legível)
+    // ===== Gerar PDF (com spinner e nextFrame)
     async function exportarPDF(){
       if (!window.__rows.length){ alert("Nada para gerar."); return; }
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
+      const btn = $("btnPDF");
+      setLoading(btn, true, "Gerar PDF");
+      try{
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
 
-      const modo = $("fModo").value || "reduzido";
-      const left=10, top=12, lineH=7, maxW = 277; // área útil em paisagem
-      let y = top;
+        const modo = $("fModo").value || "reduzido";
+        const left=10, top=12, lineH=7, maxW = 277;
+        let y = top;
 
-      doc.setFont("helvetica","bold"); doc.setFontSize(14);
-      doc.text("Relatórios — Serra Nobre", left, y); y += 6;
-      doc.setFontSize(9); doc.setFont("helvetica","normal");
-      doc.text(`Gerado em ${new Date().toLocaleString("pt-BR")}`, left, y); y += 6;
+        doc.setFont("helvetica","bold"); doc.setFontSize(14);
+        doc.text("Relatórios — Serra Nobre", left, y); y += 6;
+        doc.setFontSize(9); doc.setFont("helvetica","normal");
+        doc.text(`Gerado em ${new Date().toLocaleString("pt-BR")}`, left, y); y += 6;
 
-      // cabeçalho
-      doc.setFont("helvetica","bold");
-      const headers = ["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagamento","Cupom"];
-      const colsW   = [20,16,70,14,26,24,40,55]; // total ≈ 265
-      let x = left;
-      headers.forEach((h,i)=>{ doc.text(h, x, y); x += colsW[i]; });
-      y += 3;
-      doc.setLineWidth(.2); doc.line(left, y, left+colsW.reduce((a,b)=>a+b,0), y); y += 4;
-      doc.setFont("helvetica","normal");
+        doc.setFont("helvetica","bold");
+        const headers = ["Data","Hora","Cliente","Itens","Total (R$)","Tipo","Pagamento","Cupom"];
+        const colsW   = [20,16,70,14,26,24,40,55];
+        let x = left;
+        headers.forEach((h,i)=>{ doc.text(h, x, y); x += colsW[i]; });
+        y += 3;
+        doc.setLineWidth(.2); doc.line(left, y, left+colsW.reduce((a,b)=>a+b,0), y); y += 4;
+        doc.setFont("helvetica","normal");
 
-      for (const r of window.__rows){
-        x = left;
-        const row = [
-          toBR(r.dataEntregaISO||""), r.horaEntrega||"", r.cliente||"",
-          (Array.isArray(r.itens)? r.itens.length : 0).toString(),
-          moneyBR(r.totalPedido||0),
-          ((r?.entrega?.tipo||"").toUpperCase()==="RETIRADA"?"RETIRADA":"ENTREGA"),
-          r.pagamento||"", r.cupomFiscal||""
-        ];
+        for (const r of window.__rows){
+          x = left;
+          const row = [
+            toBR(r.dataEntregaISO||""), r.horaEntrega||"", r.cliente||"",
+            (Array.isArray(r.itens)? r.itens.length : 0).toString(),
+            moneyBR(r.totalPedido||0),
+            ((r?.entrega?.tipo||"").toUpperCase()==="RETIRADA"?"RETIRADA":"ENTREGA"),
+            r.pagamento||"", (r.cupomFiscal && String(r.cupomFiscal).trim()) ? r.cupomFiscal : "-"
+          ];
 
-        // quebra o cliente e o cupom se necessário
-        const clienteLines = doc.splitTextToSize(row[2], colsW[2]-2);
-        const cupomLines   = doc.splitTextToSize(row[7], colsW[7]-2);
-        const lines = Math.max(1, clienteLines.length, cupomLines.length);
-        const h = lines*lineH;
+          const clienteLines = doc.splitTextToSize(row[2], colsW[2]-2);
+          const cupomLines   = doc.splitTextToSize(row[7], colsW[7]-2);
+          const lines = Math.max(1, clienteLines.length, cupomLines.length);
+          const h = lines*lineH;
 
-        if (y + h > 200){ doc.addPage(); y = top; }
+          if (y + h > 200){ doc.addPage(); y = top; }
 
-        // desenha
-        const cells = [row[0], row[1], clienteLines, row[3], row[4], row[5], row[6], cupomLines];
-        for (let i=0;i<cells.length;i++){
-          const val = cells[i];
-          if (Array.isArray(val)){
-            val.forEach((ln,k)=> doc.text(ln, x, y + (k+1)*lineH - 2));
-          } else {
-            doc.text(String(val), x, y + lineH - 2);
+          const cells = [row[0], row[1], clienteLines, row[3], row[4], row[5], row[6], cupomLines];
+          for (let i=0;i<cells.length;i++){
+            const val = cells[i];
+            if (Array.isArray(val)){
+              val.forEach((ln,k)=> doc.text(ln, x, y + (k+1)*lineH - 2));
+            } else {
+              doc.text(String(val), x, y + lineH - 2);
+            }
+            x += colsW[i];
           }
-          x += colsW[i];
-        }
-        y += h;
+          y += h;
 
-        if (modo==="detalhado" && Array.isArray(r.itens) && r.itens.length){
-          const itemsTxt = r.itens.map(it=>`• ${(it.produto||it.descricao||"")} — ${(it.quantidade||it.qtd||0)} ${(it.tipo||it.un||"")} x ${moneyBR(it.precoUnit||it.preco||0)} = ${moneyBR(it.total||it.subtotal||0)}`).join("\n");
-          const itemsLines = doc.splitTextToSize(itemsTxt, maxW);
-          itemsLines.forEach((ln)=>{ if (y>200){ doc.addPage(); y=top; } doc.text(ln, left+6, y); y += 5; });
-          y += 2;
+          if (modo==="detalhado" && Array.isArray(r.itens) && r.itens.length){
+            const itemsTxt = r.itens.map(it=>`• ${(it.produto||it.descricao||"")} — ${(it.quantidade||it.qtd||0)} ${(it.tipo||it.un||"")} x ${moneyBR(it.precoUnit||it.preco||0)} = ${moneyBR(it.total||it.subtotal||0)}`).join("\n");
+            const itemsLines = doc.splitTextToSize(itemsTxt, maxW);
+            itemsLines.forEach((ln)=>{ if (y>200){ doc.addPage(); y=top; } doc.text(ln, left+6, y); y += 5; });
+            y += 2;
+          }
         }
+
+        const total = window.__rows.reduce((s,r)=> s + Number(r.totalPedido||0), 0);
+        doc.setFont("helvetica","bold"); doc.setFontSize(11);
+        if (y>190){ doc.addPage(); y=top; }
+        doc.text(`TOTAL: R$ ${moneyBR(total)}`, left, y+6);
+
+        await nextFrame(); // garante o frame do spinner
+        doc.save(`Relatorio_${new Date().toISOString().slice(0,10)}.pdf`);
+      } finally {
+        setLoading(btn, false, "Gerar PDF");
       }
-
-      // totalizador
-      const total = window.__rows.reduce((s,r)=> s + Number(r.totalPedido||0), 0);
-      doc.setFont("helvetica","bold"); doc.setFontSize(11);
-      if (y>190){ doc.addPage(); y=top; }
-      doc.text(`TOTAL: R$ ${moneyBR(total)}`, left, y+6);
-
-      doc.save(`Relatorio_${new Date().toISOString().slice(0,10)}.pdf`);
     }
 
-    // ===== Eventos principais
+    // ===== Eventos
     $("btnBuscar").onclick = buscar;
     $("btnLimpar").onclick = ()=>{
       ["fDataIni","fDataFim","fHoraIni","fHoraFim","fCliente"].forEach(id=>$(id).value="");
@@ -533,7 +570,7 @@
     $("btnXLSX").onclick = exportarXLSX;
     $("btnPDF").onclick  = exportarPDF;
 
-    // clique para editar
+    // clique para editar / excluir
     $("tbody").addEventListener("click", (ev)=>{
       const tdEdit = ev.target.closest(".cell-client");
       if (tdEdit){ const id = tdEdit.getAttribute("data-id"); if (id) carregarPedidoEmModal(id); return; }
