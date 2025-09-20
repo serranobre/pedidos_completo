@@ -344,7 +344,17 @@
 
   async function buscarClienteInfo(nomeCliente) {
     await authReady;
-    const nome = up(nomeCliente);
+    const nomeCliente = (cliente || "")
+  .replace(/\s+/g, '')        // remove espaços
+  .replace(/[^A-Z0-9]/gi, ''); // mantém só letras/números
+
+const [ano, mes, dia] = (entregaISO || "").split("-");
+const hora = (horaEntrega || "").slice(0,2) || "HH";
+const minuto = (horaEntrega || "").slice(3,5) || "MM";
+
+const nomeArquivo = `${nomeCliente}_${dia||'DD'}_${mes||'MM'}_${ano?.slice(2)||'AA'}_${hora}-${minuto}.pdf`;
+
+return { doc, nomeArquivo };
     if (!nome) return null;
     const found = await getClienteDocByNome(nome);
     if (!found) return null;
